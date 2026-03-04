@@ -44,8 +44,8 @@ export interface DailyMeetingToken {
   is_owner?: boolean;
   exp?: number;
   enable_screenshare?: boolean;
-  enable_microphone?: boolean;
-  enable_camera?: boolean;
+  start_video_off?: boolean;
+  start_audio_off?: boolean;
 }
 
 export interface VideoRoomResult {
@@ -608,8 +608,8 @@ export class VideoRoomService {
         is_owner: isTeacher,
         exp: expiration,
         enable_screenshare: isTeacher,
-        enable_microphone: isTeacher,
-        enable_camera: isTeacher,
+        start_video_off: !isTeacher,
+        start_audio_off: !isTeacher,
       };
 
       const response = await this.createMeetingToken(tokenConfig);
