@@ -18,8 +18,7 @@ interface LiveClass {
 interface CommunityMember {
   user_id: string;
   email: string;
-  display_name: string | null;
-  full_name: string | null;
+  name: string | null;
 }
 
 export const dynamic = 'force-dynamic';
@@ -40,10 +39,10 @@ export async function GET(request: NextRequest) {
         lc.title,
         lc.scheduled_start_time,
         lc.duration_minutes,
-        p.display_name as teacher_name,
+        u.name as teacher_name,
         c.slug as community_slug
       FROM live_classes lc
-      JOIN profiles p ON lc.teacher_id = p.id::text
+      JOIN "user" u ON lc.teacher_id = u.id
       JOIN communities c ON lc.community_id = c.id
       WHERE lc.status = 'scheduled'
         AND lc.reminder_sent_at IS NULL
@@ -66,14 +65,13 @@ export async function GET(request: NextRequest) {
         const members = await query<CommunityMember>`
           SELECT
             cm.user_id,
-            p.email,
-            p.display_name,
-            p.full_name
+            u.email,
+            u.name
           FROM community_members cm
-          JOIN profiles p ON cm.user_id = p.id
+          JOIN "user" u ON cm.user_id = u.id
           WHERE cm.community_id = ${liveClass.community_id}::uuid
             AND cm.status = 'active'
-            AND p.email IS NOT NULL
+            AND u.email IS NOT NULL
         `;
 
         const calendarUrl = `${baseUrl}/${liveClass.community_slug}/calendar`;
@@ -90,7 +88,7 @@ export async function GET(request: NextRequest) {
           to: member.email,
           subject: `Live class "${liveClass.title}" starts in 30 minutes!`,
           react: React.createElement(LiveClassReminderEmail, {
-            recipientName: member.display_name || member.full_name || 'Member',
+            recipientName: member.name || 'Member',
             className: liveClass.title,
             teacherName: liveClass.teacher_name || 'Teacher',
             startTime,
