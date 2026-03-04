@@ -33,7 +33,7 @@ export const BaseLayout: React.FC<BaseLayoutProps> = ({
           <Section style={EMAIL_STYLES.card}>
             {/* Logo */}
             <Img
-              src="https://dance-hub.io/logo.png"
+              src="https://dance-hub.io/Logo.png"
               width="150"
               height="50"
               alt="DanceHub"

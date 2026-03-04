@@ -11,7 +11,7 @@ interface LiveClass {
   title: string;
   scheduled_start_time: string;
   duration_minutes: number;
-  teacher_name: string;
+  community_name: string;
   community_slug: string;
 }
 
@@ -39,10 +39,9 @@ export async function GET(request: NextRequest) {
         lc.title,
         lc.scheduled_start_time,
         lc.duration_minutes,
-        u.name as teacher_name,
+        c.name as community_name,
         c.slug as community_slug
       FROM live_classes lc
-      JOIN "user" u ON lc.teacher_id = u.id
       JOIN communities c ON lc.community_id = c.id
       WHERE lc.status = 'scheduled'
         AND lc.reminder_sent_at IS NULL
@@ -90,7 +89,7 @@ export async function GET(request: NextRequest) {
           react: React.createElement(LiveClassReminderEmail, {
             recipientName: member.name || 'Member',
             className: liveClass.title,
-            teacherName: liveClass.teacher_name || 'Teacher',
+            communityName: liveClass.community_name,
             startTime,
             durationMinutes: liveClass.duration_minutes,
             calendarUrl,

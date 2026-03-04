@@ -6,7 +6,7 @@ import { EMAIL_STYLES, EMAIL_COLORS } from '../index';
 interface LiveClassReminderEmailProps {
   recipientName: string;
   className: string;
-  teacherName: string;
+  communityName: string;
   startTime: string;
   durationMinutes: number;
   calendarUrl: string;
@@ -15,7 +15,7 @@ interface LiveClassReminderEmailProps {
 export const LiveClassReminderEmail: React.FC<LiveClassReminderEmailProps> = ({
   recipientName,
   className,
-  teacherName,
+  communityName,
   startTime,
   durationMinutes,
   calendarUrl,
@@ -65,7 +65,7 @@ export const LiveClassReminderEmail: React.FC<LiveClassReminderEmailProps> = ({
         </Text>
 
         <Text style={{ fontSize: '14px', color: EMAIL_COLORS.textLight, margin: '4px 0' }}>
-          Teacher: <strong>{teacherName}</strong>
+          Community: <strong>{communityName}</strong>
         </Text>
         <Text style={{ fontSize: '14px', color: EMAIL_COLORS.textLight, margin: '4px 0' }}>
           Starts at: <strong>{startTime}</strong>
