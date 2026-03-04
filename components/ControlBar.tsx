@@ -8,6 +8,7 @@ import {
   PhoneXMarkIcon,
   ArrowUpOnSquareIcon,
   Cog6ToothIcon,
+  ChatBubbleLeftIcon,
 } from "@heroicons/react/24/solid";
 import {
   MicrophoneIcon as MicrophoneOffIcon,
@@ -17,9 +18,12 @@ import { Button } from "@/components/ui/button";
 
 interface ControlBarProps {
   onLeave: () => void;
+  onToggleChat?: () => void;
+  isChatOpen?: boolean;
+  unreadCount?: number;
 }
 
-export default function ControlBar({ onLeave }: ControlBarProps) {
+export default function ControlBar({ onLeave, onToggleChat, isChatOpen, unreadCount = 0 }: ControlBarProps) {
   const callObject = useDaily();
   const localParticipant = useLocalParticipant();
   const { isSharingScreen, startScreenShare, stopScreenShare } = useScreenShare();
@@ -121,6 +125,28 @@ export default function ControlBar({ onLeave }: ControlBarProps) {
 
         <div className="mx-4 h-10 w-px bg-gray-700"></div>
 
+        {/* Chat Button */}
+        {onToggleChat && (
+          <Button
+            onClick={onToggleChat}
+            size="lg"
+            variant="default"
+            className={`rounded-full w-14 h-14 relative ${
+              isChatOpen
+                ? "bg-blue-600 hover:bg-blue-700"
+                : "bg-gray-700 hover:bg-gray-600"
+            }`}
+            title={isChatOpen ? "Close chat" : "Open chat"}
+          >
+            <ChatBubbleLeftIcon className="h-6 w-6" />
+            {!isChatOpen && unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </Button>
+        )}
+
         {/* Settings Button */}
         <Button
           size="lg"
@@ -155,6 +181,9 @@ export default function ControlBar({ onLeave }: ControlBarProps) {
           {isSharingScreen ? "Stop" : "Share"}
         </span>
         <div className="mx-4 w-px"></div>
+        {onToggleChat && (
+          <span className="text-xs text-gray-400 w-14 text-center">Chat</span>
+        )}
         <span className="text-xs text-gray-400 w-14 text-center">Settings</span>
         <span className="text-xs text-gray-400 w-14 text-center text-red-400">Leave</span>
       </div>

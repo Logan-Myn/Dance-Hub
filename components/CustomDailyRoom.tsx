@@ -5,6 +5,7 @@ import { DailyProvider, useDaily, useParticipantIds, useLocalParticipant, useDai
 import DailyIframe from "@daily-co/daily-js";
 import ParticipantTile from "./ParticipantTile";
 import ControlBar from "./ControlBar";
+import LiveClassChat from "./LiveClassChat";
 
 interface CustomDailyRoomProps {
   roomUrl: string;
@@ -19,6 +20,8 @@ function CallInterface({ onLeave, classTitle }: { onLeave: () => void; classTitl
   const participantIds = useParticipantIds();
   const localParticipant = useLocalParticipant();
   const [callState, setCallState] = useState<string>('loading');
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Listen for call state changes
   useDailyEvent('joined-meeting', () => {
@@ -60,6 +63,15 @@ function CallInterface({ onLeave, classTitle }: { onLeave: () => void; classTitl
     );
   }
 
+  const toggleChat = () => {
+    setIsChatOpen((prev) => !prev);
+    if (!isChatOpen) setUnreadCount(0);
+  };
+
+  const handleNewMessage = () => {
+    if (!isChatOpen) setUnreadCount((c) => c + 1);
+  };
+
   return (
     <div className="h-full flex flex-col bg-gray-900">
       {/* Header with DanceHub branding */}
@@ -83,42 +95,57 @@ function CallInterface({ onLeave, classTitle }: { onLeave: () => void; classTitl
         </div>
       </div>
 
-      {/* Participant Grid */}
-      <div className="flex-1 overflow-auto p-4">
-        <div className="h-full grid gap-4 auto-rows-fr"
-          style={{
-            gridTemplateColumns: participantIds.length === 1
-              ? '1fr'
-              : participantIds.length <= 2
-                ? 'repeat(2, 1fr)'
-                : participantIds.length <= 4
+      {/* Main content area: video grid + chat */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Participant Grid */}
+        <div className="flex-1 overflow-auto p-4">
+          <div className="h-full grid gap-4 auto-rows-fr"
+            style={{
+              gridTemplateColumns: participantIds.length === 1
+                ? '1fr'
+                : participantIds.length <= 2
                   ? 'repeat(2, 1fr)'
-                  : 'repeat(3, 1fr)'
-          }}
-        >
-          {/* Local participant first */}
-          {localParticipant && (
-            <ParticipantTile
-              sessionId={localParticipant.session_id}
-              isLocal={true}
-            />
-          )}
-
-          {/* Remote participants */}
-          {participantIds
-            .filter(id => id !== localParticipant?.session_id)
-            .map((id) => (
+                  : participantIds.length <= 4
+                    ? 'repeat(2, 1fr)'
+                    : 'repeat(3, 1fr)'
+            }}
+          >
+            {/* Local participant first */}
+            {localParticipant && (
               <ParticipantTile
-                key={id}
-                sessionId={id}
-                isLocal={false}
+                sessionId={localParticipant.session_id}
+                isLocal={true}
               />
-            ))}
+            )}
+
+            {/* Remote participants */}
+            {participantIds
+              .filter(id => id !== localParticipant?.session_id)
+              .map((id) => (
+                <ParticipantTile
+                  key={id}
+                  sessionId={id}
+                  isLocal={false}
+                />
+              ))}
+          </div>
         </div>
+
+        {/* Chat Panel */}
+        {isChatOpen && (
+          <div className="w-80 flex-shrink-0">
+            <LiveClassChat onClose={toggleChat} onNewMessage={handleNewMessage} />
+          </div>
+        )}
       </div>
 
       {/* Control Bar */}
-      <ControlBar onLeave={onLeave} />
+      <ControlBar
+        onLeave={onLeave}
+        onToggleChat={toggleChat}
+        isChatOpen={isChatOpen}
+        unreadCount={unreadCount}
+      />
     </div>
   );
 }
