@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
             p.full_name
           FROM community_members cm
           JOIN profiles p ON cm.user_id = p.id
-          WHERE cm.community_id = ${liveClass.community_id}
+          WHERE cm.community_id = ${liveClass.community_id}::uuid
             AND cm.status = 'active'
             AND p.email IS NOT NULL
         `;
