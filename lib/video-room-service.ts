@@ -46,6 +46,10 @@ export interface DailyMeetingToken {
   enable_screenshare?: boolean;
   start_video_off?: boolean;
   start_audio_off?: boolean;
+  permissions?: {
+    canSend?: boolean | string[];
+    canAdmin?: string[];
+  };
 }
 
 export interface VideoRoomResult {
@@ -610,6 +614,9 @@ export class VideoRoomService {
         enable_screenshare: isTeacher,
         start_video_off: !isTeacher,
         start_audio_off: !isTeacher,
+        permissions: isTeacher
+          ? { canSend: true, canAdmin: ['participants'] }
+          : { canSend: false },
       };
 
       const response = await this.createMeetingToken(tokenConfig);

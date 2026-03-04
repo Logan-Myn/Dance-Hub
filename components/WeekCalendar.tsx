@@ -191,6 +191,8 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher }: 
                       <div
                         key={`${day.toISOString()}-${hour}`}
                         className={`border-r border-gray-100 last:border-r-0 relative ${
+                          classes.length > 0 ? 'z-10' : ''
+                        } ${
                           isPastHour ? 'bg-gray-50/30' : isToday ? 'bg-blue-50/20' : 'bg-white'
                         }`}
                       >
@@ -218,7 +220,7 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher }: 
                               >
                                 {/* Add class hint for teachers */}
                                 {isTeacher && !isPastSlot && classes.length === 0 && (
-                                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                                     <PlusIcon className="h-4 w-4 text-blue-400" />
                                   </div>
                                 )}

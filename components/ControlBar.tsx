@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useState, useEffect } from "react";
-import { useDaily, useLocalParticipant, useScreenShare } from "@daily-co/daily-react";
-import type { DailyParticipantPermissionsCanSendValues } from "@daily-co/daily-js";
+import { useCallback } from "react";
+import { useDaily, useScreenShare } from "@daily-co/daily-react";
 import {
   MicrophoneIcon,
   VideoCameraIcon,
@@ -11,6 +10,7 @@ import {
   Cog6ToothIcon,
   ChatBubbleLeftIcon,
   HandRaisedIcon,
+  UserMinusIcon,
 } from "@heroicons/react/24/solid";
 import {
   MicrophoneIcon as MicrophoneOffIcon,
@@ -25,8 +25,12 @@ interface ControlBarProps {
   unreadCount?: number;
   isTeacher?: boolean;
   hasMediaPermission?: boolean;
-  raisedHands?: Set<string>;
-  setRaisedHands?: (fn: (prev: Set<string>) => Set<string>) => void;
+  setHasMediaPermission?: (v: boolean) => void;
+  sendAppMessage?: (data: any, to?: string) => void;
+  isMuted?: boolean;
+  setIsMuted?: (v: boolean) => void;
+  isCamOff?: boolean;
+  setIsCamOff?: (v: boolean) => void;
 }
 
 export default function ControlBar({
@@ -36,188 +40,150 @@ export default function ControlBar({
   unreadCount = 0,
   isTeacher = false,
   hasMediaPermission = true,
-  raisedHands,
-  setRaisedHands,
+  setHasMediaPermission,
+  sendAppMessage,
+  isMuted = true,
+  setIsMuted,
+  isCamOff = true,
+  setIsCamOff,
 }: ControlBarProps) {
   const callObject = useDaily();
-  const localParticipant = useLocalParticipant();
   const { isSharingScreen, startScreenShare, stopScreenShare } = useScreenShare();
-  const [isHandRaised, setIsHandRaised] = useState(false);
 
-  // Reset hand raise when permission changes (granted or revoked)
-  useEffect(() => {
-    setIsHandRaised(false);
-  }, [hasMediaPermission]);
+  const canSend = isTeacher || hasMediaPermission;
 
   const toggleAudio = useCallback(() => {
     if (!callObject) return;
-    callObject.setLocalAudio(!localParticipant?.audio);
-  }, [callObject, localParticipant]);
+    const next = !isMuted;
+    try { callObject.setLocalAudio(!next); } catch {}
+    setIsMuted?.(!isMuted);
+  }, [callObject, isMuted, setIsMuted]);
 
   const toggleVideo = useCallback(() => {
     if (!callObject) return;
-    callObject.setLocalVideo(!localParticipant?.video);
-  }, [callObject, localParticipant]);
+    const next = !isCamOff;
+    try { callObject.setLocalVideo(!next); } catch {}
+    setIsCamOff?.(!isCamOff);
+  }, [callObject, isCamOff, setIsCamOff]);
 
   const toggleScreenShare = useCallback(async () => {
-    if (!callObject) return;
-
     if (isSharingScreen) {
       stopScreenShare();
     } else {
-      try {
-        await startScreenShare();
-      } catch (error) {
-        console.error("Error starting screen share:", error);
-      }
+      try { await startScreenShare(); } catch {}
     }
-  }, [callObject, isSharingScreen, startScreenShare, stopScreenShare]);
+  }, [isSharingScreen, startScreenShare, stopScreenShare]);
 
   const handleLeave = useCallback(async () => {
     if (!callObject) return;
-
-    try {
-      await callObject.leave();
-      onLeave();
-    } catch (error) {
-      console.error("Error leaving call:", error);
-      onLeave();
-    }
+    try { await callObject.leave(); } catch {}
+    onLeave();
   }, [callObject, onLeave]);
 
-  const toggleRaiseHand = useCallback(() => {
-    if (!callObject || !localParticipant) return;
-
-    const newState = !isHandRaised;
-    setIsHandRaised(newState);
-
-    callObject.sendAppMessage(
-      {
-        type: newState ? "hand-raise" : "hand-lower",
-        sender: localParticipant.user_name || "Student",
-        sessionId: localParticipant.session_id,
-      },
+  const requestParticipation = useCallback(() => {
+    if (!callObject || !sendAppMessage) return;
+    const local = callObject.participants().local;
+    if (!local) return;
+    sendAppMessage(
+      { type: "hand-raise", sender: local.user_name || "Student", sessionId: local.session_id },
       "*"
     );
-  }, [callObject, localParticipant, isHandRaised]);
+  }, [callObject, sendAppMessage]);
 
-  const revokeParticipant = useCallback(
-    (sessionId: string) => {
-      if (!callObject) return;
-      callObject.updateParticipant(sessionId, {
-        updatePermissions: {
-          canSend: new Set<DailyParticipantPermissionsCanSendValues>(["screenVideo", "screenAudio"]),
-        },
-      });
-      callObject.sendAppMessage(
-        { type: "hand-denied", sessionId },
-        "*"
-      );
-      if (setRaisedHands) {
-        setRaisedHands((prev) => {
-          const next = new Set(prev);
-          next.delete(sessionId);
-          return next;
-        });
-      }
-    },
-    [callObject, setRaisedHands]
-  );
-
-  const isAudioOn = localParticipant?.audio;
-  const isVideoOn = localParticipant?.video;
-  const showMediaButtons = isTeacher || hasMediaPermission;
+  const stepDown = useCallback(() => {
+    if (!callObject || !sendAppMessage) return;
+    const local = callObject.participants().local;
+    if (!local) return;
+    try { callObject.setLocalAudio(false); } catch {}
+    try { callObject.setLocalVideo(false); } catch {}
+    setIsMuted?.(true);
+    setIsCamOff?.(true);
+    setHasMediaPermission?.(false);
+    sendAppMessage({ type: "hand-lowered", sessionId: local.session_id }, "*");
+  }, [callObject, sendAppMessage, setIsMuted, setIsCamOff, setHasMediaPermission]);
 
   return (
     <div className="bg-gray-800 border-t border-gray-700 px-6 py-4">
       <div className="flex items-center justify-center gap-3">
-        {/* Mic/Cam buttons: only visible if teacher or permission granted */}
-        {showMediaButtons && (
+        {canSend ? (
           <>
+            {/* Mic */}
             <Button
               onClick={toggleAudio}
               size="lg"
-              variant={isAudioOn ? "default" : "destructive"}
+              variant={isMuted ? "destructive" : "default"}
               className={`rounded-full w-14 h-14 ${
-                isAudioOn
-                  ? "bg-gray-700 hover:bg-gray-600"
-                  : "bg-red-500 hover:bg-red-600"
+                isMuted ? "bg-red-500 hover:bg-red-600" : "bg-gray-700 hover:bg-gray-600"
               }`}
-              title={isAudioOn ? "Mute" : "Unmute"}
+              title={isMuted ? "Unmute" : "Mute"}
             >
-              {isAudioOn ? (
-                <MicrophoneIcon className="h-6 w-6" />
-              ) : (
-                <MicrophoneOffIcon className="h-6 w-6" />
-              )}
+              {isMuted ? <MicrophoneOffIcon className="h-6 w-6" /> : <MicrophoneIcon className="h-6 w-6" />}
             </Button>
 
+            {/* Camera */}
             <Button
               onClick={toggleVideo}
               size="lg"
-              variant={isVideoOn ? "default" : "destructive"}
+              variant={isCamOff ? "destructive" : "default"}
               className={`rounded-full w-14 h-14 ${
-                isVideoOn
-                  ? "bg-gray-700 hover:bg-gray-600"
-                  : "bg-red-500 hover:bg-red-600"
+                isCamOff ? "bg-red-500 hover:bg-red-600" : "bg-gray-700 hover:bg-gray-600"
               }`}
-              title={isVideoOn ? "Turn off camera" : "Turn on camera"}
+              title={isCamOff ? "Turn on camera" : "Turn off camera"}
             >
-              {isVideoOn ? (
-                <VideoCameraIcon className="h-6 w-6" />
-              ) : (
-                <VideoCameraSlashIcon className="h-6 w-6" />
-              )}
+              {isCamOff ? <VideoCameraSlashIcon className="h-6 w-6" /> : <VideoCameraIcon className="h-6 w-6" />}
             </Button>
-          </>
-        )}
 
-        {/* Raise Hand button: only for students */}
-        {!isTeacher && (
+            {/* Screen Share */}
+            <Button
+              onClick={toggleScreenShare}
+              size="lg"
+              variant="default"
+              className={`rounded-full w-14 h-14 ${
+                isSharingScreen ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-700 hover:bg-gray-600"
+              }`}
+              title={isSharingScreen ? "Stop sharing" : "Share screen"}
+            >
+              <ArrowUpOnSquareIcon className="h-6 w-6" />
+            </Button>
+
+            {/* Step down for approved students */}
+            {!isTeacher && hasMediaPermission && (
+              <Button
+                onClick={stepDown}
+                size="lg"
+                variant="default"
+                className="rounded-full h-14 px-4 bg-gray-700 hover:bg-gray-600 gap-2"
+                title="Step down"
+              >
+                <UserMinusIcon className="h-5 w-5" />
+                <span className="text-xs">Step Down</span>
+              </Button>
+            )}
+          </>
+        ) : (
+          /* Student viewer: Raise Hand */
           <Button
-            onClick={toggleRaiseHand}
+            onClick={requestParticipation}
             size="lg"
             variant="default"
-            className={`rounded-full w-14 h-14 ${
-              isHandRaised
-                ? "bg-yellow-500 hover:bg-yellow-600"
-                : "bg-gray-700 hover:bg-gray-600"
-            }`}
-            title={isHandRaised ? "Lower hand" : "Raise hand"}
+            className="rounded-full px-6 h-14 bg-yellow-500 hover:bg-yellow-600 text-black font-medium gap-2"
+            title="Raise hand to request mic/camera"
           >
             <HandRaisedIcon className="h-6 w-6" />
-          </Button>
-        )}
-
-        {/* Screen Share Button */}
-        {(isTeacher || hasMediaPermission) && (
-          <Button
-            onClick={toggleScreenShare}
-            size="lg"
-            variant="default"
-            className={`rounded-full w-14 h-14 ${
-              isSharingScreen
-                ? "bg-blue-600 hover:bg-blue-700"
-                : "bg-gray-700 hover:bg-gray-600"
-            }`}
-            title={isSharingScreen ? "Stop sharing" : "Share screen"}
-          >
-            <ArrowUpOnSquareIcon className="h-6 w-6" />
+            <span className="text-sm">Raise Hand</span>
           </Button>
         )}
 
         <div className="mx-4 h-10 w-px bg-gray-700"></div>
 
-        {/* Chat Button */}
+        {/* Chat */}
         {onToggleChat && (
           <Button
             onClick={onToggleChat}
             size="lg"
             variant="default"
             className={`rounded-full w-14 h-14 relative ${
-              isChatOpen
-                ? "bg-blue-600 hover:bg-blue-700"
-                : "bg-gray-700 hover:bg-gray-600"
+              isChatOpen ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-700 hover:bg-gray-600"
             }`}
             title={isChatOpen ? "Close chat" : "Open chat"}
           >
@@ -230,7 +196,7 @@ export default function ControlBar({
           </Button>
         )}
 
-        {/* Settings Button */}
+        {/* Settings */}
         <Button
           size="lg"
           variant="default"
@@ -240,7 +206,7 @@ export default function ControlBar({
           <Cog6ToothIcon className="h-6 w-6" />
         </Button>
 
-        {/* Leave Button */}
+        {/* Leave */}
         <Button
           onClick={handleLeave}
           size="lg"
@@ -252,32 +218,22 @@ export default function ControlBar({
         </Button>
       </div>
 
-      {/* Control labels */}
+      {/* Labels */}
       <div className="flex items-center justify-center gap-3 mt-2">
-        {showMediaButtons && (
+        {canSend ? (
           <>
-            <span className="text-xs text-gray-400 w-14 text-center">
-              {isAudioOn ? "Mute" : "Unmute"}
-            </span>
-            <span className="text-xs text-gray-400 w-14 text-center">
-              {isVideoOn ? "Stop" : "Start"} Video
-            </span>
+            <span className="text-xs text-gray-400 w-14 text-center">{isMuted ? "Unmute" : "Mute"}</span>
+            <span className="text-xs text-gray-400 w-14 text-center">{isCamOff ? "Start" : "Stop"} Video</span>
+            <span className="text-xs text-gray-400 w-14 text-center">{isSharingScreen ? "Stop" : "Share"}</span>
+            {!isTeacher && hasMediaPermission && (
+              <span className="text-xs text-gray-400 text-center">Step Down</span>
+            )}
           </>
-        )}
-        {!isTeacher && (
-          <span className="text-xs text-gray-400 w-14 text-center">
-            {isHandRaised ? "Lower" : "Raise"} Hand
-          </span>
-        )}
-        {(isTeacher || hasMediaPermission) && (
-          <span className="text-xs text-gray-400 w-14 text-center">
-            {isSharingScreen ? "Stop" : "Share"}
-          </span>
+        ) : (
+          <span className="text-xs text-gray-400 text-center">Request to speak</span>
         )}
         <div className="mx-4 w-px"></div>
-        {onToggleChat && (
-          <span className="text-xs text-gray-400 w-14 text-center">Chat</span>
-        )}
+        {onToggleChat && <span className="text-xs text-gray-400 w-14 text-center">Chat</span>}
         <span className="text-xs text-gray-400 w-14 text-center">Settings</span>
         <span className="text-xs text-gray-400 w-14 text-center text-red-400">Leave</span>
       </div>
