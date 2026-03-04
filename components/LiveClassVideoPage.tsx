@@ -34,6 +34,7 @@ interface VideoToken {
   roomUrl: string;
   token: string;
   expires: number;
+  isTeacher: boolean;
 }
 
 export default function LiveClassVideoPage({ classId, liveClass }: LiveClassVideoPageProps) {
@@ -248,6 +249,7 @@ export default function LiveClassVideoPage({ classId, liveClass }: LiveClassVide
             token={videoToken.token}
             onLeave={handleLeave}
             classTitle={liveClass.title}
+            isTeacher={videoToken.isTeacher}
           />
         </div>
       )}

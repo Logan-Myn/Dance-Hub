@@ -158,6 +158,7 @@ export async function GET(
       roomUrl,
       token: tokens.token,
       expires: tokens.expires,
+      isTeacher,
     });
   } catch (error) {
     console.error("Error generating live class video token:", error);

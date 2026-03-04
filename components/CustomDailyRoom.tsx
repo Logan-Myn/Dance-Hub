@@ -13,15 +13,18 @@ interface CustomDailyRoomProps {
   onLeave: () => void;
   className?: string;
   classTitle?: string;
+  isTeacher?: boolean;
 }
 
-function CallInterface({ onLeave, classTitle }: { onLeave: () => void; classTitle?: string }) {
+function CallInterface({ onLeave, classTitle, isTeacher = false }: { onLeave: () => void; classTitle?: string; isTeacher?: boolean }) {
   const callObject = useDaily();
   const participantIds = useParticipantIds();
   const localParticipant = useLocalParticipant();
   const [callState, setCallState] = useState<string>('loading');
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [hasMediaPermission, setHasMediaPermission] = useState(isTeacher);
+  const [raisedHands, setRaisedHands] = useState<Set<string>>(new Set());
 
   // Listen for call state changes
   useDailyEvent('joined-meeting', () => {
@@ -37,6 +40,45 @@ function CallInterface({ onLeave, classTitle }: { onLeave: () => void; classTitl
   useDailyEvent('error', (event) => {
     console.error('❌ Daily error:', event);
     setCallState('error');
+  });
+
+  // Track permission changes on local participant
+  useDailyEvent('participant-updated', (event) => {
+    if (!event) return;
+    const { participant } = event;
+    if (participant.local) {
+      const permissions = participant.permissions;
+      if (permissions && 'canSend' in permissions) {
+        const canSend = permissions.canSend;
+        const canSendAudio = canSend === true || (canSend instanceof Set && canSend.has('audio'));
+        const canSendVideo = canSend === true || (canSend instanceof Set && canSend.has('video'));
+        setHasMediaPermission(canSendAudio && canSendVideo);
+      }
+    }
+  });
+
+  // Handle hand-raise messages
+  useDailyEvent('app-message', (event) => {
+    if (!event) return;
+    const { data, fromId } = event;
+    if (data?.type === 'hand-raise' && fromId) {
+      setRaisedHands((prev) => new Set(prev).add(data.sessionId));
+    } else if (data?.type === 'hand-lower' && fromId) {
+      setRaisedHands((prev) => {
+        const next = new Set(prev);
+        next.delete(data.sessionId);
+        return next;
+      });
+    } else if (data?.type === 'hand-granted' || data?.type === 'hand-denied') {
+      // If the local user was granted/denied, remove from raised hands
+      if (data.sessionId) {
+        setRaisedHands((prev) => {
+          const next = new Set(prev);
+          next.delete(data.sessionId);
+          return next;
+        });
+      }
+    }
   });
 
   useEffect(() => {
@@ -134,7 +176,13 @@ function CallInterface({ onLeave, classTitle }: { onLeave: () => void; classTitl
         {/* Chat Panel */}
         {isChatOpen && (
           <div className="w-80 flex-shrink-0">
-            <LiveClassChat onClose={toggleChat} onNewMessage={handleNewMessage} />
+            <LiveClassChat
+              onClose={toggleChat}
+              onNewMessage={handleNewMessage}
+              isTeacher={isTeacher}
+              raisedHands={raisedHands}
+              setRaisedHands={setRaisedHands}
+            />
           </div>
         )}
       </div>
@@ -145,6 +193,10 @@ function CallInterface({ onLeave, classTitle }: { onLeave: () => void; classTitl
         onToggleChat={toggleChat}
         isChatOpen={isChatOpen}
         unreadCount={unreadCount}
+        isTeacher={isTeacher}
+        hasMediaPermission={hasMediaPermission}
+        raisedHands={raisedHands}
+        setRaisedHands={setRaisedHands}
       />
     </div>
   );
@@ -154,7 +206,8 @@ export default function CustomDailyRoom({
   roomUrl,
   token,
   onLeave,
-  classTitle
+  classTitle,
+  isTeacher = false
 }: CustomDailyRoomProps) {
   const callObjectRef = useRef<any>(null);
   const [isCallObjectReady, setIsCallObjectReady] = useState(false);
@@ -241,7 +294,7 @@ export default function CustomDailyRoom({
 
   return (
     <DailyProvider callObject={callObjectRef.current}>
-      <CallInterface onLeave={onLeave} classTitle={classTitle} />
+      <CallInterface onLeave={onLeave} classTitle={classTitle} isTeacher={isTeacher} />
     </DailyProvider>
   );
 }
