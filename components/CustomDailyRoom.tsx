@@ -42,41 +42,43 @@ function CallInterface({ onLeave, classTitle, isTeacher = false }: { onLeave: ()
     setCallState('error');
   });
 
-  // Track permission changes on local participant
-  useDailyEvent('participant-updated', (event) => {
-    if (!event) return;
-    const { participant } = event;
-    if (participant.local) {
-      const permissions = participant.permissions;
-      if (permissions && 'canSend' in permissions) {
-        const canSend = permissions.canSend;
-        const canSendAudio = canSend === true || (canSend instanceof Set && canSend.has('audio'));
-        const canSendVideo = canSend === true || (canSend instanceof Set && canSend.has('video'));
-        setHasMediaPermission(canSendAudio && canSendVideo);
-      }
-    }
-  });
-
-  // Handle hand-raise messages
+  // Handle hand-raise and permission messages
   useDailyEvent('app-message', (event) => {
     if (!event) return;
     const { data, fromId } = event;
-    if (data?.type === 'hand-raise' && fromId) {
+    if (data?.type === 'hand-raise' && fromId && fromId !== localParticipant?.session_id) {
       setRaisedHands((prev) => new Set(prev).add(data.sessionId));
+      // Notify teacher even when chat is closed
+      if (!isChatOpen) setUnreadCount((c) => c + 1);
     } else if (data?.type === 'hand-lower' && fromId) {
       setRaisedHands((prev) => {
         const next = new Set(prev);
         next.delete(data.sessionId);
         return next;
       });
-    } else if (data?.type === 'hand-granted' || data?.type === 'hand-denied') {
-      // If the local user was granted/denied, remove from raised hands
+    } else if (data?.type === 'hand-granted') {
       if (data.sessionId) {
         setRaisedHands((prev) => {
           const next = new Set(prev);
           next.delete(data.sessionId);
           return next;
         });
+        // If this grant targets the local participant, enable media
+        if (data.sessionId === localParticipant?.session_id) {
+          setHasMediaPermission(true);
+        }
+      }
+    } else if (data?.type === 'hand-denied') {
+      if (data.sessionId) {
+        setRaisedHands((prev) => {
+          const next = new Set(prev);
+          next.delete(data.sessionId);
+          return next;
+        });
+        // If this denial targets the local participant, disable media
+        if (data.sessionId === localParticipant?.session_id) {
+          setHasMediaPermission(false);
+        }
       }
     }
   });

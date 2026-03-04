@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useDaily, useLocalParticipant, useScreenShare } from "@daily-co/daily-react";
 import type { DailyParticipantPermissionsCanSendValues } from "@daily-co/daily-js";
 import {
@@ -43,6 +43,11 @@ export default function ControlBar({
   const localParticipant = useLocalParticipant();
   const { isSharingScreen, startScreenShare, stopScreenShare } = useScreenShare();
   const [isHandRaised, setIsHandRaised] = useState(false);
+
+  // Reset hand raise when permission changes (granted or revoked)
+  useEffect(() => {
+    setIsHandRaised(false);
+  }, [hasMediaPermission]);
 
   const toggleAudio = useCallback(() => {
     if (!callObject) return;
