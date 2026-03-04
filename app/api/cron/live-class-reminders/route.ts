@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
         p.display_name as teacher_name,
         c.slug as community_slug
       FROM live_classes lc
-      JOIN profiles p ON lc.teacher_id = p.id
+      JOIN profiles p ON lc.teacher_id::uuid = p.id
       JOIN communities c ON lc.community_id = c.id
       WHERE lc.status = 'scheduled'
         AND lc.reminder_sent_at IS NULL
