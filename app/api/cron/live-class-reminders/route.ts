@@ -43,12 +43,12 @@ export async function GET(request: NextRequest) {
         p.display_name as teacher_name,
         c.slug as community_slug
       FROM live_classes lc
-      JOIN profiles p ON lc.teacher_id::uuid = p.id
+      JOIN profiles p ON lc.teacher_id = p.id::text
       JOIN communities c ON lc.community_id = c.id
       WHERE lc.status = 'scheduled'
         AND lc.reminder_sent_at IS NULL
-        AND lc.scheduled_start_time > NOW() + INTERVAL '25 minutes'
-        AND lc.scheduled_start_time <= NOW() + INTERVAL '35 minutes'
+        AND lc.scheduled_start_time > NOW() + INTERVAL '20 minutes'
+        AND lc.scheduled_start_time <= NOW() + INTERVAL '40 minutes'
     `;
 
     if (!classes || classes.length === 0) {
