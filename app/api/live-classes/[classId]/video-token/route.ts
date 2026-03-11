@@ -3,6 +3,7 @@ import { queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { videoRoomService } from "@/lib/video-room-service";
 import { getDailyDomain } from "@/lib/get-daily-domain";
+import { startRecording } from "@/lib/daily";
 
 interface LiveClassWithDetails {
   id: string;
@@ -156,6 +157,18 @@ export async function GET(
               WHERE id = ${params.classId}
             `;
             console.log(`Created pending recording ${recording.id} for live class ${params.classId}`);
+
+            // Start recording immediately — don't wait for webhook
+            try {
+              await startRecording(liveClass.daily_room_name!);
+              await sql`
+                UPDATE live_class_recordings SET status = 'recording', updated_at = NOW()
+                WHERE id = ${recording.id}
+              `;
+              console.log(`Started recording for live class ${params.classId}`);
+            } catch (recError) {
+              console.error("Failed to start recording (will retry via webhook):", recError);
+            }
           }
         } catch (error) {
           console.error("Failed to create recording row:", error);
