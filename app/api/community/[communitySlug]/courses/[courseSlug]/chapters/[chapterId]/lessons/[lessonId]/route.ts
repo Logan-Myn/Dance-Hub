@@ -198,6 +198,15 @@ export async function DELETE(
       await deleteMuxAsset(lesson.video_asset_id);
     }
 
+    // Clean up any linked live class recording
+    try {
+      await sql`
+        DELETE FROM live_class_recordings WHERE lesson_id = ${params.lessonId}
+      `;
+    } catch (cleanupError) {
+      console.error("Error cleaning up recording link:", cleanupError);
+    }
+
     // Delete the lesson
     try {
       await sql`

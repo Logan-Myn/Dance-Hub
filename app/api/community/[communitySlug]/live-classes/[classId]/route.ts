@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { videoRoomService } from "@/lib/video-room-service";
+import { stopRecording } from "@/lib/daily";
 
 interface Community {
   id: string;
@@ -11,6 +12,8 @@ interface Community {
 interface LiveClass {
   teacher_id: string;
   daily_room_name: string | null;
+  enable_recording: boolean;
+  status: string;
 }
 
 interface LiveClassWithDetails {
@@ -121,7 +124,7 @@ export async function PUT(
 
     // Get the live class to check ownership
     const liveClass = await queryOne<LiveClass>`
-      SELECT teacher_id, daily_room_name
+      SELECT teacher_id, daily_room_name, enable_recording, status
       FROM live_classes
       WHERE id = ${params.classId}
         AND community_id = ${community.id}
@@ -143,7 +146,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { title, description, scheduled_start_time, duration_minutes, status } = body;
+    const { title, description, scheduled_start_time, duration_minutes, status, enable_recording } = body;
 
     // Update the live class using COALESCE for partial updates
     const updatedClass = await queryOne<UpdatedLiveClass>`
@@ -154,6 +157,7 @@ export async function PUT(
         scheduled_start_time = COALESCE(${scheduled_start_time ?? null}, scheduled_start_time),
         duration_minutes = COALESCE(${duration_minutes ? parseInt(duration_minutes) : null}, duration_minutes),
         status = COALESCE(${status ?? null}, status),
+        enable_recording = COALESCE(${enable_recording ?? null}, enable_recording),
         updated_at = NOW()
       WHERE id = ${params.classId}
       RETURNING *
@@ -172,6 +176,37 @@ export async function PUT(
       const videoRoomResult = await videoRoomService.createRoomForLiveClass(params.classId);
       if (!videoRoomResult.success) {
         console.error("Warning: Failed to create video room for live class:", videoRoomResult.error);
+      }
+    }
+
+    // When class goes live with recording enabled, create a pending recording row
+    if (status === 'live' && liveClass.enable_recording) {
+      try {
+        const recording = await queryOne<{ id: string }>`
+          INSERT INTO live_class_recordings (live_class_id, status)
+          VALUES (${params.classId}, 'pending')
+          RETURNING id
+        `;
+        if (recording) {
+          await sql`
+            UPDATE live_classes SET recording_id = ${recording.id}, updated_at = NOW()
+            WHERE id = ${params.classId}
+          `;
+          console.log(`Created pending recording ${recording.id} for live class ${params.classId}`);
+        }
+      } catch (error) {
+        console.error("Failed to create recording row:", error);
+      }
+    }
+
+    // When class ends with recording enabled, stop the recording
+    if (status === 'ended' && liveClass.enable_recording && liveClass.daily_room_name) {
+      try {
+        await stopRecording(liveClass.daily_room_name);
+        console.log(`Stopped recording for live class ${params.classId}`);
+      } catch (error) {
+        // Recording may have already stopped — not critical
+        console.error("Failed to stop recording (may already be stopped):", error);
       }
     }
 

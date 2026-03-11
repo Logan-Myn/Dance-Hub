@@ -133,7 +133,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { title, description, scheduled_start_time, duration_minutes } = body;
+    const { title, description, scheduled_start_time, duration_minutes, enable_recording } = body;
 
     // Validate required fields
     if (!title || !scheduled_start_time || !duration_minutes) {
@@ -151,14 +151,16 @@ export async function POST(
         title,
         description,
         scheduled_start_time,
-        duration_minutes
+        duration_minutes,
+        enable_recording
       ) VALUES (
         ${community.id},
         ${user.id},
         ${title},
         ${description || null},
         ${scheduled_start_time},
-        ${parseInt(duration_minutes)}
+        ${parseInt(duration_minutes)},
+        ${enable_recording === true}
       )
       RETURNING *
     `;

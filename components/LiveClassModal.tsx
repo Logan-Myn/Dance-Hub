@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +39,7 @@ export default function LiveClassModal({
     scheduledDateTime: "",
     scheduledTime: "",
     duration: "60",
+    enableRecording: false,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -78,6 +80,7 @@ export default function LiveClassModal({
           scheduled_start_time: scheduledStartTime.toISOString(),
           duration_minutes: parseInt(formData.duration),
           community_id: communityId,
+          enable_recording: formData.enableRecording,
         }),
       });
 
@@ -187,6 +190,17 @@ export default function LiveClassModal({
               value={formData.duration}
               onChange={handleChange}
               required
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Label htmlFor="enableRecording">Record this class</Label>
+            <Switch
+              id="enableRecording"
+              checked={formData.enableRecording}
+              onCheckedChange={(checked) =>
+                setFormData((prev) => ({ ...prev, enableRecording: checked }))
+              }
             />
           </div>
 

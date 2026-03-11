@@ -167,6 +167,77 @@ export function generateRoomName(bookingId: string, communitySlug: string): stri
 }
 
 /**
+ * Start cloud recording for a Daily.co room
+ */
+export async function startRecording(roomName: string) {
+  if (!DAILY_API_KEY) {
+    throw new Error('Daily.co API key is not configured');
+  }
+
+  const response = await fetch(`${DAILY_API_URL}/rooms/${roomName}/recordings/start`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${DAILY_API_KEY}`,
+    },
+    body: JSON.stringify({ type: 'cloud' }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Daily.co API error: ${error.error || 'Failed to start recording'}`);
+  }
+
+  return await response.json();
+}
+
+/**
+ * Stop cloud recording for a Daily.co room
+ */
+export async function stopRecording(roomName: string) {
+  if (!DAILY_API_KEY) {
+    throw new Error('Daily.co API key is not configured');
+  }
+
+  const response = await fetch(`${DAILY_API_URL}/rooms/${roomName}/recordings/stop`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${DAILY_API_KEY}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Daily.co API error: ${error.error || 'Failed to stop recording'}`);
+  }
+
+  return await response.json();
+}
+
+/**
+ * Get a download URL for a Daily.co recording
+ */
+export async function getRecordingAccessLink(recordingId: string): Promise<string | null> {
+  if (!DAILY_API_KEY) {
+    throw new Error('Daily.co API key is not configured');
+  }
+
+  const response = await fetch(`${DAILY_API_URL}/recordings/${recordingId}/access-link`, {
+    headers: {
+      'Authorization': `Bearer ${DAILY_API_KEY}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Daily.co API error: ${error.error || 'Failed to get recording access link'}`);
+  }
+
+  const data = await response.json();
+  return data.download_link || null;
+}
+
+/**
  * Calculate room expiration time (lesson duration + 30 minutes buffer)
  * If scheduledAt is provided, calculate from that time, otherwise from now
  */

@@ -57,6 +57,44 @@ export async function getMuxAsset(uploadId: string) {
   }
 }
 
+/**
+ * Create a Mux asset from one or more URLs (e.g., Daily.co recording downloads).
+ * Uses raw fetch with Basic auth to support multi-URL input for segment concatenation.
+ */
+export async function createAssetFromUrls(urls: string[], passthrough?: string) {
+  const tokenId = process.env.MUX_TOKEN_ID;
+  const tokenSecret = process.env.MUX_TOKEN_SECRET;
+  if (!tokenId || !tokenSecret) {
+    throw new Error('Missing Mux API credentials');
+  }
+
+  const input = urls.map((url) => ({ url }));
+  const body: Record<string, unknown> = {
+    input,
+    playback_policy: ['public'],
+  };
+  if (passthrough) {
+    body.passthrough = passthrough;
+  }
+
+  const response = await fetch('https://api.mux.com/video/v1/assets', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Basic ${Buffer.from(`${tokenId}:${tokenSecret}`).toString('base64')}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Mux API error (${response.status}): ${error}`);
+  }
+
+  const result = await response.json();
+  return result.data;
+}
+
 // Add new function to delete a Mux asset
 export async function deleteMuxAsset(assetId: string) {
   try {
