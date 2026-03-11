@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { queryOne } from "@/lib/db";
+import { queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { videoRoomService } from "@/lib/video-room-service";
 import { getDailyDomain } from "@/lib/get-daily-domain";
@@ -13,6 +13,9 @@ interface LiveClassWithDetails {
   duration_minutes: number;
   daily_room_name: string | null;
   daily_room_url: string | null;
+  status: string;
+  enable_recording: boolean;
+  recording_id: string | null;
 }
 
 interface Profile {
@@ -131,6 +134,33 @@ export async function GET(
 
       liveClass.daily_room_name = updatedClass.daily_room_name;
       liveClass.daily_room_url = updatedClass.daily_room_url;
+    }
+
+    // When teacher joins, set class to live and create recording row if needed
+    if (isTeacher && liveClass.status === 'scheduled') {
+      await sql`
+        UPDATE live_classes SET status = 'live', updated_at = NOW()
+        WHERE id = ${params.classId}
+      `;
+
+      if (liveClass.enable_recording && !liveClass.recording_id) {
+        try {
+          const recording = await queryOne<{ id: string }>`
+            INSERT INTO live_class_recordings (live_class_id, status)
+            VALUES (${params.classId}, 'pending')
+            RETURNING id
+          `;
+          if (recording) {
+            await sql`
+              UPDATE live_classes SET recording_id = ${recording.id}, updated_at = NOW()
+              WHERE id = ${params.classId}
+            `;
+            console.log(`Created pending recording ${recording.id} for live class ${params.classId}`);
+          }
+        } catch (error) {
+          console.error("Failed to create recording row:", error);
+        }
+      }
     }
 
     // Generate tokens for the user
