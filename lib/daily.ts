@@ -184,11 +184,12 @@ export async function startRecording(roomName: string) {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(`Daily.co API error: ${error.error || 'Failed to start recording'}`);
+    const error = await response.text();
+    throw new Error(`Daily.co API error: ${error}`);
   }
 
-  return await response.json();
+  const data = await response.json();
+  return { recordingId: data.recordingId, ...data };
 }
 
 /**
@@ -222,7 +223,8 @@ export async function enableAutoRecording(roomName: string) {
 }
 
 /**
- * Stop cloud recording for a Daily.co room
+ * Stop cloud recording for a Daily.co room.
+ * Gracefully handles cases where recording was never started or already stopped.
  */
 export async function stopRecording(roomName: string) {
   if (!DAILY_API_KEY) {
@@ -236,12 +238,16 @@ export async function stopRecording(roomName: string) {
     },
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(`Daily.co API error: ${error.error || 'Failed to stop recording'}`);
+  // Ignore 404 and invalid-request errors — recording may have already stopped or never started
+  if (!response.ok && response.status !== 404) {
+    const text = await response.text();
+    // Don't throw on "invalid-request-error" — this means no active recording exists
+    if (text.includes('invalid-request-error')) {
+      console.log(`No active recording to stop for room ${roomName} (already stopped or never started)`);
+      return;
+    }
+    throw new Error(`Daily.co API error: ${text}`);
   }
-
-  return await response.json();
 }
 
 /**
