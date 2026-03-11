@@ -40,8 +40,8 @@ DROP VIEW IF EXISTS live_classes_with_details;
 CREATE VIEW live_classes_with_details AS
 SELECT
   lc.*,
-  p.display_name as teacher_name,
-  p.avatar_url as teacher_avatar_url,
+  u.name as teacher_name,
+  u.image as teacher_avatar_url,
   c.name as community_name,
   c.slug as community_slug,
   c.created_by as community_created_by,
@@ -56,5 +56,5 @@ SELECT
     ELSE false
   END as is_starting_soon
 FROM live_classes lc
-JOIN profiles p ON lc.teacher_id::uuid = p.id
+JOIN "user" u ON lc.teacher_id = u.id
 JOIN communities c ON lc.community_id = c.id;
