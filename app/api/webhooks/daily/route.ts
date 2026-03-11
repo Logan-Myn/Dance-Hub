@@ -35,9 +35,21 @@ interface Recording {
   daily_recording_id: string | null;
 }
 
+// GET handler for Daily webhook verification
+export async function GET() {
+  return NextResponse.json({ ok: true });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text();
+
+    // Handle empty/non-JSON bodies (Daily verification ping)
+    if (!rawBody || !rawBody.trim().startsWith("{")) {
+      console.log("Daily webhook: empty or non-JSON body (verification ping)");
+      return NextResponse.json({ received: true });
+    }
+
     const signature = request.headers.get("x-webhook-signature") ?? "";
     const timestamp = request.headers.get("x-webhook-timestamp") ?? "";
 
