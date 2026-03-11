@@ -192,6 +192,36 @@ export async function startRecording(roomName: string) {
 }
 
 /**
+ * Enable auto cloud recording on a Daily.co room.
+ * Recording will start automatically when the first participant joins.
+ */
+export async function enableAutoRecording(roomName: string) {
+  if (!DAILY_API_KEY) {
+    throw new Error('Daily.co API key is not configured');
+  }
+
+  const response = await fetch(`${DAILY_API_URL}/rooms/${roomName}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${DAILY_API_KEY}`,
+    },
+    body: JSON.stringify({
+      properties: {
+        start_cloud_recording: true,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Daily.co API error: ${error.error || 'Failed to enable auto recording'}`);
+  }
+
+  return await response.json();
+}
+
+/**
  * Stop cloud recording for a Daily.co room
  */
 export async function stopRecording(roomName: string) {

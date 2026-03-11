@@ -3,7 +3,7 @@ import { queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { videoRoomService } from "@/lib/video-room-service";
 import { getDailyDomain } from "@/lib/get-daily-domain";
-import { startRecording } from "@/lib/daily";
+import { enableAutoRecording } from "@/lib/daily";
 
 interface LiveClassWithDetails {
   id: string;
@@ -158,16 +158,16 @@ export async function GET(
             `;
             console.log(`Created pending recording ${recording.id} for live class ${params.classId}`);
 
-            // Start recording immediately — don't wait for webhook
+            // Enable auto-recording on the room — starts when teacher joins
             try {
-              await startRecording(liveClass.daily_room_name!);
+              await enableAutoRecording(liveClass.daily_room_name!);
               await sql`
                 UPDATE live_class_recordings SET status = 'recording', updated_at = NOW()
                 WHERE id = ${recording.id}
               `;
-              console.log(`Started recording for live class ${params.classId}`);
+              console.log(`Enabled auto-recording for live class ${params.classId}`);
             } catch (recError) {
-              console.error("Failed to start recording (will retry via webhook):", recError);
+              console.error("Failed to enable auto-recording:", recError);
             }
           }
         } catch (error) {
