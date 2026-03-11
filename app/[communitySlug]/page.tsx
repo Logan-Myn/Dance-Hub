@@ -1109,8 +1109,7 @@ export default function CommunityPage() {
             <div className="w-full lg:w-72 flex-shrink-0">
               <CommunitySidebar
                 customLinks={community.customLinks || []}
-                members={members}
-                membersCount={totalMembers}
+                communitySlug={communitySlug}
                 creatorId={community.created_by}
                 isMember={isMember}
                 isCreator={isCreator}

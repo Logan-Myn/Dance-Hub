@@ -1,32 +1,38 @@
 "use client";
 
-import { useState } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, ChevronDown, ChevronUp, Users } from "lucide-react";
+import {
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  Calendar,
+  Clock,
+} from "lucide-react";
 import Link from "next/link";
-import { cn, formatDisplayName } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import useSWR from "swr";
 
 interface CustomLink {
   title: string;
   url: string;
 }
 
-interface Member {
+interface UpcomingClass {
   id: string;
-  user_id: string;
-  profile?: {
-    id: string;
-    full_name: string | null;
-    avatar_url: string | null;
-    display_name: string | null;
-  };
+  title: string;
+  scheduled_start_time: string;
+  duration_minutes: number;
+  status: string;
+  teacher_name: string;
+  teacher_avatar_url: string | null;
+  is_currently_active: boolean;
+  is_starting_soon: boolean;
 }
 
 interface CommunitySidebarProps {
   customLinks: CustomLink[];
-  members: Member[];
-  membersCount: number;
+  communitySlug: string;
   creatorId: string;
   isMember: boolean;
   isCreator: boolean;
@@ -41,10 +47,55 @@ interface CommunitySidebarProps {
   onJoinClick: () => void;
 }
 
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+function formatClassTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const classDay = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate()
+  );
+  const diffDays = Math.round(
+    (classDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  const timeStr = date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  if (diffDays === 0) return `Today at ${timeStr}`;
+  if (diffDays === 1) return `Tomorrow at ${timeStr}`;
+  if (diffDays < 7) {
+    const dayName = date.toLocaleDateString([], { weekday: "long" });
+    return `${dayName} at ${timeStr}`;
+  }
+  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} at ${timeStr}`;
+}
+
+function getTimeUntil(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = date.getTime() - now.getTime();
+
+  if (diffMs <= 0) return "Starting now";
+
+  const diffMin = Math.floor(diffMs / (1000 * 60));
+  if (diffMin < 60) return `In ${diffMin} min`;
+
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `In ${diffHours}h`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `In ${diffDays}d`;
+}
+
 export default function CommunitySidebar({
   customLinks,
-  members,
-  membersCount,
+  communitySlug,
   creatorId,
   isMember,
   isCreator,
@@ -59,21 +110,19 @@ export default function CommunitySidebar({
   onJoinClick,
 }: CommunitySidebarProps) {
   const [linksExpanded, setLinksExpanded] = useState(true);
+  const [, setTick] = useState(0);
 
-  // Get non-creator members for the dance circle
-  const circleMembers = members
-    .filter((m) => m.user_id !== creatorId)
-    .slice(0, 8);
-  const remainingCount = Math.max(0, membersCount - 1 - 8);
+  const { data: upcomingClasses } = useSWR<UpcomingClass[]>(
+    `/api/community/${communitySlug}/upcoming-classes`,
+    fetcher,
+    { refreshInterval: 30000 }
+  );
 
-  // Calculate positions for dance circle (8 positions around a circle)
-  const getCirclePosition = (index: number, total: number) => {
-    const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
-    const radius = 38; // percentage from center
-    const x = 50 + radius * Math.cos(angle);
-    const y = 50 + radius * Math.sin(angle);
-    return { x, y };
-  };
+  // Re-render every minute to update relative times
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <aside className="sticky top-24 space-y-4">
@@ -116,89 +165,98 @@ export default function CommunitySidebar({
         </div>
       )}
 
-      {/* Members Dance Circle */}
+      {/* Upcoming Classes */}
       <div className="bg-card rounded-2xl p-4 border border-border/50 shadow-sm">
         <div className="flex items-center gap-2 mb-4">
-          <Users className="h-4 w-4 text-primary" />
+          <Calendar className="h-4 w-4 text-primary" />
           <span className="text-sm font-semibold text-foreground">
-            Members ({membersCount - 1})
+            Upcoming Classes
           </span>
         </div>
 
-        {/* Dance Circle Visualization */}
-        <div className="relative w-full aspect-square max-w-[180px] mx-auto mb-4">
-          {/* Center decoration */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/30 to-secondary/30" />
-            </div>
+        {!upcomingClasses || upcomingClasses.length === 0 ? (
+          <div className="flex flex-col items-center py-6 text-muted-foreground">
+            <Clock className="h-8 w-8 mb-2 opacity-50" />
+            <p className="text-sm">No upcoming classes</p>
           </div>
+        ) : (
+          <div className="space-y-3">
+            {upcomingClasses.map((cls) => {
+              const isLive = cls.status === "live" || cls.is_currently_active;
+              const isStartingSoon = cls.is_starting_soon;
 
-          {/* Member avatars in circle */}
-          {circleMembers.map((member, index) => {
-            const pos = getCirclePosition(index, Math.min(circleMembers.length, 8));
-            return (
-              <div
-                key={member.id}
-                className="absolute transform -translate-x-1/2 -translate-y-1/2 group"
-                style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-              >
-                <Avatar
-                  className={cn(
-                    "h-9 w-9 border-2 border-card shadow-md",
-                    "transition-all duration-200",
-                    "hover:scale-110 hover:z-10 hover:border-primary/50"
-                  )}
-                >
-                  <AvatarImage
-                    src={member.profile?.avatar_url || ""}
-                    alt={member.profile?.full_name || "Member"}
-                  />
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-                    {(
-                      member.profile?.display_name?.[0] ||
-                      member.profile?.full_name?.[0] ||
-                      "U"
-                    ).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-
-                {/* Tooltip */}
+              return (
                 <div
+                  key={cls.id}
                   className={cn(
-                    "absolute bottom-full left-1/2 -translate-x-1/2 mb-2",
-                    "px-2 py-1 bg-foreground text-background text-xs rounded-md",
-                    "whitespace-nowrap pointer-events-none",
-                    "opacity-0 group-hover:opacity-100 transition-opacity duration-200",
-                    "z-20"
+                    "rounded-xl p-3 border transition-colors",
+                    isLive
+                      ? "border-red-500/30 bg-red-500/5"
+                      : "border-border/50 bg-muted/30"
                   )}
                 >
-                  {member.profile?.display_name ||
-                    formatDisplayName(member.profile?.full_name) ||
-                    "Anonymous"}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {cls.title}
+                      </p>
+                    </div>
+                    {isLive && (
+                      <span className="flex items-center gap-1 text-xs font-medium text-red-500 flex-shrink-0">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                        </span>
+                        LIVE
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    {isLive
+                      ? "Happening now"
+                      : formatClassTime(cls.scheduled_start_time)}
+                  </p>
+
+                  {isLive || isStartingSoon ? (
+                    <Link href={`/${communitySlug}/calendar`}>
+                      <Button
+                        size="sm"
+                        className={cn(
+                          "w-full mt-2 h-7 text-xs",
+                          isLive
+                            ? "bg-purple-600 hover:bg-purple-700 text-white"
+                            : "bg-primary hover:bg-primary/90"
+                        )}
+                      >
+                        {isLive ? "Join Now" : "Join"}
+                      </Button>
+                    </Link>
+                  ) : (
+                    <p className="text-xs text-muted-foreground/70 mt-2">
+                      {getTimeUntil(cls.scheduled_start_time)}
+                    </p>
+                  )}
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+        )}
 
-          {/* Remaining count badge */}
-          {remainingCount > 0 && (
-            <div
-              className="absolute transform -translate-x-1/2 -translate-y-1/2"
-              style={{ left: "50%", top: "85%" }}
-            >
-              <div className="bg-muted text-muted-foreground text-xs font-medium px-2 py-1 rounded-full">
-                +{remainingCount} more
-              </div>
-            </div>
-          )}
-        </div>
+        <Link
+          href={`/${communitySlug}/calendar`}
+          className="flex items-center justify-center gap-1.5 text-xs text-primary hover:text-primary/80 mt-3 pt-3 border-t border-border/50 transition-colors"
+        >
+          <Calendar className="h-3 w-3" />
+          View Calendar
+        </Link>
+      </div>
 
-        {/* Action buttons */}
-        {!isCreator && (
+      {/* Action buttons */}
+      {!isCreator && (
+        <div className="bg-card rounded-2xl p-4 border border-border/50 shadow-sm">
           <div className="space-y-2">
             {subscriptionStatus === "canceling" && accessEndDate ? (
-              // Member has canceled but still has access until period end
               <>
                 <p className="text-xs text-center text-muted-foreground mb-2">
                   Your membership ends on{" "}
@@ -214,7 +272,6 @@ export default function CommunitySidebar({
                 </Button>
               </>
             ) : memberStatus === "inactive" ? (
-              // Member is fully inactive (past period end)
               <>
                 <Button
                   onClick={onReactivateClick}
@@ -224,12 +281,12 @@ export default function CommunitySidebar({
                 </Button>
                 {accessEndDate && (
                   <p className="text-xs text-center text-amber-600">
-                    Access until {new Date(accessEndDate).toLocaleDateString()}
+                    Access until{" "}
+                    {new Date(accessEndDate).toLocaleDateString()}
                   </p>
                 )}
               </>
             ) : isMember ? (
-              // Active member
               <Button
                 onClick={onLeaveClick}
                 variant="outline"
@@ -238,7 +295,6 @@ export default function CommunitySidebar({
                 Leave Community
               </Button>
             ) : (
-              // Not a member
               <Button
                 onClick={onJoinClick}
                 className="w-full bg-primary hover:bg-primary/90"
@@ -249,8 +305,8 @@ export default function CommunitySidebar({
               </Button>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </aside>
   );
 }
