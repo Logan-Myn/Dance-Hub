@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { queryOne, sql } from "@/lib/db";
+import { queryOne, query, sql } from "@/lib/db";
 import { startRecording, getRecordingAccessLink } from "@/lib/daily";
 import { createAssetFromUrls } from "@/lib/mux";
 import crypto from "crypto";
@@ -28,11 +28,12 @@ interface LiveClassForRecording {
   enable_recording: boolean;
 }
 
-interface Recording {
+interface RecordingRow {
   id: string;
   status: string;
   live_class_id: string | null;
   daily_recording_id: string | null;
+  duration_seconds: number | null;
 }
 
 // GET handler for Daily webhook verification
@@ -67,6 +68,9 @@ export async function POST(request: NextRequest) {
     switch (eventType) {
       case "meeting.started":
         await handleMeetingStarted(event);
+        break;
+      case "recording.stopped":
+        await handleRecordingStopped(event);
         break;
       case "recording.ready-to-download":
         await handleRecordingReady(event);
@@ -109,8 +113,9 @@ async function handleMeetingStarted(event: any) {
     return;
   }
 
-  const recording = await queryOne<Recording>`
-    SELECT id, status FROM live_class_recordings WHERE id = ${liveClass.recording_id}
+  const recording = await queryOne<RecordingRow>`
+    SELECT id, status, live_class_id, daily_recording_id, duration_seconds
+    FROM live_class_recordings WHERE id = ${liveClass.recording_id}
   `;
 
   if (!recording || recording.status !== 'pending') {
@@ -120,7 +125,6 @@ async function handleMeetingStarted(event: any) {
 
   try {
     const result = await startRecording(roomName);
-    // Store the daily_recording_id from the start response (needed for recording.ready-to-download)
     const dailyRecordingId = result?.recordingId || result?.id;
     console.log(`[recording] startRecording response:`, JSON.stringify(result));
 
@@ -141,16 +145,80 @@ async function handleMeetingStarted(event: any) {
   }
 }
 
+/**
+ * Recording stopped unexpectedly — restart if live is still active.
+ * This handles Daily's recording time limits and unexpected stops.
+ * Creates a new recording segment and restarts recording.
+ */
+async function handleRecordingStopped(event: any) {
+  const roomName = event.payload?.room;
+  if (!roomName) return;
+
+  console.log(`[recording] recording.stopped for room: ${roomName}`);
+
+  const liveClass = await queryOne<LiveClassForRecording>`
+    SELECT id, recording_id, community_id, title, status, enable_recording
+    FROM live_classes
+    WHERE daily_room_name = ${roomName}
+      AND enable_recording = true
+  `;
+
+  if (!liveClass) return;
+
+  // If class is still live, create a new segment and restart recording
+  if (liveClass.status === 'live') {
+    console.log(`[recording] Recording stopped while class ${liveClass.id} still live — restarting...`);
+
+    try {
+      // Create a new recording segment
+      const newRecording = await queryOne<{ id: string }>`
+        INSERT INTO live_class_recordings (live_class_id, status)
+        VALUES (${liveClass.id}, 'pending')
+        RETURNING id
+      `;
+
+      if (!newRecording) {
+        console.error(`[recording] Failed to create new segment for live class ${liveClass.id}`);
+        return;
+      }
+
+      const result = await startRecording(roomName);
+      const dailyRecordingId = result?.recordingId || result?.id;
+      console.log(`[recording] Restarted recording for room: ${roomName}, dailyRecordingId: ${dailyRecordingId}`);
+
+      await sql`
+        UPDATE live_class_recordings
+        SET status = 'recording',
+            daily_recording_id = ${dailyRecordingId || null},
+            updated_at = NOW()
+        WHERE id = ${newRecording.id}
+      `;
+
+      // Update live class to point to new active recording segment
+      await sql`
+        UPDATE live_classes SET recording_id = ${newRecording.id}, updated_at = NOW()
+        WHERE id = ${liveClass.id}
+      `;
+    } catch (error) {
+      console.error(`[recording] Failed to restart recording for live class ${liveClass.id}:`, error);
+    }
+  }
+}
+
+/**
+ * Recording file ready — store info and try to concatenate all segments.
+ * If live has ended and all segments are ready, concatenate into one Mux asset.
+ */
 async function handleRecordingReady(event: any) {
   const recordingId = event.payload?.recording_id;
   const duration = event.payload?.duration;
   if (!recordingId) return;
 
-  console.log(`[recording] recording.ready-to-download, recording_id: ${recordingId}`);
+  console.log(`[recording] recording.ready-to-download, recording_id: ${recordingId}, duration: ${duration}`);
 
   // Find the recording by daily_recording_id
-  const recording = await queryOne<Recording>`
-    SELECT id, status, live_class_id, daily_recording_id
+  const recording = await queryOne<RecordingRow>`
+    SELECT id, status, live_class_id, daily_recording_id, duration_seconds
     FROM live_class_recordings
     WHERE daily_recording_id = ${recordingId}
   `;
@@ -161,36 +229,112 @@ async function handleRecordingReady(event: any) {
   }
 
   try {
-    await sql`
-      UPDATE live_class_recordings SET status = 'processing', updated_at = NOW()
-      WHERE id = ${recording.id}
-    `;
-
-    // Get download URL from Daily
-    const accessLink = await getRecordingAccessLink(recordingId);
-    if (!accessLink) {
-      throw new Error("Failed to get recording access link from Daily");
-    }
-
-    // Create Mux asset from the recording URL
-    const muxAsset = await createAssetFromUrls(
-      [accessLink],
-      `live-class-recording-${recording.id}`
-    );
-
+    // Mark this segment as processing and store duration
     await sql`
       UPDATE live_class_recordings
-      SET mux_asset_id = ${muxAsset.id}, updated_at = NOW()
+      SET status = 'processing',
+          duration_seconds = ${duration || null},
+          updated_at = NOW()
       WHERE id = ${recording.id}
     `;
 
-    console.log(`[recording] Recording ${recording.id} sent to Mux, asset: ${muxAsset.id}`);
+    // Try to concatenate if live class has ended and all segments are ready
+    await tryConcatenateSegments(recording.live_class_id);
   } catch (error) {
     console.error(`[recording] Failed to process recording ${recording.id}:`, error);
     await sql`
       UPDATE live_class_recordings
       SET status = 'failed', error = ${String(error)}, updated_at = NOW()
       WHERE id = ${recording.id}
+    `;
+  }
+}
+
+/**
+ * Check if all segments for a live class are ready and the class has ended.
+ * If so, concatenate all segments into a single Mux asset.
+ */
+async function tryConcatenateSegments(liveClassId: string) {
+  const liveClass = await queryOne<{ id: string; status: string; title: string }>`
+    SELECT id, status, title FROM live_classes WHERE id = ${liveClassId}
+  `;
+
+  if (!liveClass || liveClass.status !== 'ended') {
+    console.log(`[recording] Live class ${liveClassId} not ended yet (status: ${liveClass?.status}) — waiting`);
+    return;
+  }
+
+  // Get all recording segments for this live class
+  const segments = await query<RecordingRow>`
+    SELECT id, status, live_class_id, daily_recording_id, duration_seconds
+    FROM live_class_recordings
+    WHERE live_class_id = ${liveClassId}
+    ORDER BY created_at ASC
+  `;
+
+  // Check if any are still recording or pending
+  const stillActive = segments.some((s) => s.status === 'pending' || s.status === 'recording');
+  if (stillActive) {
+    console.log(`[recording] Some segments still active for live class ${liveClassId} — waiting`);
+    return;
+  }
+
+  // Check if we already created a Mux asset
+  const alreadyProcessed = segments.some((s) => s.status === 'ready');
+  if (alreadyProcessed) {
+    console.log(`[recording] Segments already processed for live class ${liveClassId}`);
+    return;
+  }
+
+  // Get segments that are ready for concatenation
+  const readySegments = segments.filter((s) => s.daily_recording_id && s.status === 'processing');
+  if (readySegments.length === 0) {
+    console.log(`[recording] No ready segments for live class ${liveClassId}`);
+    return;
+  }
+
+  console.log(`[recording] Concatenating ${readySegments.length} segment(s) for live class "${liveClass.title}"`);
+
+  try {
+    // Get download URLs for all segments
+    const downloadUrls: string[] = [];
+    for (const seg of readySegments) {
+      const url = await getRecordingAccessLink(seg.daily_recording_id!);
+      if (!url) throw new Error(`Failed to get access link for segment ${seg.id}`);
+      downloadUrls.push(url);
+    }
+
+    // Create a single Mux asset from all segment URLs (Mux concatenates them)
+    const primaryRecording = readySegments[0];
+    const muxAsset = await createAssetFromUrls(downloadUrls, `live-class-recording-${primaryRecording.id}`);
+
+    // Calculate total duration
+    const totalDuration = readySegments.reduce((sum, s) => sum + (s.duration_seconds ?? 0), 0);
+
+    // Update the first recording with the Mux asset info
+    await sql`
+      UPDATE live_class_recordings
+      SET mux_asset_id = ${muxAsset.id},
+          duration_seconds = ${totalDuration},
+          status = 'processing',
+          updated_at = NOW()
+      WHERE id = ${primaryRecording.id}
+    `;
+
+    // Clean up extra segment rows (keep only the primary)
+    if (readySegments.length > 1) {
+      for (const seg of readySegments.slice(1)) {
+        await sql`DELETE FROM live_class_recordings WHERE id = ${seg.id}`;
+      }
+    }
+
+    console.log(`[recording] Created Mux asset ${muxAsset.id} (${readySegments.length} segments, ${Math.round(totalDuration)}s total)`);
+  } catch (error) {
+    console.error(`[recording] Failed to concatenate segments for live class ${liveClassId}:`, error);
+    await sql`
+      UPDATE live_class_recordings
+      SET status = 'failed', error = ${String(error)}, updated_at = NOW()
+      WHERE id = ${readySegments[0].id}
     `;
   }
 }
