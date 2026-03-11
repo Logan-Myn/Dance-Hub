@@ -493,8 +493,12 @@ export default function CoursePage() {
         const profileResponse = await fetch(`/api/profile?userId=${user.id}`);
         if (profileResponse.ok) {
           const profile = await profileResponse.json();
-          // Admins have access to all communities
+          // Admins have access to all communities — but still need community data
           if (profile?.is_admin) {
+            const communityRes = await fetch(`/api/community/${communitySlug}`);
+            if (communityRes.ok) {
+              setCommunity(await communityRes.json());
+            }
             setIsAccessChecked(true);
             return;
           }
