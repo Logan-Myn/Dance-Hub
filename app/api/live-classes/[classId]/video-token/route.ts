@@ -3,7 +3,6 @@ import { queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { videoRoomService } from "@/lib/video-room-service";
 import { getDailyDomain } from "@/lib/get-daily-domain";
-import { enableAutoRecording } from "@/lib/daily";
 
 interface LiveClassWithDetails {
   id: string;
@@ -158,17 +157,7 @@ export async function GET(
             `;
             console.log(`Created pending recording ${recording.id} for live class ${params.classId}`);
 
-            // Enable auto-recording on the room — starts when teacher joins
-            try {
-              await enableAutoRecording(liveClass.daily_room_name!);
-              await sql`
-                UPDATE live_class_recordings SET status = 'recording', updated_at = NOW()
-                WHERE id = ${recording.id}
-              `;
-              console.log(`Enabled auto-recording for live class ${params.classId}`);
-            } catch (recError) {
-              console.error("Failed to enable auto-recording:", recError);
-            }
+            // Recording will start via Daily webhook when meeting.started fires
           }
         } catch (error) {
           console.error("Failed to create recording row:", error);

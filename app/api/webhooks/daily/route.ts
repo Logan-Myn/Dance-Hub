@@ -6,12 +6,11 @@ import crypto from "crypto";
 
 const DAILY_WEBHOOK_SECRET = process.env.DAILY_WEBHOOK_SECRET;
 
-function verifySignature(payload: string, signature: string | null): boolean {
-  if (!DAILY_WEBHOOK_SECRET || !signature) return false;
-  // Daily sends base64-encoded HMAC-SHA256 using the base64-decoded secret
-  const secretBytes = Buffer.from(DAILY_WEBHOOK_SECRET, "base64");
-  const hmac = crypto.createHmac("sha256", secretBytes);
-  hmac.update(payload);
+function verifySignature(payload: string, timestamp: string, signature: string): boolean {
+  if (!DAILY_WEBHOOK_SECRET) return false;
+  const key = Buffer.from(DAILY_WEBHOOK_SECRET, "base64");
+  const hmac = crypto.createHmac("sha256", key);
+  hmac.update(`${timestamp}.${payload}`);
   const expected = hmac.digest("base64");
   try {
     return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
@@ -39,14 +38,13 @@ interface Recording {
 export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text();
-    const signature = request.headers.get("x-webhook-signature") || request.headers.get("X-Webhook-Signature");
+    const signature = request.headers.get("x-webhook-signature") ?? "";
+    const timestamp = request.headers.get("x-webhook-timestamp") ?? "";
 
     if (DAILY_WEBHOOK_SECRET && signature) {
-      const isValid = verifySignature(rawBody, signature);
-      if (!isValid) {
-        console.warn("Daily webhook signature mismatch — allowing through for debugging");
-        // TODO: re-enable strict verification once confirmed working
-        // return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+      if (!verifySignature(rawBody, timestamp, signature)) {
+        console.error("Daily webhook signature verification failed");
+        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
       }
     }
 
