@@ -20,6 +20,7 @@ interface CustomDailyRoomProps {
   roomUrl: string;
   token: string;
   onLeave: () => void;
+  onEndClass?: () => void;
   className?: string;
   classTitle?: string;
   isTeacher?: boolean;
@@ -44,7 +45,7 @@ export interface ActiveSpeaker {
   userName: string;
 }
 
-function CallInterface({ onLeave, classTitle, isTeacher = false }: { onLeave: () => void; classTitle?: string; isTeacher?: boolean }) {
+function CallInterface({ onLeave, onEndClass, classTitle, isTeacher = false }: { onLeave: () => void; onEndClass?: () => void; classTitle?: string; isTeacher?: boolean }) {
   const callObject = useDaily();
   const allParticipantIds = useParticipantIds();
   const localSessionId = useLocalSessionId();
@@ -319,6 +320,7 @@ function CallInterface({ onLeave, classTitle, isTeacher = false }: { onLeave: ()
       {/* Control Bar */}
       <ControlBar
         onLeave={onLeave}
+        onEndClass={onEndClass}
         onToggleChat={toggleChat}
         isChatOpen={isChatOpen}
         unreadCount={unreadCount}
@@ -339,6 +341,7 @@ export default function CustomDailyRoom({
   roomUrl,
   token,
   onLeave,
+  onEndClass,
   classTitle,
   isTeacher = false
 }: CustomDailyRoomProps) {
@@ -399,7 +402,7 @@ export default function CustomDailyRoom({
 
   return (
     <DailyProvider callObject={callObjectRef.current}>
-      <CallInterface onLeave={onLeave} classTitle={classTitle} isTeacher={isTeacher} />
+      <CallInterface onLeave={onLeave} onEndClass={onEndClass} classTitle={classTitle} isTeacher={isTeacher} />
     </DailyProvider>
   );
 }

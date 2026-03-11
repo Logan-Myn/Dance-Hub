@@ -11,6 +11,7 @@ import {
   ChatBubbleLeftIcon,
   HandRaisedIcon,
   UserMinusIcon,
+  StopCircleIcon,
 } from "@heroicons/react/24/solid";
 import {
   MicrophoneIcon as MicrophoneOffIcon,
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 
 interface ControlBarProps {
   onLeave: () => void;
+  onEndClass?: () => void;
   onToggleChat?: () => void;
   isChatOpen?: boolean;
   unreadCount?: number;
@@ -35,6 +37,7 @@ interface ControlBarProps {
 
 export default function ControlBar({
   onLeave,
+  onEndClass,
   onToggleChat,
   isChatOpen,
   unreadCount = 0,
@@ -206,6 +209,20 @@ export default function ControlBar({
           <Cog6ToothIcon className="h-6 w-6" />
         </Button>
 
+        {/* End Class (teacher only) */}
+        {isTeacher && onEndClass && (
+          <Button
+            onClick={onEndClass}
+            size="lg"
+            variant="destructive"
+            className="rounded-full h-14 px-4 bg-orange-600 hover:bg-orange-700 gap-2"
+            title="End class for everyone"
+          >
+            <StopCircleIcon className="h-5 w-5" />
+            <span className="text-xs">End Class</span>
+          </Button>
+        )}
+
         {/* Leave */}
         <Button
           onClick={handleLeave}
@@ -235,6 +252,7 @@ export default function ControlBar({
         <div className="mx-4 w-px"></div>
         {onToggleChat && <span className="text-xs text-gray-400 w-14 text-center">Chat</span>}
         <span className="text-xs text-gray-400 w-14 text-center">Settings</span>
+        {isTeacher && onEndClass && <span className="text-xs text-orange-400 text-center">End Class</span>}
         <span className="text-xs text-gray-400 w-14 text-center text-red-400">Leave</span>
       </div>
     </div>

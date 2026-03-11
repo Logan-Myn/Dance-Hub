@@ -87,6 +87,25 @@ export default function LiveClassVideoPage({ classId, liveClass }: LiveClassVide
     router.push(`/${liveClass.community_slug}`);
   };
 
+  const handleEndClass = async () => {
+    if (!confirm("End this class for everyone? This will stop the recording if active.")) return;
+    try {
+      const response = await fetch(`/api/community/${liveClass.community_slug}/live-classes/${classId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "ended" }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to end class");
+      }
+      toast.success("Class ended successfully");
+      router.push(`/${liveClass.community_slug}`);
+    } catch (err) {
+      toast.error("Failed to end class");
+      console.error("Error ending class:", err);
+    }
+  };
+
   const getStatusDisplay = () => {
     if (isCancelled) {
       return (
@@ -248,6 +267,7 @@ export default function LiveClassVideoPage({ classId, liveClass }: LiveClassVide
             roomUrl={videoToken.roomUrl}
             token={videoToken.token}
             onLeave={handleLeave}
+            onEndClass={videoToken.isTeacher ? handleEndClass : undefined}
             classTitle={liveClass.title}
             isTeacher={videoToken.isTeacher}
           />
