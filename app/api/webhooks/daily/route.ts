@@ -118,30 +118,68 @@ async function handleMeetingStarted(event: any) {
     FROM live_class_recordings WHERE id = ${liveClass.recording_id}
   `;
 
-  if (!recording || recording.status !== 'pending') {
-    console.log(`[recording] Recording ${liveClass.recording_id} not pending (status: ${recording?.status})`);
+  // If current recording is pending, start it
+  if (recording && recording.status === 'pending') {
+    try {
+      const result = await startRecording(roomName);
+      const dailyRecordingId = result?.recordingId || result?.id;
+      console.log(`[recording] startRecording response:`, JSON.stringify(result));
+
+      await sql`
+        UPDATE live_class_recordings
+        SET status = 'recording',
+            daily_recording_id = ${dailyRecordingId || null},
+            updated_at = NOW()
+        WHERE id = ${recording.id}
+      `;
+      console.log(`[recording] Started recording for live class ${liveClass.id}, dailyRecordingId: ${dailyRecordingId}`);
+    } catch (error) {
+      console.error(`[recording] Failed to start recording for live class ${liveClass.id}:`, error);
+      await sql`
+        UPDATE live_class_recordings SET status = 'failed', error = ${String(error)}, updated_at = NOW()
+        WHERE id = ${recording.id}
+      `;
+    }
     return;
   }
 
-  try {
-    const result = await startRecording(roomName);
-    const dailyRecordingId = result?.recordingId || result?.id;
-    console.log(`[recording] startRecording response:`, JSON.stringify(result));
+  // If current recording already completed/processing (e.g. teacher left and came back),
+  // create a new recording segment and start it
+  if (!recording || recording.status !== 'recording') {
+    console.log(`[recording] Current recording ${liveClass.recording_id} is '${recording?.status}' — creating new segment for rejoined meeting`);
 
-    await sql`
-      UPDATE live_class_recordings
-      SET status = 'recording',
-          daily_recording_id = ${dailyRecordingId || null},
-          updated_at = NOW()
-      WHERE id = ${recording.id}
-    `;
-    console.log(`[recording] Started recording for live class ${liveClass.id}, dailyRecordingId: ${dailyRecordingId}`);
-  } catch (error) {
-    console.error(`[recording] Failed to start recording for live class ${liveClass.id}:`, error);
-    await sql`
-      UPDATE live_class_recordings SET status = 'failed', error = ${String(error)}, updated_at = NOW()
-      WHERE id = ${recording.id}
-    `;
+    try {
+      const newRecording = await queryOne<{ id: string }>`
+        INSERT INTO live_class_recordings (live_class_id, status)
+        VALUES (${liveClass.id}, 'pending')
+        RETURNING id
+      `;
+
+      if (!newRecording) {
+        console.error(`[recording] Failed to create new segment for live class ${liveClass.id}`);
+        return;
+      }
+
+      const result = await startRecording(roomName);
+      const dailyRecordingId = result?.recordingId || result?.id;
+
+      await sql`
+        UPDATE live_class_recordings
+        SET status = 'recording',
+            daily_recording_id = ${dailyRecordingId || null},
+            updated_at = NOW()
+        WHERE id = ${newRecording.id}
+      `;
+
+      await sql`
+        UPDATE live_classes SET recording_id = ${newRecording.id}, updated_at = NOW()
+        WHERE id = ${liveClass.id}
+      `;
+
+      console.log(`[recording] Started new recording segment for live class ${liveClass.id}, dailyRecordingId: ${dailyRecordingId}`);
+    } catch (error) {
+      console.error(`[recording] Failed to start new recording segment for live class ${liveClass.id}:`, error);
+    }
   }
 }
 
