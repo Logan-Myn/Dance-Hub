@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryOne, query, sql } from "@/lib/db";
 import { startRecording, getRecordingAccessLink } from "@/lib/daily";
-import { createAssetFromUrls } from "@/lib/mux";
+import { createAssetFromUrl } from "@/lib/mux";
 import crypto from "crypto";
 
 const DAILY_WEBHOOK_SECRET = process.env.DAILY_WEBHOOK_SECRET;
@@ -300,7 +300,7 @@ async function handleRecordingReady(event: any) {
     `;
 
     // Try to concatenate if live class has ended and all segments are ready
-    await tryConcatenateSegments(recording.live_class_id);
+    await tryProcessSegments(recording.live_class_id);
   } catch (error) {
     console.error(`[recording] Failed to process recording ${recording.id}:`, error);
     await sql`
@@ -313,9 +313,9 @@ async function handleRecordingReady(event: any) {
 
 /**
  * Check if all segments for a live class are ready and the class has ended.
- * If so, concatenate all segments into a single Mux asset.
+ * If so, create a Mux asset for each segment.
  */
-async function tryConcatenateSegments(liveClassId: string) {
+async function tryProcessSegments(liveClassId: string) {
   const liveClass = await queryOne<{ id: string; status: string; title: string }>`
     SELECT id, status, title FROM live_classes WHERE id = ${liveClassId}
   `;
@@ -340,63 +340,39 @@ async function tryConcatenateSegments(liveClassId: string) {
     return;
   }
 
-  // Check if we already created a Mux asset
-  const alreadyProcessed = segments.some((s) => s.status === 'ready');
-  if (alreadyProcessed) {
-    console.log(`[recording] Segments already processed for live class ${liveClassId}`);
-    return;
-  }
-
-  // Get segments that are ready for concatenation
+  // Get segments that are ready for Mux processing (no mux_asset_id yet)
   const readySegments = segments.filter((s) => s.daily_recording_id && s.status === 'processing');
   if (readySegments.length === 0) {
     console.log(`[recording] No ready segments for live class ${liveClassId}`);
     return;
   }
 
-  console.log(`[recording] Concatenating ${readySegments.length} segment(s) for live class "${liveClass.title}"`);
+  console.log(`[recording] Processing ${readySegments.length} segment(s) for live class "${liveClass.title}"`);
 
-  try {
-    // Get download URLs for all segments
-    const downloadUrls: string[] = [];
-    for (const seg of readySegments) {
+  for (const seg of readySegments) {
+    try {
       const url = await getRecordingAccessLink(seg.daily_recording_id!);
       if (!url) throw new Error(`Failed to get access link for segment ${seg.id}`);
-      downloadUrls.push(url);
+
+      const muxAsset = await createAssetFromUrl(url, `live-class-recording-${seg.id}`);
+
+      await sql`
+        UPDATE live_class_recordings
+        SET mux_asset_id = ${muxAsset.id},
+            status = 'processing',
+            updated_at = NOW()
+        WHERE id = ${seg.id}
+      `;
+
+      console.log(`[recording] Created Mux asset ${muxAsset.id} for segment ${seg.id} (${Math.round(seg.duration_seconds ?? 0)}s)`);
+    } catch (error) {
+      console.error(`[recording] Failed to create Mux asset for segment ${seg.id}:`, error);
+      await sql`
+        UPDATE live_class_recordings
+        SET status = 'failed', error = ${String(error)}, updated_at = NOW()
+        WHERE id = ${seg.id}
+      `;
     }
-
-    // Create a single Mux asset from all segment URLs (Mux concatenates them)
-    const primaryRecording = readySegments[0];
-    const muxAsset = await createAssetFromUrls(downloadUrls, `live-class-recording-${primaryRecording.id}`);
-
-    // Calculate total duration
-    const totalDuration = readySegments.reduce((sum, s) => sum + (s.duration_seconds ?? 0), 0);
-
-    // Update the first recording with the Mux asset info
-    await sql`
-      UPDATE live_class_recordings
-      SET mux_asset_id = ${muxAsset.id},
-          duration_seconds = ${totalDuration},
-          status = 'processing',
-          updated_at = NOW()
-      WHERE id = ${primaryRecording.id}
-    `;
-
-    // Clean up extra segment rows (keep only the primary)
-    if (readySegments.length > 1) {
-      for (const seg of readySegments.slice(1)) {
-        await sql`DELETE FROM live_class_recordings WHERE id = ${seg.id}`;
-      }
-    }
-
-    console.log(`[recording] Created Mux asset ${muxAsset.id} (${readySegments.length} segments, ${Math.round(totalDuration)}s total)`);
-  } catch (error) {
-    console.error(`[recording] Failed to concatenate segments for live class ${liveClassId}:`, error);
-    await sql`
-      UPDATE live_class_recordings
-      SET status = 'failed', error = ${String(error)}, updated_at = NOW()
-      WHERE id = ${readySegments[0].id}
-    `;
   }
 }
 

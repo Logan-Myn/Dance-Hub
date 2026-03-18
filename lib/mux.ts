@@ -58,19 +58,17 @@ export async function getMuxAsset(uploadId: string) {
 }
 
 /**
- * Create a Mux asset from one or more URLs (e.g., Daily.co recording downloads).
- * Uses raw fetch with Basic auth to support multi-URL input for segment concatenation.
+ * Create a Mux asset from a single URL (e.g., Daily.co recording download).
  */
-export async function createAssetFromUrls(urls: string[], passthrough?: string) {
+export async function createAssetFromUrl(url: string, passthrough?: string) {
   const tokenId = process.env.MUX_TOKEN_ID;
   const tokenSecret = process.env.MUX_TOKEN_SECRET;
   if (!tokenId || !tokenSecret) {
     throw new Error('Missing Mux API credentials');
   }
 
-  const input = urls.map((url) => ({ url }));
   const body: Record<string, unknown> = {
-    input,
+    input: [{ url }],
     playback_policy: ['public'],
   };
   if (passthrough) {
@@ -93,6 +91,14 @@ export async function createAssetFromUrls(urls: string[], passthrough?: string) 
 
   const result = await response.json();
   return result.data;
+}
+
+/**
+ * @deprecated Use createAssetFromUrl instead. Mux does not support concatenating multiple video URLs.
+ * Kept for backward compatibility — only uses the first URL.
+ */
+export async function createAssetFromUrls(urls: string[], passthrough?: string) {
+  return createAssetFromUrl(urls[0], passthrough);
 }
 
 // Add new function to delete a Mux asset
