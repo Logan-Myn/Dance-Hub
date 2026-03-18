@@ -146,8 +146,8 @@ async function handleMeetingStarted(event: any) {
 }
 
 /**
- * Recording stopped unexpectedly — restart if live is still active.
- * This handles Daily's recording time limits and unexpected stops.
+ * Recording stopped — restart if live is still active and not being intentionally ended.
+ * This handles Daily's recording time limits, unexpected stops, and owner-left scenarios.
  * Creates a new recording segment and restarts recording.
  */
 async function handleRecordingStopped(event: any) {
@@ -155,6 +155,10 @@ async function handleRecordingStopped(event: any) {
   if (!roomName) return;
 
   console.log(`[recording] recording.stopped for room: ${roomName}`);
+
+  // Small delay to allow the "End Class" PUT request to finish updating the DB
+  // This prevents a race condition where the webhook fires before status is set to 'ended'
+  await new Promise((resolve) => setTimeout(resolve, 1500));
 
   const liveClass = await queryOne<LiveClassForRecording>`
     SELECT id, recording_id, community_id, title, status, enable_recording
@@ -165,43 +169,62 @@ async function handleRecordingStopped(event: any) {
 
   if (!liveClass) return;
 
-  // If class is still live, create a new segment and restart recording
-  if (liveClass.status === 'live') {
-    console.log(`[recording] Recording stopped while class ${liveClass.id} still live — restarting...`);
+  // If class is ended or being ended, don't restart
+  if (liveClass.status !== 'live') {
+    console.log(`[recording] Class ${liveClass.id} status is '${liveClass.status}' — not restarting recording`);
+    return;
+  }
 
-    try {
-      // Create a new recording segment
-      const newRecording = await queryOne<{ id: string }>`
-        INSERT INTO live_class_recordings (live_class_id, status)
-        VALUES (${liveClass.id}, 'pending')
-        RETURNING id
-      `;
+  // Check if any recordings are in 'stopping' state (intentional end via End Class button)
+  const stoppingRecording = await queryOne<{ id: string }>`
+    SELECT id FROM live_class_recordings
+    WHERE live_class_id = ${liveClass.id} AND status = 'stopping'
+    LIMIT 1
+  `;
 
-      if (!newRecording) {
-        console.error(`[recording] Failed to create new segment for live class ${liveClass.id}`);
-        return;
-      }
+  if (stoppingRecording) {
+    console.log(`[recording] Class ${liveClass.id} has recordings in 'stopping' state — not restarting (intentional end)`);
+    return;
+  }
 
-      const result = await startRecording(roomName);
-      const dailyRecordingId = result?.recordingId || result?.id;
-      console.log(`[recording] Restarted recording for room: ${roomName}, dailyRecordingId: ${dailyRecordingId}`);
+  // Class is still live and recording wasn't intentionally stopped — restart it
+  console.log(`[recording] Recording stopped while class ${liveClass.id} still live — restarting...`);
 
-      await sql`
-        UPDATE live_class_recordings
-        SET status = 'recording',
-            daily_recording_id = ${dailyRecordingId || null},
-            updated_at = NOW()
-        WHERE id = ${newRecording.id}
-      `;
+  try {
+    // Create a new recording segment
+    const newRecording = await queryOne<{ id: string }>`
+      INSERT INTO live_class_recordings (live_class_id, status)
+      VALUES (${liveClass.id}, 'pending')
+      RETURNING id
+    `;
 
-      // Update live class to point to new active recording segment
-      await sql`
-        UPDATE live_classes SET recording_id = ${newRecording.id}, updated_at = NOW()
-        WHERE id = ${liveClass.id}
-      `;
-    } catch (error) {
-      console.error(`[recording] Failed to restart recording for live class ${liveClass.id}:`, error);
+    if (!newRecording) {
+      console.error(`[recording] Failed to create new segment for live class ${liveClass.id}`);
+      return;
     }
+
+    const result = await startRecording(roomName);
+    const dailyRecordingId = result?.recordingId || result?.id;
+    console.log(`[recording] Restarted recording for room: ${roomName}, dailyRecordingId: ${dailyRecordingId}`);
+
+    await sql`
+      UPDATE live_class_recordings
+      SET status = 'recording',
+          daily_recording_id = ${dailyRecordingId || null},
+          updated_at = NOW()
+      WHERE id = ${newRecording.id}
+    `;
+
+    // Update live class to point to new active recording segment
+    await sql`
+      UPDATE live_classes SET recording_id = ${newRecording.id}, updated_at = NOW()
+      WHERE id = ${liveClass.id}
+    `;
+  } catch (error) {
+    console.error(`[recording] Failed to restart recording for live class ${liveClass.id}:`, error);
+    // Recording restart failed — this likely means the room is empty
+    // Don't mark anything as failed; the recording segment will stay pending
+    // and will be cleaned up when the class eventually ends
   }
 }
 
@@ -272,8 +295,8 @@ async function tryConcatenateSegments(liveClassId: string) {
     ORDER BY created_at ASC
   `;
 
-  // Check if any are still recording or pending
-  const stillActive = segments.some((s) => s.status === 'pending' || s.status === 'recording');
+  // Check if any are still recording, pending, or stopping
+  const stillActive = segments.some((s) => s.status === 'pending' || s.status === 'recording' || s.status === 'stopping');
   if (stillActive) {
     console.log(`[recording] Some segments still active for live class ${liveClassId} — waiting`);
     return;

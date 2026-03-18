@@ -199,8 +199,17 @@ export async function PUT(
       }
     }
 
-    // When class ends with recording enabled, stop the recording
+    // When class ends with recording enabled, mark recordings as stopping then stop
     if (status === 'ended' && liveClass.enable_recording && liveClass.daily_room_name) {
+      // Mark all active recordings as 'stopping' BEFORE calling stopRecording
+      // This prevents the webhook handler from restarting the recording
+      await sql`
+        UPDATE live_class_recordings
+        SET status = 'stopping', updated_at = NOW()
+        WHERE live_class_id = ${params.classId}
+          AND status IN ('pending', 'recording')
+      `;
+
       try {
         await stopRecording(liveClass.daily_room_name);
         console.log(`Stopped recording for live class ${params.classId}`);
