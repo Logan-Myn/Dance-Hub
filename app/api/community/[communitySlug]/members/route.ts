@@ -38,11 +38,13 @@ export async function GET(
       );
     }
 
-    // Get members with their profiles
+    // Get members with their profiles (only active members with successful payment)
     const membersData = await query<MemberWithProfile>`
       SELECT *
       FROM community_members_with_profiles
       WHERE community_id = ${community.id}
+        AND status = 'active'
+        AND (subscription_status = 'active' OR subscription_status IS NULL)
     `;
 
     // Format the members data
