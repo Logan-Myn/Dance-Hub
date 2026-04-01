@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
-import { createRoom, stopRecording as streamHubStopRecording, deleteRoom } from "@/lib/stream-hub";
+import { createRoom, stopRecording as streamHubStopRecording } from "@/lib/stream-hub";
 
 interface Community {
   id: string;
@@ -221,12 +221,9 @@ export async function PUT(
         console.error("Failed to stop recording (may already be stopped):", error);
       }
 
-      try {
-        await deleteRoom(liveClass.livekit_room_name);
-        console.log(`Deleted room for live class ${params.classId}`);
-      } catch (error) {
-        console.error("Failed to delete room:", error);
-      }
+      // Don't delete the room here — the egress needs it alive to finish
+      // writing the recording file. The room will auto-close after 300s
+      // of being empty (configured in LiveKit's emptyTimeout).
     }
 
     return NextResponse.json(updatedClass);
