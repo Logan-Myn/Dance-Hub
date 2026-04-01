@@ -50,14 +50,22 @@ export default function LiveKitControlBar({
 
   const toggleAudio = useCallback(async () => {
     try {
+      console.log("Toggling mic, current:", isMicrophoneEnabled);
       await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
-    } catch {}
+      console.log("Mic toggled successfully");
+    } catch (err) {
+      console.error("Failed to toggle mic:", err);
+    }
   }, [localParticipant, isMicrophoneEnabled]);
 
   const toggleVideo = useCallback(async () => {
     try {
+      console.log("Toggling camera, current:", isCameraEnabled);
       await localParticipant.setCameraEnabled(!isCameraEnabled);
-    } catch {}
+      console.log("Camera toggled successfully");
+    } catch (err) {
+      console.error("Failed to toggle camera:", err);
+    }
   }, [localParticipant, isCameraEnabled]);
 
   const toggleScreenShare = useCallback(async () => {
