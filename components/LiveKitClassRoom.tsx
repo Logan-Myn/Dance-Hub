@@ -322,7 +322,6 @@ export default function LiveKitClassRoom({
       token={token}
       serverUrl={serverUrl}
       connectOptions={{ autoSubscribe: true }}
-      onDisconnected={onLeave}
       style={{ height: "100%" }}
     >
       <CallInterface
