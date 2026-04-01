@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { LessonBookingWithDetails } from "@/types/private-lessons";
-import UltraSimpleDaily from "@/components/UltraSimpleDaily";
+import dynamic from "next/dynamic";
+const LiveKitVideoCall = dynamic(() => import("@/components/LiveKitVideoCall"), { ssr: false });
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,22 +40,11 @@ function VideoCallWithTokens({
 }) {
   const [videoData, setVideoData] = useState<{
     token: string;
-    room_url: string;
+    serverUrl: string;
   } | null>(null);
   const [isLoadingTokens, setIsLoadingTokens] = useState(false);
 
   useEffect(() => {
-    // If we already have a token, use it
-    const existingToken = isTeacher ? booking.teacher_daily_token : booking.student_daily_token;
-    if (existingToken && booking.daily_room_url) {
-      setVideoData({
-        token: existingToken,
-        room_url: booking.daily_room_url
-      });
-      return;
-    }
-
-    // Otherwise, fetch tokens
     fetchVideoTokens();
   }, [booking, isTeacher]);
 
@@ -76,7 +66,7 @@ function VideoCallWithTokens({
       const data = await response.json();
       setVideoData({
         token: data.token,
-        room_url: data.room_url
+        serverUrl: data.serverUrl
       });
 
     } catch (error) {
@@ -121,16 +111,16 @@ function VideoCallWithTokens({
 
   // Log the video data for debugging
   console.log('📹 Video data:', {
-    roomUrl: videoData.room_url,
+    serverUrl: videoData.serverUrl,
     hasToken: !!videoData.token,
     tokenLength: videoData.token?.length
   });
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden" style={{ height: '600px' }}>
-      <UltraSimpleDaily
-        roomUrl={videoData.room_url}
+      <LiveKitVideoCall
         token={videoData.token}
+        serverUrl={videoData.serverUrl}
       />
     </div>
   );
@@ -215,20 +205,17 @@ export default function VideoSessionPage() {
 
     const now = new Date();
     const scheduledTime = data.scheduled_at ? new Date(data.scheduled_at) : null;
-    const expiresAt = data.daily_room_expires_at ? new Date(data.daily_room_expires_at) : null;
 
     // Can join if:
     // 1. Payment is successful
-    // 2. Has Daily.co room name (tokens can be generated on-demand)
+    // 2. Has LiveKit room name (tokens can be generated on-demand)
     // 3. Within 15 minutes of scheduled time (or no scheduled time)
-    // 4. Room hasn't expired
     const hasValidPayment = data.payment_status === 'succeeded';
-    const hasRoomInfo = data.daily_room_name; // Remove token requirement - tokens generated on-demand
-    const isWithinJoinWindow = !scheduledTime || 
+    const hasRoomInfo = data.livekit_room_name;
+    const isWithinJoinWindow = !scheduledTime ||
       (now.getTime() >= scheduledTime.getTime() - 15 * 60 * 1000); // 15 minutes before
-    const isNotExpired = !expiresAt || now.getTime() < expiresAt.getTime();
 
-    setCanJoin(hasValidPayment && hasRoomInfo && isWithinJoinWindow && isNotExpired);
+    setCanJoin(hasValidPayment && hasRoomInfo && isWithinJoinWindow);
   };
 
   const updateTimeUntilStart = (bookingData?: any) => {
@@ -368,7 +355,7 @@ export default function VideoSessionPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Video Call Section */}
           <div className="lg:col-span-2">
-            {canJoin && booking.daily_room_name ? (
+            {canJoin && booking.livekit_room_name ? (
               <VideoCallWithTokens
                 booking={booking}
                 bookingId={bookingId}
@@ -388,7 +375,7 @@ export default function VideoSessionPage() {
                       <p className="text-gray-600 dark:text-gray-300">
                         Payment must be completed before joining the lesson.
                       </p>
-                    ) : !booking.daily_room_name ? (
+                    ) : !booking.livekit_room_name ? (
                       <p className="text-gray-600 dark:text-gray-300">
                         Video room is being set up. Please refresh the page.
                       </p>
