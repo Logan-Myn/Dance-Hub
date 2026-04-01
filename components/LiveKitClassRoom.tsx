@@ -61,14 +61,11 @@ function CallInterface({
   const [unreadCount, setUnreadCount] = useState(0);
   const [hasMediaPermission, setHasMediaPermission] = useState(isTeacher);
   const [handRaises, setHandRaises] = useState<HandRaise[]>([]);
-  const [activeSpeakers, setActiveSpeakers] = useState<HandRaise[]>([]);
-  const [isMuted, setIsMuted] = useState(!isTeacher);
-  const [isCamOff, setIsCamOff] = useState(!isTeacher);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [deniedFeedback, setDeniedFeedback] = useState(false);
   const [revokedFeedback, setRevokedFeedback] = useState(false);
 
-  const { send: sendData } = useDataChannel("app-messages", useCallback((msg) => {
+  const { send: sendData } = useDataChannel("app-messages", useCallback((msg: any) => {
     const data: DataMessage = JSON.parse(decoder.decode(msg.payload));
     const fromIdentity = msg.from?.identity ?? "";
 
@@ -99,7 +96,6 @@ function CallInterface({
       }
       if (data.type === "hand-lowered" && data.participantIdentity) {
         setHandRaises((prev) => prev.filter((r) => r.participantIdentity !== data.participantIdentity));
-        setActiveSpeakers((prev) => prev.filter((s) => s.participantIdentity !== data.participantIdentity));
       }
     } else {
       if (data.type === "hand-approved") {
@@ -112,10 +108,8 @@ function CallInterface({
       if (data.type === "hand-revoked") {
         setHasMediaPermission(false);
         setRevokedFeedback(true);
-        try { localParticipant?.setMicrophoneEnabled(false); } catch {}
-        try { localParticipant?.setCameraEnabled(false); } catch {}
-        setIsMuted(true);
-        setIsCamOff(true);
+        localParticipant?.setMicrophoneEnabled(false);
+        localParticipant?.setCameraEnabled(false);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -124,7 +118,7 @@ function CallInterface({
   const sendAppMessage = useCallback(
     (data: DataMessage, destinationIdentities?: string[]) => {
       const payload = encoder.encode(JSON.stringify(data));
-      sendData(payload, { destination: destinationIdentities });
+      sendData(payload, { destinationIdentities });
     },
     [sendData]
   );
@@ -134,7 +128,6 @@ function CallInterface({
     if (!isTeacher) return;
     const identities = participants.map((p) => p.identity);
     setHandRaises((prev) => prev.filter((r) => identities.includes(r.participantIdentity)));
-    setActiveSpeakers((prev) => prev.filter((s) => identities.includes(s.participantIdentity)));
   }, [participants, isTeacher]);
 
   // Teacher auto-enables camera and mic on connect
@@ -144,8 +137,6 @@ function CallInterface({
       try {
         await localParticipant.setCameraEnabled(true);
         await localParticipant.setMicrophoneEnabled(true);
-        setIsCamOff(false);
-        setIsMuted(false);
       } catch (err) {
         console.error("Error enabling media:", err);
       }
@@ -190,7 +181,7 @@ function CallInterface({
     (t) => t.participant.identity !== localParticipant?.identity
   );
 
-  const showLocalVideo = canSend && !isCamOff && !!localCameraTrack;
+  const showLocalVideo = canSend && !!localCameraTrack;
   const visibleCount = remoteTrackRefs.length + (showLocalVideo ? 1 : 0);
 
   return (
@@ -292,12 +283,11 @@ function CallInterface({
               onClose={toggleChat}
               isTeacher={isTeacher}
               handRaises={handRaises}
-              activeSpeakers={activeSpeakers}
               chatMessages={chatMessages}
               setChatMessages={setChatMessages}
               sendAppMessage={sendAppMessage}
               setHandRaises={setHandRaises}
-              setActiveSpeakers={setActiveSpeakers}
+              localParticipant={localParticipant}
             />
           </div>
         )}
@@ -314,10 +304,6 @@ function CallInterface({
         hasMediaPermission={hasMediaPermission}
         setHasMediaPermission={setHasMediaPermission}
         sendAppMessage={sendAppMessage}
-        isMuted={isMuted}
-        setIsMuted={setIsMuted}
-        isCamOff={isCamOff}
-        setIsCamOff={setIsCamOff}
       />
     </div>
   );
