@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
 
+const STREAM_HUB_API_KEY = process.env.STREAM_HUB_API_KEY;
+
 interface CallbackPayload {
   event: "recording.ready" | "recording.failed";
   roomName: string;
@@ -29,6 +31,12 @@ interface Chapter {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify the callback is from Stream-Hub using shared API key
+    const apiKey = request.headers.get("x-api-key");
+    if (!STREAM_HUB_API_KEY || apiKey !== STREAM_HUB_API_KEY) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const payload: CallbackPayload = await request.json();
     console.log(`Stream-Hub callback received: ${payload.event} for room ${payload.roomName}`);
 
@@ -134,6 +142,7 @@ async function handleRecordingFailed(payload: CallbackPayload) {
     UPDATE live_class_recordings
     SET status = 'failed', error = ${payload.error || "Recording failed"}, updated_at = NOW()
     WHERE live_class_id = ${classId}
+      AND status IN ('pending', 'recording', 'stopping')
   `;
 
   console.error(`Recording failed for room ${payload.roomName}: ${payload.error}`);

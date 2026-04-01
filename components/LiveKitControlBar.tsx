@@ -50,9 +50,7 @@ export default function LiveKitControlBar({
 
   const toggleAudio = useCallback(async () => {
     try {
-      console.log("Toggling mic, current:", isMicrophoneEnabled);
       await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
-      console.log("Mic toggled successfully");
     } catch (err) {
       console.error("Failed to toggle mic:", err);
     }
@@ -60,9 +58,7 @@ export default function LiveKitControlBar({
 
   const toggleVideo = useCallback(async () => {
     try {
-      console.log("Toggling camera, current:", isCameraEnabled);
       await localParticipant.setCameraEnabled(!isCameraEnabled);
-      console.log("Camera toggled successfully");
     } catch (err) {
       console.error("Failed to toggle camera:", err);
     }
@@ -86,7 +82,7 @@ export default function LiveKitControlBar({
     sendAppMessage({
       type: "hand-raise",
       sender: localParticipant.name || localParticipant.identity || "Student",
-      sessionId: localParticipant.identity,
+      participantIdentity: localParticipant.identity,
     });
   }, [localParticipant, sendAppMessage]);
 
