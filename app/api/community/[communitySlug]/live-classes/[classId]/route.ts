@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
-import { videoRoomService } from "@/lib/video-room-service";
-import { stopRecording } from "@/lib/daily";
+import { createRoom, stopRecording as streamHubStopRecording, deleteRoom } from "@/lib/stream-hub";
 
 interface Community {
   id: string;
@@ -11,7 +10,7 @@ interface Community {
 
 interface LiveClass {
   teacher_id: string;
-  daily_room_name: string | null;
+  livekit_room_name: string | null;
   enable_recording: boolean;
   status: string;
 }
@@ -124,7 +123,7 @@ export async function PUT(
 
     // Get the live class to check ownership
     const liveClass = await queryOne<LiveClass>`
-      SELECT teacher_id, daily_room_name, enable_recording, status
+      SELECT teacher_id, livekit_room_name, enable_recording, status
       FROM live_classes
       WHERE id = ${params.classId}
         AND community_id = ${community.id}
@@ -171,11 +170,17 @@ export async function PUT(
       );
     }
 
-    // If the class doesn't have a Daily.co room, create one
-    if (!liveClass.daily_room_name) {
-      const videoRoomResult = await videoRoomService.createRoomForLiveClass(params.classId);
-      if (!videoRoomResult.success) {
-        console.error("Warning: Failed to create video room for live class:", videoRoomResult.error);
+    // If the class doesn't have a LiveKit room, create one
+    if (!liveClass.livekit_room_name) {
+      try {
+        const roomName = `live-class-${params.classId}`;
+        await createRoom(roomName, 100);
+        await sql`
+          UPDATE live_classes SET livekit_room_name = ${roomName}, updated_at = NOW()
+          WHERE id = ${params.classId}
+        `;
+      } catch (error) {
+        console.error("Warning: Failed to create video room for live class:", error);
       }
     }
 
@@ -199,10 +204,9 @@ export async function PUT(
       }
     }
 
-    // When class ends with recording enabled, mark recordings as stopping then stop
-    if (status === 'ended' && liveClass.enable_recording && liveClass.daily_room_name) {
-      // Mark all active recordings as 'stopping' BEFORE calling stopRecording
-      // This prevents the webhook handler from restarting the recording
+    // When class ends with recording enabled, stop recording and clean up room
+    if (status === 'ended' && liveClass.livekit_room_name) {
+      // Mark all active recordings as 'stopping'
       await sql`
         UPDATE live_class_recordings
         SET status = 'stopping', updated_at = NOW()
@@ -211,11 +215,17 @@ export async function PUT(
       `;
 
       try {
-        await stopRecording(liveClass.daily_room_name);
+        await streamHubStopRecording(liveClass.livekit_room_name);
         console.log(`Stopped recording for live class ${params.classId}`);
       } catch (error) {
-        // Recording may have already stopped — not critical
         console.error("Failed to stop recording (may already be stopped):", error);
+      }
+
+      try {
+        await deleteRoom(liveClass.livekit_room_name);
+        console.log(`Deleted room for live class ${params.classId}`);
+      } catch (error) {
+        console.error("Failed to delete room:", error);
       }
     }
 
