@@ -35,7 +35,10 @@ export interface LessonBooking {
   created_at: string;
   updated_at: string;
   
-  // Daily.co video room information
+  // LiveKit room
+  livekit_room_name?: string;
+
+  // Daily.co video room information (legacy)
   daily_room_name?: string;
   daily_room_url?: string;
   daily_room_created_at?: string;

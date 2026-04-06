@@ -7,8 +7,9 @@ import { ClockIcon, UsersIcon, VideoCameraIcon } from "@heroicons/react/24/outli
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import CustomDailyRoom from "./CustomDailyRoom";
 import { toast } from "react-hot-toast";
+import dynamic from "next/dynamic";
+const LiveKitClassRoom = dynamic(() => import("./LiveKitClassRoom"), { ssr: false });
 
 interface LiveClass {
   id: string;
@@ -31,9 +32,8 @@ interface LiveClassVideoPageProps {
 }
 
 interface VideoToken {
-  roomUrl: string;
   token: string;
-  expires: number;
+  serverUrl: string;
   isTeacher: boolean;
 }
 
@@ -263,9 +263,9 @@ export default function LiveClassVideoPage({ classId, liveClass }: LiveClassVide
       ) : (
         // Video session
         <div className="h-screen">
-          <CustomDailyRoom
-            roomUrl={videoToken.roomUrl}
+          <LiveKitClassRoom
             token={videoToken.token}
+            serverUrl={videoToken.serverUrl}
             onLeave={handleLeave}
             onEndClass={videoToken.isTeacher ? handleEndClass : undefined}
             classTitle={liveClass.title}

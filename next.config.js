@@ -52,9 +52,9 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://accounts.google.com",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' https://*.vercel.app https://*.vercel.live https://vercel.live https://*.supabase.co wss://*.supabase.co https://*.daily.co wss://*.daily.co https://api.daily.co https://*.mux.com https://*.litix.io https://api.stripe.com https://accounts.google.com https://*.backblazeb2.com https://dance-hub.io",
+              "connect-src 'self' https://*.vercel.app https://*.vercel.live https://vercel.live https://*.supabase.co wss://*.supabase.co https://*.daily.co wss://*.daily.co https://api.daily.co https://*.mux.com https://*.litix.io https://api.stripe.com https://accounts.google.com https://*.backblazeb2.com https://dance-hub.io https://live.nexio.ee wss://live.nexio.ee https://preprod.dance-hub.io",
               "frame-src 'self' https://*.daily.co https://js.stripe.com https://*.stripe.com https://accounts.google.com https://vercel.live https://*.vercel.live",
-              "media-src 'self' blob: https://*.daily.co https://*.mux.com",
+              "media-src 'self' blob: https://*.daily.co https://*.mux.com https://live.nexio.ee",
               "worker-src 'self' blob:",
             ].join('; ')
           }

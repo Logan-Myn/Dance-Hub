@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
-import { videoRoomService } from "@/lib/video-room-service";
+import { createRoom } from "@/lib/stream-hub";
 
 interface Community {
   id: string;
@@ -173,13 +173,17 @@ export async function POST(
       );
     }
 
-    // Create Daily.co video room for the live class
-    const videoRoomResult = await videoRoomService.createRoomForLiveClass(liveClass.id);
-
-    if (!videoRoomResult.success) {
-      console.error("Warning: Failed to create video room for live class:", videoRoomResult.error);
-      // Don't fail the entire request - the class is created, just without a video room
-      // The room can be created later or manually
+    // Create Stream-Hub/LiveKit room for the live class
+    try {
+      const roomName = `live-class-${liveClass.id}`;
+      await createRoom(roomName, 100);
+      await sql`
+        UPDATE live_classes SET livekit_room_name = ${roomName}, updated_at = NOW()
+        WHERE id = ${liveClass.id}
+      `;
+    } catch (error) {
+      console.error("Warning: Failed to create video room for live class:", error);
+      // Don't fail the entire request - the room can be created later on join
     }
 
     return NextResponse.json(liveClass, { status: 201 });

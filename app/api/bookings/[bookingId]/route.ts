@@ -72,6 +72,7 @@ export async function GET(
         lb.payment_intent_id,
         lb.price_paid,
         lb.is_community_member,
+        lb.livekit_room_name,
         lb.daily_room_name,
         lb.daily_room_url,
         lb.daily_room_expires_at,

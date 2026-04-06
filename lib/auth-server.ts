@@ -185,7 +185,7 @@ export const auth = betterAuth({
     },
     changeEmail: {
       enabled: true,
-      sendChangeEmailVerification: async ({ user, newEmail, url }) => {
+      sendChangeEmailVerification: async ({ user, newEmail, url }: { user: { name?: string }; newEmail: string; url: string }) => {
         // Send verification to the new email address
         void sendEmail(
           newEmail,
