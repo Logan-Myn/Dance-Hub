@@ -250,7 +250,20 @@ These were live questions resolved during the design conversation. Recording the
 
 ---
 
-## 9. Out of Scope / Follow-ups
+## 9. Implementation Notes (added during plan-writing)
+
+After this spec was committed, the writing-plans phase did one more pass over the codebase to make the implementation tasks concrete. Three findings materially simplified the work compared to what this spec assumed. They are recorded here so future readers don't have to re-derive them:
+
+- **`react-toastify` is already 100% dead.** The earlier "56 files" count was misleading — all 55 strict imports were `react-hot-toast`, and `react-toastify` has zero source imports. It only exists in `package.json` and `bun.lock`. **Phase 3 collapses from "migrate ~30 files" to "delete one line from `package.json`."**
+- **`lib/supabase/client.ts` is `@deprecated` with zero importers.** The file's own banner says it should be removed once the better-auth migration is done. Nothing imports it. **Phase 2 collapses from "swap one import" to "delete the file outright + drop `@supabase/auth-helpers-nextjs`."**
+- **`<Toaster />` from `react-hot-toast` is already mounted in `app/layout.tsx:7`** with `position="bottom-right"` at line 59. The Phase 3 step about adding it to the layout is a no-op.
+- **`types/live-classes.ts` (plural) already exists.** That's where the extracted Daily type defs (`HandRaise`, `ActiveSpeaker`) go in Phase 1 step 2 — not a new singular `live-class.ts` file as the spec implied.
+
+Net effect: the spec's overall direction is unchanged, but Phases 2 and 3 are dramatically smaller than originally estimated, and the implementation plan reflects that reality.
+
+---
+
+## 10. Out of Scope / Follow-ups
 
 These are deliberately excluded from this round. Each one is a candidate for its own future spec:
 
