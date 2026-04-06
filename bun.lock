@@ -85,7 +85,7 @@
         "zod": "^3.23.8",
       },
       "devDependencies": {
-        "@next/bundle-analyzer": "^16.2.2",
+        "@next/bundle-analyzer": "^14",
         "@playwright/test": "^1.57.0",
         "@tailwindcss/typography": "^0.5.15",
         "@testing-library/jest-dom": "^6.9.1",
@@ -443,7 +443,7 @@
 
     "@neondatabase/serverless": ["@neondatabase/serverless@1.0.2", "", { "dependencies": { "@types/node": "^22.15.30", "@types/pg": "^8.8.0" } }, "sha512-I5sbpSIAHiB+b6UttofhrN/UJXII+4tZPAq1qugzwCwLIL8EZLV7F/JyHUrEIiGgQpEXzpnjlJ+zwcEhheGvCw=="],
 
-    "@next/bundle-analyzer": ["@next/bundle-analyzer@16.2.2", "", { "dependencies": { "webpack-bundle-analyzer": "4.10.1" } }, "sha512-wIpZBHyCv1y+y0dnFmqQFlpX91V94Z7RKnpu1TRP0BRaWB/1M74Iqxa9IJ8lzSO0FyTqKldgDHoQJJmn8F+gIA=="],
+    "@next/bundle-analyzer": ["@next/bundle-analyzer@14.2.35", "", { "dependencies": { "webpack-bundle-analyzer": "4.10.1" } }, "sha512-br772Uozk44eJq3a0Z+sTyNII+29d7ue1a0s4xd+9MlUQl3HhKo/wLqxZPFngMbwr6YnAWh/uKoVEpEOV35Fzw=="],
 
     "@next/env": ["@next/env@14.2.16", "", {}, "sha512-fLrX5TfJzHCbnZ9YUSnGW63tMV3L4nSfhgOQ0iCcX21Pt+VSTDuaLsSuL8J/2XAiVA5AnzvXDpf6pMs60QxOag=="],
 
