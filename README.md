@@ -210,7 +210,7 @@ npm run test:load
 ## 📖 Documentation
 
 - [Daily.co Integration Guide](./docs/daily-co-integration.md)
-- [API Testing Guide](./API_TESTING_GUIDE.md)
+- [API Testing Guide](./docs/archive/API_TESTING_GUIDE.md)
 - [Business Model](./BusinessModel.md)
 
 ## 📄 License

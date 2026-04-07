@@ -1,5 +1,3 @@
-"use client";
-
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ForgotPasswordForm } from '@/components/auth/forgot-password-form';
 import { Lock } from 'lucide-react';
