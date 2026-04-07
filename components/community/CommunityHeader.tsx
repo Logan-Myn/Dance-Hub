@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Users, Settings } from "lucide-react";
@@ -42,9 +43,13 @@ export default function CommunityHeader({
     <div className="relative mb-8">
       {/* Background with gradient overlay */}
       <div className="relative h-64 md:h-72 overflow-hidden rounded-3xl">
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${imageUrl || "/placeholder.svg"})` }}
+        <Image
+          src={imageUrl || "/placeholder.svg"}
+          alt={name}
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover object-center"
         />
         {/* Subtle dark gradient at bottom for text readability */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
