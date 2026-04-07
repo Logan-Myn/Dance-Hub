@@ -8,13 +8,20 @@ Output of the investigation track from cleanup spec `2026-04-06-cleanup-and-perf
 
 ## Top 5 candidates for the follow-up perf execution spec
 
-Sorted by **absolute impact on user-facing bundle size**. These are the items that most deserve a dedicated round of implementation work.
+**⚠️ This Top 5 was REVISED on 2026-04-07 after Probe B5 (bundle inspection) was completed.** The original plan called for 3 architectural RSC splits (A4/A5/A6 below). The bundle analysis revealed that **most of the projected wins come from 3 small mechanical fixes** (lazy-load PageBuilder section imports, lazy-load NextStepJS, lazy-load TipTap composer) — NOT from the architectural splits. See `2026-04-07-bundle-hotspots-findings.md` for the full analysis.
 
-1. **A6 — Split `app/[communitySlug]/about/page.tsx`** *(613 kB First Load JS — heaviest route in the app)*. The about page is mostly static content with a TipTap-rendered description block. It currently ships the entire editor runtime to every visitor even though only admins edit it. Split into a server shell that streams the static about content + a client island for the edit mode. Target: ≤300 kB First Load JS. **Single biggest bundle win available.**
-2. **A5 — Split `app/[communitySlug]/classroom/[courseSlug]/page.tsx`** *(611 kB)*. The course detail page loads the full lesson player state machine client-side. Split into server-rendered course shell + client island for the player controls. Target: meaningful drop.
-3. **A4 — Split `app/[communitySlug]/page.tsx`** *(411 kB, 43 hook usages, main community landing page)*. The highest-traffic page in the app. Server-fetch community data + feed, render static feed shell, delegate only the interactive post composer to a client island. Target: ≤250 kB.
-4. **B5 — Bundle analyzer visual inspection** *(data-gathering for the above 3 items)*. Open `.next/analyze/client.html` in a browser and identify the top 3 contributing modules per heavy route. This informs WHERE the weight is coming from (is it TipTap? livekit-client? something else?) so the split strategy is precise instead of guesswork. **Should happen FIRST in the follow-up spec** — it feeds A4/A5/A6.
-5. **A7 — Split `app/[communitySlug]/classroom/page.tsx`** *(200 kB — course grid)*. Server-fetch courses, render grid RSC, keep only card hover state client-side. Lower absolute impact than A4–A6 but the cleanest architectural pattern to establish the server-shell/client-island split rhythm for the follow-up work.
+**New recommended approach:** do "Round A" first — the small mechanical fixes — then measure, then decide if the architectural splits in Round B are still worth doing.
+
+### Round A — 1-2 days, ~284 KB gzip savings
+1. **PageBuilder section dynamic-imports** — fix the `/about` page Mux+HLS leak. Single biggest bundle win available. **~284 KB gzip on about page.**
+2. **NextStepJS lazy-load** — `~41 KB gzip on /[communitySlug]`.
+3. **TipTap lazy-load behind composer focus** — `~60 KB gzip on /[communitySlug]`.
+
+### Round B — only if Round A's measurements suggest it's still worth it
+4. **(was A6) Architectural RSC split for `/about`** — marginal incremental gain after Round A fix #1.
+5. **(was A4) Architectural RSC split for `/[communitySlug]`** — marginal incremental gain after Round A fixes #2-3.
+
+The architectural rows A4–A11 below are all still valid, just deprioritized below the mechanical fixes in light of the new data.
 
 ## Phase 5 candidates (≤ 5-line mechanical fixes from this round)
 
@@ -50,7 +57,7 @@ These meet the strict Phase 5 admission rule (≤ 5 lines, mechanical, reviewabl
 | B2 | B | `package.json` — `lucide-react` | Already per-icon imports everywhere (no wildcards found) — nothing to fix | None | — | — | ✅ Already good |
 | B3 | B | `package.json` — `date-fns` | All 12 import sites use named imports (`import { format } from 'date-fns'`) which tree-shake correctly in v4 | None | — | — | ✅ Already good |
 | B4 | B | `app/admin/*/page.tsx` (5 files) | Import `sql` and `stripe` from server-only libs — confirmed all are RSC (no `'use client'` directive), no client bundle leak | None | — | — | ✅ Server SDK isolation is correct |
-| B5 | B | `.next/analyze/client.html` (manual follow-up) | Route-level module hot-spots for `about/page.tsx` (613 kB) and `classroom/[courseSlug]/page.tsx` (611 kB) need visual inspection in a browser | Open the analyzer HTML in a browser, identify top 3 contributing modules per route, append follow-up rows | S | H | Data-gathering for the follow-up perf spec |
+| B5 | B | `.next/analyze/client.html` | ✅ **DONE 2026-04-07** — see `2026-04-07-bundle-hotspots-findings.md`. Top finding: `about/page.tsx` LEAKS ~1 MB of mux-player+hls.js because PageBuilder statically imports VideoSection. Single-line `next/dynamic` fix saves ~284 KB gzip on the route. NextStepJS bloats `/[communitySlug]` by 41 KB gzip. TipTap leaks on 3 routes via PageBuilder + composer. Concrete Round A plan with 7 prioritized fixes documented in the findings doc. | n/a — see findings doc | n/a | n/a | Investigation complete |
 | C1 | C | `app/api/admin/courses/[courseId]/route.ts:73-83` | `Promise.all(lessons.map(async (lesson) => Video.assets.delete(...)))` — this is an external Mux API fan-out, NOT a DB N+1 | None — appropriate parallelism for external API calls | — | — | ✅ No action |
 | C2 | C | `app/api/community/[communitySlug]/courses/[courseSlug]/notify/route.ts:98` | `Promise.allSettled(profiles.map(async (profile) => sendEmail(...)))` — external Resend API fan-out, not DB | None — appropriate parallelism | — | — | ✅ No action |
 | C3 | C | `app/api/admin/subscriptions/route.ts:54` | `map(async ({ stripe_account_id }) => ...)` — external Stripe API fan-out | None — appropriate parallelism | — | — | ✅ No action |
