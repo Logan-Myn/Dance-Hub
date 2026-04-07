@@ -15,11 +15,18 @@ import {
   SelectValue,
 } from "./ui/select";
 import { v4 as uuidv4 } from 'uuid';
-import HeroSection from "./sections/HeroSection";
-import TextSection from "./sections/TextSection";
-import ImageSection from "./sections/ImageSection";
-import CTASection from "./sections/CTASection";
-import VideoSection from "./sections/VideoSection";
+import dynamic from "next/dynamic";
+// Section components are dynamically imported so each only ships its
+// own JS chunk to pages where it actually appears in the saved data.
+// VideoSection in particular previously leaked ~284 KB gzip (Mux + HLS)
+// to every visitor of every community's about page regardless of whether
+// the community had a video section. See:
+//   docs/superpowers/specs/2026-04-07-bundle-hotspots-findings.md
+const HeroSection = dynamic(() => import("./sections/HeroSection"));
+const TextSection = dynamic(() => import("./sections/TextSection"));
+const ImageSection = dynamic(() => import("./sections/ImageSection"));
+const CTASection = dynamic(() => import("./sections/CTASection"));
+const VideoSection = dynamic(() => import("./sections/VideoSection"), { ssr: false });
 import { Card } from "./ui/card";
 import {
   AlertDialog,
