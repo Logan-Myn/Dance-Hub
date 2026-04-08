@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { format, addDays, startOfWeek, endOfWeek, isSameDay, parseISO } from "date-fns";
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,8 @@ interface WeekCalendarProps {
   isTeacher: boolean;
 }
 
-const HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 6 AM to 11 PM
+const DEFAULT_MIN_HOUR = 6;  // default start of visible day: 6 AM
+const DEFAULT_MAX_HOUR = 23; // default end of visible day:   11 PM
 const HALF_HOURS = [0, 30]; // Support 30-minute increments
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -43,6 +44,30 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher }: 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 0 });
   const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 0 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
+  // Dynamic visible hour range: default 6 AM - 11 PM, but extend to cover any
+  // scheduled class in the currently-viewed week. Students in other timezones
+  // from the teacher may see classes land at 1 AM or 4 AM local time; we must
+  // not hide those rows from them.
+  const visibleHours = useMemo(() => {
+    let minHour = DEFAULT_MIN_HOUR;
+    let maxHour = DEFAULT_MAX_HOUR;
+    for (const liveClass of liveClasses) {
+      const classStart = parseISO(liveClass.scheduled_start_time);
+      const classEnd = new Date(classStart.getTime() + liveClass.duration_minutes * 60000);
+      const startHour = classStart.getHours();
+      // If the class crosses midnight, its end date is the next day — in that
+      // case cap end-hour at 23 so we don't jump tomorrow's visible range.
+      const crossesMidnight = classEnd.getDate() !== classStart.getDate();
+      const endHour = crossesMidnight ? 23 : classEnd.getHours();
+      if (startHour < minHour) minHour = startHour;
+      if (endHour > maxHour) maxHour = endHour;
+    }
+    minHour = Math.max(0, minHour);
+    maxHour = Math.min(23, maxHour);
+    const length = maxHour - minHour + 1;
+    return Array.from({ length }, (_, i) => i + minHour);
+  }, [liveClasses]);
 
   useEffect(() => {
     fetchLiveClasses();
@@ -173,7 +198,7 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher }: 
 
             {/* Time slots */}
             <div className="divide-y divide-gray-100">
-              {HOURS.map((hour) => (
+              {visibleHours.map((hour) => (
                 <div key={hour} className="grid grid-cols-8 min-h-[60px]">
                   {/* Time label */}
                   <div className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200 flex items-start bg-gray-50/50">
