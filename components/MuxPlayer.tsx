@@ -12,7 +12,7 @@ export function MuxPlayer({ playbackId }: MuxPlayerProps) {
       <MuxPlayerComponent
         streamType="on-demand"
         playbackId={playbackId}
-        preload="auto"
+        preload="metadata"
         maxResolution="720p"
         onError={(error) => {
           console.error('Mux Player Error:', error);
