@@ -420,6 +420,90 @@ export async function POST(request: Request) {
 
         break;
 
+      case 'invoice.created': {
+        console.log('📝 Invoice created (draft) — checking platform fee');
+        const draftInvoice = event.data.object as Stripe.Invoice;
+
+        // In Clover API, subscription is in parent.subscription_details.subscription
+        const draftInvoiceParent = (draftInvoice as any).parent;
+        const draftSubscriptionId = draftInvoiceParent?.subscription_details?.subscription || (draftInvoice as any).subscription;
+
+        if (!draftSubscriptionId) {
+          console.log('⚠️ invoice.created: no subscription attached, skipping');
+          return NextResponse.json({ received: true });
+        }
+
+        try {
+          const draftSub = await connectedStripe.subscriptions.retrieve(draftSubscriptionId as string);
+          const draftCommunityId = draftSub.metadata?.community_id;
+
+          if (!draftCommunityId) {
+            console.log('⚠️ invoice.created: sub has no community_id metadata, skipping');
+            return NextResponse.json({ received: true });
+          }
+
+          const draftCommunity = await queryOne<Community>`
+            SELECT id, name, slug, description, image_url, membership_price, created_at, active_member_count, status, opening_date
+            FROM communities
+            WHERE id = ${draftCommunityId}
+          `;
+
+          if (!draftCommunity) {
+            console.log('⚠️ invoice.created: community not found, skipping');
+            return NextResponse.json({ received: true });
+          }
+
+          // Compute correct fee % based on community grace period + tier
+          const draftCommunityAge = Date.now() - new Date(draftCommunity.created_at).getTime();
+          const thirtyDaysInMsDraft = 30 * 24 * 60 * 60 * 1000;
+          const draftIsStillPromotional = draftCommunityAge < thirtyDaysInMsDraft;
+
+          let draftFeePercentage = 0;
+          if (!draftIsStillPromotional) {
+            if (draftCommunity.active_member_count <= 50) {
+              draftFeePercentage = 8.0;
+            } else if (draftCommunity.active_member_count <= 100) {
+              draftFeePercentage = 6.0;
+            } else {
+              draftFeePercentage = 4.0;
+            }
+          }
+
+          // Update the invoice's application_fee_amount directly (only possible while draft)
+          // This ensures the CURRENT cycle gets the correct fee, not just future ones.
+          const draftAmountDue = draftInvoice.amount_due || 0;
+          const correctFeeAmount = Math.round(draftAmountDue * (draftFeePercentage / 100));
+          const currentFeeAmount = draftInvoice.application_fee_amount || 0;
+
+          if (draftInvoice.status === 'draft' && currentFeeAmount !== correctFeeAmount) {
+            console.log(`🔄 Updating draft invoice ${draftInvoice.id} application_fee_amount from ${currentFeeAmount} to ${correctFeeAmount} (${draftFeePercentage}% of ${draftAmountDue})`);
+            await connectedStripe.invoices.update(draftInvoice.id as string, {
+              application_fee_amount: correctFeeAmount,
+            });
+          } else if (draftInvoice.status !== 'draft') {
+            console.log(`⚠️ invoice.created: invoice status is ${draftInvoice.status}, cannot update application_fee_amount`);
+          }
+
+          // Also update subscription's application_fee_percent so future cycles inherit the new rate.
+          if (draftSub.application_fee_percent !== draftFeePercentage) {
+            console.log(`🔄 Updating subscription ${draftSub.id} application_fee_percent from ${draftSub.application_fee_percent}% to ${draftFeePercentage}%`);
+            await connectedStripe.subscriptions.update(draftSub.id, {
+              application_fee_percent: draftFeePercentage,
+              metadata: {
+                ...draftSub.metadata,
+                fee_updated_at: new Date().toISOString(),
+                previous_fee: draftSub.application_fee_percent?.toString() || '0',
+              },
+            });
+          }
+        } catch (error) {
+          console.error('❌ Error in invoice.created handler:', error);
+          // Don't fail the webhook — log and continue
+        }
+
+        return NextResponse.json({ received: true });
+      }
+
       case 'invoice.payment_succeeded':
         console.log('📄 Invoice payment succeeded');
         const invoice = event.data.object as Stripe.Invoice;
