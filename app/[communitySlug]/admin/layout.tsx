@@ -39,7 +39,7 @@ export default async function AdminLayout({
       />
       <main className="flex-grow">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
-          <div className="flex flex-col sm:flex-row gap-6 lg:gap-8">
+          <div className="flex flex-col sm:flex-row gap-3 lg:gap-4">
             <AdminNav
               communitySlug={params.communitySlug}
               communityName={community.name}
