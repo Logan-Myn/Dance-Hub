@@ -5,20 +5,23 @@ interface CommunityNavbarProps {
   communitySlug: string;
   activePage: string;
   isMember: boolean;
+  isOwner?: boolean;
 }
 
-export default function CommunityNavbar({ communitySlug, activePage, isMember }: CommunityNavbarProps) {
-  const navItems = [
+export default function CommunityNavbar({ communitySlug, activePage, isMember, isOwner = false }: CommunityNavbarProps) {
+  const navItems: Array<{ label: string; href: string; memberOnly?: boolean; ownerOnly?: boolean }> = [
     { label: "Community", href: `/${communitySlug}` },
     { label: "Classroom", href: `/${communitySlug}/classroom`, memberOnly: true },
     { label: "Private Lessons", href: `/${communitySlug}/private-lessons`, memberOnly: false },
     { label: "Calendar", href: `/${communitySlug}/calendar`, memberOnly: true },
     { label: "About", href: `/${communitySlug}/about` },
+    { label: "Admin", href: `/${communitySlug}/admin`, ownerOnly: true },
   ];
 
-  // Filter items based on membership status
+  // Filter items based on membership and ownership status
   const visibleItems = navItems.filter(item =>
-    !item.memberOnly || isMember
+    (!item.memberOnly || isMember) &&
+    (!item.ownerOnly || isOwner)
   );
 
   return (

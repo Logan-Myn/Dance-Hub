@@ -1330,6 +1330,7 @@ export default function CoursePage() {
         communitySlug={communitySlug}
         activePage="classroom"
         isMember={true}
+        isOwner={isCreator}
       />
 
       <main className="flex-grow">
