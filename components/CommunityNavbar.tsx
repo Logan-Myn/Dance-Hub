@@ -18,11 +18,16 @@ export default function CommunityNavbar({ communitySlug, activePage, isMember, i
     { label: "Admin", href: `/${communitySlug}/admin`, ownerOnly: true },
   ];
 
+  const broadcastsEnabled = process.env.NEXT_PUBLIC_BROADCASTS_ENABLED === "true";
+
   // Filter items based on membership and ownership status
-  const visibleItems = navItems.filter(item =>
-    (!item.memberOnly || isMember) &&
-    (!item.ownerOnly || isOwner)
-  );
+  const visibleItems = navItems.filter(item => {
+    if (item.memberOnly && !isMember) return false;
+    if (item.ownerOnly && !isOwner) return false;
+    // Gate the Admin tab behind the broadcasts feature flag
+    if (item.label === "Admin" && !broadcastsEnabled) return false;
+    return true;
+  });
 
   return (
     <nav className="bg-card border-b border-border/50 sticky top-0 z-30 backdrop-blur-sm bg-card/95" id="navigation-tabs">

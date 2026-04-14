@@ -21,6 +21,13 @@ export default async function AdminLayout({
   if (!community) redirect(`/${params.communitySlug}`);
   if (community.created_by !== session.user.id) redirect(`/${params.communitySlug}`);
 
+  // Kill-switch: admin section is only accessible when the feature flag is on,
+  // or when this community is explicitly marked VIP (pilot / gift access).
+  const broadcastsEnabled = process.env.NEXT_PUBLIC_BROADCASTS_ENABLED === 'true';
+  if (!broadcastsEnabled && !community.is_broadcast_vip) {
+    redirect(`/${params.communitySlug}`);
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-background font-sans">
       <Navbar />
