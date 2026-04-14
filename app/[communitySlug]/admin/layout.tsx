@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth-session';
 import { queryOne } from '@/lib/db';
+import Navbar from '@/app/components/Navbar';
+import CommunityNavbar from '@/components/CommunityNavbar';
 import { AdminNav } from '@/components/admin/AdminNav';
 
 export default async function AdminLayout({
@@ -20,12 +22,23 @@ export default async function AdminLayout({
   if (community.created_by !== session.user.id) redirect(`/${params.communitySlug}`);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <h1 className="text-2xl font-bold mb-6">Admin · {community.name}</h1>
-      <div className="flex flex-col sm:flex-row gap-6">
-        <AdminNav communitySlug={params.communitySlug} />
-        <main className="flex-1 min-w-0">{children}</main>
-      </div>
+    <div className="flex flex-col min-h-screen bg-background font-sans">
+      <Navbar />
+      <CommunityNavbar
+        communitySlug={params.communitySlug}
+        activePage="admin"
+        isMember={true}
+        isOwner={true}
+      />
+      <main className="flex-grow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <h1 className="text-2xl font-bold mb-6">Admin · {community.name}</h1>
+          <div className="flex flex-col sm:flex-row gap-6">
+            <AdminNav communitySlug={params.communitySlug} />
+            <div className="flex-1 min-w-0">{children}</div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
