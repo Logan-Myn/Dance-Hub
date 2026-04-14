@@ -7,29 +7,44 @@ export interface QuotaBadgeProps {
   className?: string;
 }
 
+/**
+ * Narrative quota line — intentionally typographic, not a pill.
+ * Use in the emails list hero and composer side panel.
+ */
 export function QuotaBadge({ tier, used, limit, className }: QuotaBadgeProps) {
   if (tier === 'vip') {
     return (
-      <span className={cn('inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-3 py-1 text-xs font-medium', className)}>
-        VIP · Unlimited
-      </span>
+      <p className={cn('text-sm text-muted-foreground', className)}>
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 mr-2 align-middle" />
+        <span className="text-foreground font-medium">VIP access</span>
+        <span className="text-muted-foreground"> · unlimited broadcasts</span>
+      </p>
     );
   }
+
   if (tier === 'paid') {
     return (
-      <span className={cn('inline-flex items-center rounded-full bg-indigo-100 text-indigo-800 px-3 py-1 text-xs font-medium', className)}>
-        Unlimited · {used} sent this month
-      </span>
+      <p className={cn('text-sm text-muted-foreground', className)}>
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary mr-2 align-middle" />
+        <span className="text-foreground font-medium">Unlimited</span>
+        <span className="text-muted-foreground">
+          {' · '}
+          {used} sent this month
+        </span>
+      </p>
     );
   }
+
   const atLimit = limit !== null && used >= limit;
+  const dotColor = atLimit ? 'bg-amber-500' : 'bg-slate-400';
+
   return (
-    <span className={cn(
-      'inline-flex items-center rounded-full px-3 py-1 text-xs font-medium',
-      atLimit ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-800',
-      className
-    )}>
-      {used} / {limit} this month
-    </span>
+    <p className={cn('text-sm text-muted-foreground', className)}>
+      <span className={cn('inline-block h-1.5 w-1.5 rounded-full mr-2 align-middle', dotColor)} />
+      <span className="text-foreground font-medium">
+        {used} of {limit}
+      </span>
+      <span className="text-muted-foreground"> broadcasts this month</span>
+    </p>
   );
 }

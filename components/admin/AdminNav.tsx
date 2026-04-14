@@ -1,31 +1,42 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function AdminNav({ communitySlug }: { communitySlug: string }) {
   const pathname = usePathname();
   const items = [
-    { href: `/${communitySlug}/admin/emails`, label: 'Emails', icon: Mail },
+    { href: `/${communitySlug}/admin/emails`, label: 'Broadcasts' },
   ];
 
   return (
-    <nav className="w-full sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r bg-muted/20">
-      <ul className="flex sm:flex-col p-2 gap-1">
+    <nav className="w-full sm:w-48 shrink-0">
+      <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-medium mb-3 pl-1">
+        Studio
+      </p>
+      <ul className="flex sm:flex-col gap-0.5">
         {items.map((item) => {
           const active = pathname.startsWith(item.href);
-          const Icon = item.icon;
           return (
             <li key={item.href}>
               <Link
                 href={item.href}
                 className={cn(
-                  'flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors',
-                  active ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                  'group flex items-center gap-2 pl-3 pr-2 py-2 text-sm transition-colors relative',
+                  active
+                    ? 'text-foreground font-medium'
+                    : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                <Icon className="h-4 w-4" />
+                <span
+                  aria-hidden
+                  className={cn(
+                    'absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full transition-all',
+                    active
+                      ? 'bg-primary opacity-100'
+                      : 'bg-primary/0 opacity-0 group-hover:opacity-40'
+                  )}
+                />
                 {item.label}
               </Link>
             </li>

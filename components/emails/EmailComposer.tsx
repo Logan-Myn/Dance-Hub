@@ -3,9 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { EmailEditor } from './EmailEditor';
 import { QuotaBadge } from './QuotaBadge';
 import { UpgradeDialog } from './UpgradeDialog';
@@ -32,13 +29,22 @@ export function EmailComposer(props: Props) {
   const atLimit = props.quota.limit !== null && props.quota.used >= props.quota.limit;
 
   const validate = () => {
-    if (!subject.trim()) { toast.error('Subject is required'); return false; }
-    if (!html.trim() || html === '<p></p>') { toast.error('Message is empty'); return false; }
+    if (!subject.trim()) {
+      toast.error('Subject is required');
+      return false;
+    }
+    if (!html.trim() || html === '<p></p>') {
+      toast.error('Message is empty');
+      return false;
+    }
     return true;
   };
 
   const handleSend = async () => {
-    if (atLimit && props.quota.tier === 'free') { setUpgradeOpen(true); return; }
+    if (atLimit && props.quota.tier === 'free') {
+      setUpgradeOpen(true);
+      return;
+    }
     if (!validate()) return;
     setSending(true);
     try {
@@ -47,13 +53,26 @@ export function EmailComposer(props: Props) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ subject, htmlContent: html, editorJson: json, previewText }),
       });
-      if (res.status === 402) { setUpgradeOpen(true); return; }
-      if (!res.ok) throw new Error((await res.json()).error || 'Send failed');
+      if (res.status === 402) {
+        setUpgradeOpen(true);
+        return;
+      }
+      if (!res.ok) {
+        const body = await res.text();
+        let msg = 'Send failed';
+        try {
+          msg = JSON.parse(body).error || msg;
+        } catch {}
+        throw new Error(msg);
+      }
       const data = await res.json();
       if (data.status === 'partial_failure') {
-        toast(`Sent to ${data.successfulCount} of ${data.recipientCount}. ${data.failedCount} failed.`, { icon: '⚠️' });
+        toast(
+          `Sent to ${data.successfulCount} of ${data.recipientCount}. ${data.failedCount} failed.`,
+          { icon: '⚠️' }
+        );
       } else {
-        toast.success(`Sent to ${data.recipientCount} members.`);
+        toast.success(`Published to ${data.recipientCount} readers.`);
       }
       router.push(`/${props.communitySlug}/admin/emails/${data.broadcastId}`);
     } catch (err) {
@@ -67,11 +86,14 @@ export function EmailComposer(props: Props) {
     if (!validate()) return;
     setTesting(true);
     try {
-      const res = await fetch(`/api/community/${props.communitySlug}/broadcasts/test`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ subject, htmlContent: html, previewText }),
-      });
+      const res = await fetch(
+        `/api/community/${props.communitySlug}/broadcasts/test`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ subject, htmlContent: html, previewText }),
+        }
+      );
       if (!res.ok) throw new Error('Test send failed');
       toast.success(`Test sent to ${props.ownerEmail}`);
     } catch (err) {
@@ -82,50 +104,122 @@ export function EmailComposer(props: Props) {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 space-y-4">
-        <div>
-          <Label htmlFor="subject">Subject</Label>
-          <Input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g., Spring schedule update" />
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_18rem] gap-10">
+      {/* Composer */}
+      <div className="space-y-8 min-w-0">
+        <div className="space-y-1">
+          <label
+            htmlFor="subject"
+            className="block text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-medium"
+          >
+            Subject
+          </label>
+          <input
+            id="subject"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            placeholder="Your headline"
+            className="w-full bg-transparent border-0 border-b border-border/60 rounded-none px-0 py-2 font-display text-3xl leading-tight text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary transition-colors"
+          />
         </div>
-        <div>
-          <Label htmlFor="preview">Preview text (optional)</Label>
-          <Input id="preview" value={previewText} onChange={(e) => setPreviewText(e.target.value)} placeholder="Short description shown in inbox" />
-        </div>
-        <EmailEditor communitySlug={props.communitySlug} onChange={(h, j) => { setHtml(h); setJson(j); }} />
-      </div>
 
-      <aside className="space-y-4">
-        <div className="border rounded-lg p-4 space-y-3">
-          <div>
-            <div className="text-xs text-muted-foreground">Recipients</div>
-            <div className="text-lg font-semibold">{props.activeMemberCount} active members</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground">Sending from</div>
-            <div className="text-sm">{props.communityName} &lt;community@dance-hub.io&gt;</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground">Reply-to</div>
-            <div className="text-sm">{props.ownerEmail}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground mb-1">Quota</div>
-            <QuotaBadge {...props.quota} />
-          </div>
+        <div className="space-y-1">
+          <label
+            htmlFor="preview"
+            className="block text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-medium"
+          >
+            Preview text
+          </label>
+          <input
+            id="preview"
+            value={previewText}
+            onChange={(e) => setPreviewText(e.target.value)}
+            placeholder="The line people see in their inbox before opening"
+            className="w-full bg-transparent border-0 border-b border-border/60 rounded-none px-0 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary transition-colors italic"
+          />
         </div>
 
         <div className="space-y-2">
-          <Button onClick={handleSend} disabled={sending} className="w-full">
-            {sending ? 'Sending…' : atLimit && props.quota.tier === 'free' ? 'Upgrade to send →' : 'Send now'}
-          </Button>
-          <Button variant="outline" onClick={handleSendTest} disabled={testing} className="w-full">
-            {testing ? 'Sending test…' : 'Send test to me'}
-          </Button>
+          <label className="block text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-medium">
+            Body
+          </label>
+          <EmailEditor
+            communitySlug={props.communitySlug}
+            onChange={(h, j) => {
+              setHtml(h);
+              setJson(j);
+            }}
+          />
         </div>
+      </div>
+
+      {/* Side panel */}
+      <aside className="space-y-8">
+        <section>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-medium mb-3">
+            Readership
+          </p>
+          <p className="font-display text-3xl leading-none text-foreground">
+            {props.activeMemberCount}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {props.activeMemberCount === 1 ? 'active member' : 'active members'}
+          </p>
+        </section>
+
+        <section className="space-y-3 pt-6 border-t border-border/50">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-1">
+              From
+            </p>
+            <p className="text-sm text-foreground leading-snug">
+              {props.communityName}
+              <span className="block text-xs text-muted-foreground">
+                community@dance-hub.io
+              </span>
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-1">
+              Reply-to
+            </p>
+            <p className="text-sm text-foreground break-all">{props.ownerEmail}</p>
+          </div>
+        </section>
+
+        <section className="pt-6 border-t border-border/50">
+          <QuotaBadge {...props.quota} />
+        </section>
+
+        <section className="space-y-2 pt-2">
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={sending}
+            className="w-full bg-primary text-primary-foreground py-3 px-4 rounded-sm text-sm font-medium tracking-wide hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {sending
+              ? 'Publishing…'
+              : atLimit && props.quota.tier === 'free'
+              ? 'Upgrade to publish →'
+              : 'Publish broadcast'}
+          </button>
+          <button
+            type="button"
+            onClick={handleSendTest}
+            disabled={testing}
+            className="w-full bg-transparent text-foreground py-3 px-4 rounded-sm text-sm font-medium border border-border hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+          >
+            {testing ? 'Sending test…' : 'Send test to myself'}
+          </button>
+        </section>
       </aside>
 
-      <UpgradeDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} communitySlug={props.communitySlug} />
+      <UpgradeDialog
+        open={upgradeOpen}
+        onOpenChange={setUpgradeOpen}
+        communitySlug={props.communitySlug}
+      />
     </div>
   );
 }
