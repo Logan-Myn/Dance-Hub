@@ -3,7 +3,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
-export function AdminNav({ communitySlug }: { communitySlug: string }) {
+export function AdminNav({
+  communitySlug,
+  communityName,
+}: {
+  communitySlug: string;
+  communityName: string;
+}) {
   const pathname = usePathname();
   const items = [
     { href: `/${communitySlug}/admin/emails`, label: 'Broadcasts' },
@@ -12,7 +18,7 @@ export function AdminNav({ communitySlug }: { communitySlug: string }) {
   return (
     <nav className="w-full sm:w-48 shrink-0">
       <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-medium mb-3 pl-1">
-        Studio
+        {communityName}
       </p>
       <ul className="flex sm:flex-col gap-0.5">
         {items.map((item) => {
