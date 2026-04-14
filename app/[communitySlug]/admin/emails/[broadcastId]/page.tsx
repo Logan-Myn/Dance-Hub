@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { queryOne } from '@/lib/db';
 import { format } from 'date-fns';
 
+export const dynamic = 'force-dynamic';
+
 interface BroadcastRow {
   id: string;
   subject: string;

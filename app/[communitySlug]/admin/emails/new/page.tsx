@@ -5,6 +5,8 @@ import { getQuota } from '@/lib/broadcasts/quota';
 import { getActiveRecipientsForCommunity } from '@/lib/broadcasts/recipients';
 import { EmailComposer } from '@/components/emails/EmailComposer';
 
+export const dynamic = 'force-dynamic';
+
 export default async function NewEmailPage({
   params,
 }: {

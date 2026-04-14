@@ -7,6 +7,10 @@ import {
   BroadcastHistoryItem,
 } from '@/components/emails/BroadcastHistoryList';
 
+// Always read fresh — broadcast list / quota must reflect rows inserted
+// milliseconds earlier by the send endpoint.
+export const dynamic = 'force-dynamic';
+
 export default async function EmailsListPage({
   params,
 }: {
