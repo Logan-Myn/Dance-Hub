@@ -24,7 +24,7 @@ export async function getActiveRecipientsForCommunity(
       p.full_name,
       ep.unsubscribe_token
     FROM community_members m
-    JOIN profiles p ON p.id = m.user_id
+    JOIN profiles p ON p.auth_user_id = m.user_id
     LEFT JOIN email_preferences ep ON ep.email = p.email
     WHERE m.community_id = ${communityId}
       AND m.status = 'active'
