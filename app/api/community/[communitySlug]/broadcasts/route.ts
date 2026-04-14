@@ -54,12 +54,21 @@ export async function POST(
     return NextResponse.json({ error: gate.reason, quota: gate.quota }, { status: httpStatus });
   }
 
+  // email_broadcasts.sender_user_id is uuid REFERENCES profiles(id); session.user.id
+  // is the better-auth text ID, so resolve it to the profile UUID.
+  const senderProfile = await queryOne<{ id: string }>`
+    SELECT id FROM profiles WHERE auth_user_id = ${session.user.id}
+  `;
+  if (!senderProfile) {
+    return NextResponse.json({ error: 'Sender profile not found' }, { status: 500 });
+  }
+
   const inserted = await queryOne<{ id: string }>`
     INSERT INTO email_broadcasts
       (community_id, sender_user_id, subject, html_content, editor_json, preview_text,
        recipient_count, status)
     VALUES
-      (${community.id}, ${session.user.id}, ${subject}, ${htmlContent},
+      (${community.id}, ${senderProfile.id}, ${subject}, ${htmlContent},
        ${JSON.stringify(editorJson)}::jsonb, ${previewText ?? null}, 0, 'sending')
     RETURNING id
   `;
