@@ -79,7 +79,7 @@ export default async function BroadcastDetailPage({
         <div className="flex items-center gap-3 mb-4">
           <span className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[broadcast.status]}`} />
           <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-medium">
-            {STATUS_LABEL[broadcast.status]} · {community.name}
+            {STATUS_LABEL[broadcast.status]}
           </span>
         </div>
 

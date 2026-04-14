@@ -36,9 +36,6 @@ export default async function EmailsListPage({
     <div className="animate-in fade-in slide-in-from-bottom-1 duration-500">
       <header className="flex flex-wrap items-end justify-between gap-6 mb-10">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-medium mb-3">
-            {community.name}
-          </p>
           <h1 className="font-display text-4xl sm:text-5xl leading-[1.05] text-foreground">
             Broadcasts
           </h1>
