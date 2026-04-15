@@ -1,6 +1,7 @@
 import React from 'react';
-import { Section, Text } from '@react-email/components';
+import { Section, Text, Link, Hr } from '@react-email/components';
 import { BaseLayout } from '../base-layout';
+import { EMAIL_COLORS, EMAIL_STYLES } from '..';
 
 interface BroadcastEmailProps {
   communityName: string;
@@ -15,6 +16,12 @@ interface BroadcastEmailProps {
   unsubscribePlaceholder: string;
 }
 
+/**
+ * Broadcast email template. Uses a *community-first* footer — the community
+ * name is the primary identity, with DanceHub as a small "powered by" line.
+ * This differs from other transactional emails (auth, bookings), where
+ * DanceHub is itself the sender and the full BaseLayout footer is appropriate.
+ */
 export const BroadcastEmail: React.FC<BroadcastEmailProps> = ({
   communityName,
   subject,
@@ -22,19 +29,62 @@ export const BroadcastEmail: React.FC<BroadcastEmailProps> = ({
   previewText,
   unsubscribePlaceholder,
 }) => (
-  <BaseLayout
-    preview={previewText ?? subject}
-    footer={{
-      showUnsubscribe: true,
-      unsubscribeUrl: unsubscribePlaceholder,
-      preferencesUrl: unsubscribePlaceholder,
-    }}
-  >
+  <BaseLayout preview={previewText ?? subject}>
     <Section>
-      <Text style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px' }}>
+      <Text
+        style={{ fontSize: '13px', color: EMAIL_COLORS.textLight, marginBottom: '16px' }}
+      >
         A message from {communityName}
       </Text>
       <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+    </Section>
+
+    {/* Community-first footer */}
+    <Hr
+      style={{
+        marginTop: '40px',
+        marginBottom: '20px',
+        border: 'none',
+        borderTop: `1px solid ${EMAIL_COLORS.border}`,
+      }}
+    />
+    <Section style={{ textAlign: 'center' as const }}>
+      <Text
+        style={{
+          fontSize: '13px',
+          color: EMAIL_COLORS.textLight,
+          marginBottom: '12px',
+          lineHeight: '1.5',
+        }}
+      >
+        You&apos;re receiving this because you&apos;re a member of{' '}
+        <strong style={{ color: EMAIL_COLORS.text }}>{communityName}</strong>.
+      </Text>
+      <Text style={{ fontSize: '12px', color: EMAIL_COLORS.textLight, marginBottom: '24px' }}>
+        <Link href={unsubscribePlaceholder} style={EMAIL_STYLES.link}>
+          Manage preferences
+        </Link>
+        {' · '}
+        <Link href={unsubscribePlaceholder} style={EMAIL_STYLES.link}>
+          Unsubscribe
+        </Link>
+      </Text>
+      <Text
+        style={{
+          fontSize: '11px',
+          color: EMAIL_COLORS.textLight,
+          opacity: 0.7,
+          marginTop: '16px',
+        }}
+      >
+        Powered by{' '}
+        <Link
+          href="https://dance-hub.io"
+          style={{ color: EMAIL_COLORS.textLight, textDecoration: 'none' }}
+        >
+          DanceHub
+        </Link>
+      </Text>
     </Section>
   </BaseLayout>
 );
