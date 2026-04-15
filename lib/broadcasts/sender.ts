@@ -1,4 +1,6 @@
 import { Resend } from 'resend';
+import { render } from '@react-email/components';
+import React from 'react';
 import type { BroadcastRecipient } from './recipients';
 import {
   BATCH_SIZE,
@@ -6,8 +8,14 @@ import {
   MAX_BATCH_RETRIES,
   BROADCAST_FROM_ADDRESS,
 } from './constants';
+import { BroadcastEmail } from '@/lib/resend/templates/marketing/broadcast';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Internal-only placeholders — chosen so they cannot collide with text an owner
+// could write in the editor. Replaced per-recipient just before sending.
+const UNSUBSCRIBE_PLACEHOLDER = '__DH_BROADCAST_UNSUBSCRIBE_URL__';
+const DISPLAY_NAME_PLACEHOLDER = '__DH_BROADCAST_DISPLAY_NAME__';
 
 export interface RunBroadcastInput {
   broadcastId: string;
@@ -41,16 +49,42 @@ function buildUnsubscribeUrl(token: string | null): string {
   return `${base}/api/email/unsubscribe?token=${encodeURIComponent(token)}&type=teacher_broadcast`;
 }
 
-function personalizeHtml(html: string, recipient: BroadcastRecipient): string {
+function personalize(html: string, recipient: BroadcastRecipient): string {
   return html
-    .replace(/{{unsubscribeUrl}}/g, buildUnsubscribeUrl(recipient.unsubscribeToken))
-    .replace(/{{displayName}}/g, recipient.displayName);
+    .split(UNSUBSCRIBE_PLACEHOLDER)
+    .join(buildUnsubscribeUrl(recipient.unsubscribeToken))
+    .split(DISPLAY_NAME_PLACEHOLDER)
+    .join(recipient.displayName);
+}
+
+/**
+ * Render the full broadcast HTML once with placeholder tokens for per-recipient
+ * substitution. Wraps the editor HTML in BaseLayout (which carries the
+ * unsubscribe + preferences footer — required for CAN-SPAM / GDPR compliance).
+ */
+async function renderTemplate(
+  communityName: string,
+  subject: string,
+  bodyHtml: string,
+  previewText?: string
+): Promise<string> {
+  // Inject placeholder tokens into the footer unsubscribe links via the
+  // existing BaseLayout footer. BroadcastEmail passes these through.
+  return render(
+    React.createElement(BroadcastEmail, {
+      communityName,
+      subject,
+      bodyHtml,
+      previewText,
+      unsubscribePlaceholder: UNSUBSCRIBE_PLACEHOLDER,
+    })
+  );
 }
 
 async function sendBatchWithRetry(
   batch: BroadcastRecipient[],
   subject: string,
-  htmlContent: string,
+  templatedHtml: string,
   fromName: string,
   replyTo: string,
   previewText?: string
@@ -63,7 +97,7 @@ async function sendBatchWithRetry(
         to: r.email,
         replyTo,
         subject,
-        html: personalizeHtml(htmlContent, r),
+        html: personalize(templatedHtml, r),
         headers: previewText ? { 'X-Preview': previewText } : undefined,
         tags: [{ name: 'category', value: 'teacher_broadcast' }],
       }));
@@ -83,6 +117,8 @@ async function sendBatchWithRetry(
 
 export async function runBroadcast(input: RunBroadcastInput): Promise<RunBroadcastResult> {
   const { recipients, subject, htmlContent, fromName, replyTo, previewText } = input;
+
+  const templatedHtml = await renderTemplate(fromName, subject, htmlContent, previewText);
   const chunks = chunk(recipients, BATCH_SIZE);
 
   const batchIds: string[] = [];
@@ -95,10 +131,10 @@ export async function runBroadcast(input: RunBroadcastInput): Promise<RunBroadca
     const { batchId, error } = await sendBatchWithRetry(
       batch,
       subject,
-      htmlContent,
+      templatedHtml,
       fromName,
       replyTo,
-      previewText,
+      previewText
     );
     if (batchId) {
       batchIds.push(batchId);

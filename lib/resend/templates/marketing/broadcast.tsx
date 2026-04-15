@@ -7,24 +7,27 @@ interface BroadcastEmailProps {
   subject: string;
   bodyHtml: string;
   previewText?: string;
+  /**
+   * Sender.ts renders this template once with a placeholder token for the
+   * unsubscribe link, then string-replaces the token per recipient before
+   * sending. Keeps rendering to O(1) instead of O(recipients).
+   */
+  unsubscribePlaceholder: string;
 }
 
-/**
- * Broadcast email template. The bodyHtml placeholders ({{unsubscribeUrl}},
- * {{displayName}}) are replaced per-recipient at send time by sender.ts.
- */
 export const BroadcastEmail: React.FC<BroadcastEmailProps> = ({
   communityName,
   subject,
   bodyHtml,
   previewText,
+  unsubscribePlaceholder,
 }) => (
   <BaseLayout
     preview={previewText ?? subject}
     footer={{
       showUnsubscribe: true,
-      unsubscribeUrl: '{{unsubscribeUrl}}',
-      preferencesUrl: '{{unsubscribeUrl}}',
+      unsubscribeUrl: unsubscribePlaceholder,
+      preferencesUrl: unsubscribePlaceholder,
     }}
   >
     <Section>

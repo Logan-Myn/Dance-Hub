@@ -1,5 +1,3 @@
-import { runBroadcast } from '@/lib/broadcasts/sender';
-
 const mockBatchSend = jest.fn();
 
 jest.mock('resend', () => ({
@@ -7,6 +5,17 @@ jest.mock('resend', () => ({
     batch: { send: (...args: unknown[]) => mockBatchSend(...args) },
   })),
 }));
+
+// Avoid pulling in the React Email browser bundle (uses TextDecoder, not in jsdom).
+// runBroadcast's behaviour we care about here is chunking + retry, not template rendering.
+jest.mock('@react-email/components', () => ({
+  render: jest.fn(async (_el: unknown) => '<html><body>FAKE_TEMPLATE</body></html>'),
+}));
+jest.mock('@/lib/resend/templates/marketing/broadcast', () => ({
+  BroadcastEmail: () => null,
+}));
+
+import { runBroadcast } from '@/lib/broadcasts/sender';
 
 const recipient = (i: number) => ({
   userId: `u${i}`,

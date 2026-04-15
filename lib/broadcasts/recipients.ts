@@ -28,7 +28,10 @@ export async function getActiveRecipientsForCommunity(
     LEFT JOIN email_preferences ep ON ep.email = p.email
     WHERE m.community_id = ${communityId}
       AND m.status = 'active'
-      AND (m.subscription_status = 'active' OR m.subscription_status IS NULL)
+      AND (
+        m.subscription_status IS NULL
+        OR m.subscription_status NOT IN ('canceled', 'unpaid', 'past_due', 'incomplete', 'incomplete_expired')
+      )
       AND (ep.teacher_broadcast IS DISTINCT FROM false)
       AND (ep.unsubscribed_all IS DISTINCT FROM true)
       AND p.email IS NOT NULL

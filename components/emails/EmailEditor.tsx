@@ -31,7 +31,13 @@ export function EmailEditor({ communitySlug, initialHtml = '', onChange }: Email
         codeBlock: false,
       }),
       TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right'] }),
-      Link.configure({ openOnClick: false, HTMLAttributes: { class: 'text-indigo-600 underline' } }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: { class: 'text-indigo-600 underline' },
+        // Reject javascript:/data:/vbscript: URLs to prevent XSS via the link picker
+        validate: (href: string) =>
+          /^https?:\/\//i.test(href) || /^mailto:/i.test(href) || /^tel:/i.test(href),
+      }),
       Image.configure({ HTMLAttributes: { class: 'max-w-full rounded' } }),
       Placeholder.configure({ placeholder: 'Write your email…' }),
     ],
