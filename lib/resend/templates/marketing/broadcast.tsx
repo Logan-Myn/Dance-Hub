@@ -29,7 +29,7 @@ export const BroadcastEmail: React.FC<BroadcastEmailProps> = ({
   previewText,
   unsubscribePlaceholder,
 }) => (
-  <BaseLayout preview={previewText ?? subject}>
+  <BaseLayout preview={previewText ?? subject} hideLogo>
     <Section>
       <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
     </Section>
