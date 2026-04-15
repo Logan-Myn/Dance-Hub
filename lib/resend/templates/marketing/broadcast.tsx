@@ -31,11 +31,6 @@ export const BroadcastEmail: React.FC<BroadcastEmailProps> = ({
 }) => (
   <BaseLayout preview={previewText ?? subject}>
     <Section>
-      <Text
-        style={{ fontSize: '13px', color: EMAIL_COLORS.textLight, marginBottom: '16px' }}
-      >
-        A message from {communityName}
-      </Text>
       <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
     </Section>
 
