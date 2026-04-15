@@ -8,6 +8,10 @@ import { BookingConfirmationEmail } from '@/lib/resend/templates/booking/booking
 import { PaymentReceiptEmail } from '@/lib/resend/templates/booking/payment-receipt';
 import { MemberWelcomeEmail } from '@/lib/resend/templates/community/member-welcome';
 import { CommunityOpeningEmail } from '@/lib/resend/templates/community/community-opening';
+import {
+  upsertBroadcastSubscription,
+  markBroadcastSubscriptionStatus,
+} from '@/lib/broadcasts/billing';
 import React from 'react';
 import Stripe from 'stripe';
 
@@ -58,6 +62,36 @@ interface Community {
 interface UserProfile {
   full_name: string | null;
   email: string | null;
+}
+
+async function handleBroadcastCheckoutCompleted(session: Stripe.Checkout.Session) {
+  if (session.metadata?.purpose !== 'broadcast_subscription') return;
+  const communityId = session.metadata?.communityId;
+  if (!communityId) {
+    console.error('[Broadcast sub] missing communityId in metadata');
+    return;
+  }
+  const subscriptionId = session.subscription as string;
+  const sub = await stripe.subscriptions.retrieve(subscriptionId);
+  await upsertBroadcastSubscription({
+    communityId,
+    stripeCustomerId: sub.customer as string,
+    stripeSubscriptionId: sub.id,
+    status: sub.status as 'active' | 'past_due' | 'canceled' | 'incomplete',
+    currentPeriodEnd: (sub as any).current_period_end
+      ? new Date((sub as any).current_period_end * 1000)
+      : null,
+  });
+}
+
+async function handleBroadcastSubscriptionLifecycle(sub: Stripe.Subscription): Promise<boolean> {
+  if (sub.metadata?.purpose !== 'broadcast_subscription') return false;
+  await markBroadcastSubscriptionStatus(
+    sub.id,
+    sub.status as 'active' | 'past_due' | 'canceled' | 'incomplete',
+    (sub as any).current_period_end ? new Date((sub as any).current_period_end * 1000) : null
+  );
+  return true;
 }
 
 export async function POST(request: Request) {
@@ -705,6 +739,12 @@ export async function POST(request: Request) {
       case 'customer.subscription.updated':
         const subscription = event.data.object as Stripe.Subscription;
 
+        // Broadcast subscriptions are handled separately; short-circuit before the
+        // membership-metadata guard below.
+        if (await handleBroadcastSubscriptionLifecycle(subscription)) {
+          break;
+        }
+
         if (!subscription.metadata?.user_id || !subscription.metadata?.community_id) {
           console.error('Missing metadata in subscription:', subscription.id);
           return NextResponse.json({ error: 'Missing metadata' }, { status: 400 });
@@ -807,6 +847,11 @@ export async function POST(request: Request) {
         break;
 
       // Note: customer.subscription.updated is already handled above in the combined case
+
+      case 'checkout.session.completed': {
+        await handleBroadcastCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+        break;
+      }
     }
 
     return NextResponse.json({ received: true });

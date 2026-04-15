@@ -106,10 +106,11 @@ export default function CommunityCalendarPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <CommunityNavbar 
-        communitySlug={communitySlug} 
-        activePage="calendar" 
+      <CommunityNavbar
+        communitySlug={communitySlug}
+        activePage="calendar"
         isMember={isMember}
+        isOwner={isCreator}
       />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

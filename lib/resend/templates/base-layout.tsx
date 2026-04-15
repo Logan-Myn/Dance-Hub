@@ -17,12 +17,17 @@ interface BaseLayoutProps {
   preview: string;
   children: React.ReactNode;
   footer?: EmailFooterProps;
+  /** When true, omit the DanceHub logo at the top. Used for broadcasts
+   *  where the community is the sender and the platform retreats to a
+   *  small signature in a custom footer. */
+  hideLogo?: boolean;
 }
 
 export const BaseLayout: React.FC<BaseLayoutProps> = ({
   preview,
   children,
   footer,
+  hideLogo = false,
 }) => {
   return (
     <Html>
@@ -32,13 +37,15 @@ export const BaseLayout: React.FC<BaseLayoutProps> = ({
         <Container style={EMAIL_STYLES.container}>
           <Section style={EMAIL_STYLES.card}>
             {/* Logo */}
-            <Img
-              src="https://dance-hub.io/Logo.png"
-              width="150"
-              height="50"
-              alt="DanceHub"
-              style={{ marginBottom: '24px' }}
-            />
+            {!hideLogo && (
+              <Img
+                src="https://dance-hub.io/Logo.png"
+                width="150"
+                height="50"
+                alt="DanceHub"
+                style={{ marginBottom: '24px' }}
+              />
+            )}
             
             {/* Main Content */}
             {children}

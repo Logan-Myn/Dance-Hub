@@ -14,7 +14,8 @@ export type EmailCategory =
   | 'course_announcements'
   | 'lesson_reminders'
   | 'community_updates'
-  | 'weekly_digest';
+  | 'weekly_digest'
+  | 'teacher_broadcast';
 
 interface EmailPreferences {
   email: string;
@@ -25,6 +26,7 @@ interface EmailPreferences {
   lesson_reminders: boolean | null;
   community_updates: boolean | null;
   weekly_digest: boolean | null;
+  teacher_broadcast: boolean | null;
 }
 
 interface ProfileId {
@@ -54,7 +56,8 @@ export async function canSendEmail(
         course_announcements,
         lesson_reminders,
         community_updates,
-        weekly_digest
+        weekly_digest,
+        teacher_broadcast
       FROM email_preferences
       WHERE email = ${userEmail}
     `;
@@ -83,6 +86,8 @@ export async function canSendEmail(
         return preferences.community_updates ?? true;
       case 'weekly_digest':
         return preferences.weekly_digest ?? false;
+      case 'teacher_broadcast':
+        return preferences.teacher_broadcast ?? true;
       default:
         return true;
     }

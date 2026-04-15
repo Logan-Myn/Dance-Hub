@@ -114,6 +114,7 @@ export default function CommunityPrivateLessonsPage() {
         communitySlug={communitySlug}
         activePage="private-lessons"
         isMember={isMember}
+        isOwner={isCreator}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

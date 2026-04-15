@@ -219,6 +219,7 @@ export default function ClassroomPage() {
           communitySlug={communitySlug}
           activePage="classroom"
           isMember={isMember}
+          isOwner={isCreator}
         />
         <main className="flex-grow">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -250,6 +251,7 @@ export default function ClassroomPage() {
           communitySlug={communitySlug}
           activePage="classroom"
           isMember={isMember}
+          isOwner={isCreator}
         />
         <main className="flex-grow flex items-center justify-center">
           <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-8 max-w-md text-center">
@@ -277,6 +279,7 @@ export default function ClassroomPage() {
         communitySlug={communitySlug}
         activePage="classroom"
         isMember={isMember}
+        isOwner={isCreator}
       />
       <main className="flex-grow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
