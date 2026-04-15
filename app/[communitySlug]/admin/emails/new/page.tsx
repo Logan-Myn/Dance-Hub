@@ -35,15 +35,6 @@ export default async function NewEmailPage({
         Back to archive
       </Link>
 
-      <header className="mb-10">
-        <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-medium mb-3">
-          New broadcast
-        </p>
-        <h1 className="font-display text-4xl sm:text-5xl leading-[1.05] text-foreground">
-          Write an issue
-        </h1>
-      </header>
-
       <EmailComposer
         communityId={community.id}
         communitySlug={params.communitySlug}
