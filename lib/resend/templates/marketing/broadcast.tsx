@@ -46,36 +46,42 @@ export const BroadcastEmail: React.FC<BroadcastEmailProps> = ({
     <Section style={{ textAlign: 'center' as const }}>
       <Text
         style={{
-          fontSize: '13px',
+          fontSize: '11px',
           color: EMAIL_COLORS.textLight,
-          marginBottom: '12px',
+          marginBottom: '8px',
           lineHeight: '1.5',
         }}
       >
         You&apos;re receiving this because you&apos;re a member of{' '}
         <strong style={{ color: EMAIL_COLORS.text }}>{communityName}</strong>.
       </Text>
-      <Text style={{ fontSize: '12px', color: EMAIL_COLORS.textLight, marginBottom: '24px' }}>
-        <Link href={unsubscribePlaceholder} style={EMAIL_STYLES.link}>
+      <Text
+        style={{
+          fontSize: '11px',
+          color: EMAIL_COLORS.textLight,
+          marginBottom: '20px',
+        }}
+      >
+        <Link href={unsubscribePlaceholder} style={{ ...EMAIL_STYLES.link, fontSize: '11px' }}>
           Manage preferences
         </Link>
         {' · '}
-        <Link href={unsubscribePlaceholder} style={EMAIL_STYLES.link}>
+        <Link href={unsubscribePlaceholder} style={{ ...EMAIL_STYLES.link, fontSize: '11px' }}>
           Unsubscribe
         </Link>
       </Text>
       <Text
         style={{
-          fontSize: '11px',
+          fontSize: '10px',
           color: EMAIL_COLORS.textLight,
           opacity: 0.7,
-          marginTop: '16px',
+          marginTop: '12px',
         }}
       >
         Powered by{' '}
         <Link
           href="https://dance-hub.io"
-          style={{ color: EMAIL_COLORS.textLight, textDecoration: 'none' }}
+          style={{ color: EMAIL_COLORS.textLight, textDecoration: 'none', fontSize: '10px' }}
         >
           DanceHub
         </Link>
