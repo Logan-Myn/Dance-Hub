@@ -1,50 +1,214 @@
 'use client';
 
-import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import {
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements,
+} from '@stripe/react-stripe-js';
+import { loadStripe, type StripeElementsOptions } from '@stripe/stripe-js';
+import { Loader2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
-export interface UpgradeDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
+);
+
+// ── Inner form rendered inside <Elements> ──────────────────────────
+
+function PaymentForm({
+  communitySlug,
+  onSuccess,
+}: {
   communitySlug: string;
-}
-
-export function UpgradeDialog({ open, onOpenChange, communitySlug }: UpgradeDialogProps) {
+  onSuccess: () => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
   const [loading, setLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
-  const handleSubscribe = async () => {
+  // Poll for subscription activation after payment confirmation
+  useEffect(() => {
+    if (!processing) return;
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `/api/community/${communitySlug}/broadcasts/quota`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.tier === 'paid' || data.tier === 'vip') {
+          setProcessing(false);
+          toast.success('Subscription active! You can now send unlimited broadcasts.');
+          onSuccess();
+        }
+      } catch {}
+    }, 2000);
+    return () => clearInterval(id);
+  }, [processing, communitySlug, onSuccess]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
     setLoading(true);
     try {
-      const res = await fetch(`/api/community/${communitySlug}/broadcasts/subscription`, { method: 'POST' });
-      if (!res.ok) throw new Error('Checkout failed');
-      const { checkoutUrl } = await res.json();
-      window.location.href = checkoutUrl;
+      const { error } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/${communitySlug}/admin/emails?subscription=success`,
+        },
+        redirect: 'if_required',
+      });
+
+      if (error) {
+        toast.error(error.message || 'Payment failed');
+      } else {
+        setProcessing(true);
+      }
+    } catch {
+      toast.error('Payment failed');
     } finally {
       setLoading(false);
     }
   };
 
+  if (processing) {
+    return (
+      <div className="flex flex-col items-center justify-center space-y-4 py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">
+          Activating your subscription...
+        </p>
+        <p className="text-xs text-muted-foreground">
+          This may take a few moments
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <PaymentElement />
+      <Button type="submit" disabled={!stripe || loading} className="w-full">
+        {loading ? (
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Processing...</span>
+          </div>
+        ) : (
+          'Subscribe — €10/month'
+        )}
+      </Button>
+    </form>
+  );
+}
+
+// ── Main dialog ────────────────────────────────────────────────────
+
+export interface UpgradeDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  communitySlug: string;
+  onSuccess?: () => void;
+}
+
+export function UpgradeDialog({
+  open,
+  onOpenChange,
+  communitySlug,
+  onSuccess,
+}: UpgradeDialogProps) {
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [loadingIntent, setLoadingIntent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch client_secret when the dialog opens
+  useEffect(() => {
+    if (!open) {
+      setClientSecret(null);
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingIntent(true);
+    setError(null);
+
+    fetch(`/api/community/${communitySlug}/broadcasts/subscription`, {
+      method: 'POST',
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+        return res.json();
+      })
+      .then(({ clientSecret }) => {
+        if (!cancelled) setClientSecret(clientSecret);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingIntent(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, communitySlug]);
+
+  const handleSuccess = () => {
+    onOpenChange(false);
+    onSuccess?.();
+    // Reload the page to refresh quota state
+    window.location.reload();
+  };
+
+  const options: StripeElementsOptions | undefined = clientSecret
+    ? { clientSecret, appearance: { theme: 'stripe' as const } }
+    : undefined;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Upgrade to unlimited broadcasts</DialogTitle>
           <DialogDescription>
-            You&apos;ve sent 10 emails this month. Upgrade to send unlimited broadcasts for €10/month.
+            You&apos;ve used all your free broadcasts this month. Subscribe
+            to send unlimited broadcasts for €10/month. Cancel anytime.
           </DialogDescription>
         </DialogHeader>
-        <ul className="text-sm space-y-2 py-2">
-          <li>Unlimited broadcasts to your community</li>
-          <li>Cancel anytime from the same page</li>
-          <li>Fair-use cap of 200 sends per month</li>
-        </ul>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSubscribe} disabled={loading}>
-            {loading ? 'Redirecting…' : 'Subscribe — €10/month'}
-          </Button>
-        </DialogFooter>
+
+        {loadingIntent && (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {error && (
+          <div className="text-sm text-rose-600 py-4 text-center">
+            {error}
+          </div>
+        )}
+
+        {clientSecret && options && (
+          <Elements stripe={stripePromise} options={options}>
+            <PaymentForm
+              communitySlug={communitySlug}
+              onSuccess={handleSuccess}
+            />
+          </Elements>
+        )}
       </DialogContent>
     </Dialog>
   );

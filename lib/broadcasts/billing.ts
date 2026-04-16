@@ -1,49 +1,87 @@
 import { stripe } from '@/lib/stripe';
-import { sql } from '@/lib/db';
+import { sql, queryOne } from '@/lib/db';
 import { BROADCAST_PRICE_ID_ENV } from './constants';
+import Stripe from 'stripe';
 
-export interface CreateCheckoutSessionInput {
+export interface CreateSubscriptionIntentInput {
   communityId: string;
-  communitySlug: string;
   ownerEmail: string;
-  returnUrl: string;
 }
 
-export interface CreateCheckoutSessionResult {
-  checkoutUrl: string;
-  sessionId: string;
+export interface CreateSubscriptionIntentResult {
+  clientSecret: string;
+  subscriptionId: string;
 }
 
-export async function createBroadcastCheckoutSession(
-  input: CreateCheckoutSessionInput
-): Promise<CreateCheckoutSessionResult> {
+/**
+ * Create a Stripe Subscription in incomplete state so the frontend can
+ * confirm payment via Elements (in-app, no redirect). Returns the
+ * client_secret for stripe.confirmPayment().
+ */
+export async function createBroadcastSubscriptionIntent(
+  input: CreateSubscriptionIntentInput
+): Promise<CreateSubscriptionIntentResult> {
   const priceId = process.env[BROADCAST_PRICE_ID_ENV];
   if (!priceId) throw new Error(`Missing ${BROADCAST_PRICE_ID_ENV}`);
 
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io';
-  const successUrl = `${baseUrl}/${input.communitySlug}/admin/emails?subscription=success`;
-  const cancelUrl = `${baseUrl}/${input.communitySlug}/admin/emails?subscription=cancelled`;
+  // Reuse existing Stripe customer if the owner already has one (e.g. from
+  // a prior membership purchase), otherwise create a fresh one.
+  let customerId: string;
+  const existing = await queryOne<{ stripe_customer_id: string }>`
+    SELECT stripe_customer_id
+    FROM community_broadcast_subscriptions
+    WHERE community_id = ${input.communityId}
+  `;
 
-  const session = await stripe.checkout.sessions.create({
-    mode: 'subscription',
-    line_items: [{ price: priceId, quantity: 1 }],
-    customer_email: input.ownerEmail,
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-    metadata: {
-      communityId: input.communityId,
-      purpose: 'broadcast_subscription',
-    },
-    subscription_data: {
+  if (existing?.stripe_customer_id) {
+    customerId = existing.stripe_customer_id;
+  } else {
+    const customer = await stripe.customers.create({
+      email: input.ownerEmail,
       metadata: {
         communityId: input.communityId,
         purpose: 'broadcast_subscription',
       },
+    });
+    customerId = customer.id;
+  }
+
+  const subscription = await stripe.subscriptions.create({
+    customer: customerId,
+    items: [{ price: priceId }],
+    payment_behavior: 'default_incomplete',
+    payment_settings: { save_default_payment_method: 'on_subscription' },
+    metadata: {
+      communityId: input.communityId,
+      purpose: 'broadcast_subscription',
     },
+    expand: ['latest_invoice.payment_intent'],
   });
 
-  if (!session.url) throw new Error('Stripe did not return a checkout URL');
-  return { checkoutUrl: session.url, sessionId: session.id };
+  const invoice = subscription.latest_invoice as Stripe.Invoice;
+  const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent;
+
+  if (!paymentIntent?.client_secret) {
+    throw new Error('Stripe did not return a client_secret');
+  }
+
+  // Create the DB row immediately (status=incomplete). The webhook handler
+  // will update it to 'active' when Stripe fires customer.subscription.updated
+  // after payment confirmation.
+  await upsertBroadcastSubscription({
+    communityId: input.communityId,
+    stripeCustomerId: customerId,
+    stripeSubscriptionId: subscription.id,
+    status: 'incomplete',
+    currentPeriodEnd: subscription.current_period_end
+      ? new Date(subscription.current_period_end * 1000)
+      : null,
+  });
+
+  return {
+    clientSecret: paymentIntent.client_secret,
+    subscriptionId: subscription.id,
+  };
 }
 
 export interface UpsertSubscriptionInput {

@@ -86,11 +86,23 @@ async function handleBroadcastCheckoutCompleted(session: Stripe.Checkout.Session
 
 async function handleBroadcastSubscriptionLifecycle(sub: Stripe.Subscription): Promise<boolean> {
   if (sub.metadata?.purpose !== 'broadcast_subscription') return false;
-  await markBroadcastSubscriptionStatus(
-    sub.id,
-    sub.status as 'active' | 'past_due' | 'canceled' | 'incomplete',
-    (sub as any).current_period_end ? new Date((sub as any).current_period_end * 1000) : null
-  );
+  const communityId = sub.metadata?.communityId;
+  if (communityId) {
+    // Upsert so we handle both initial activation and subsequent updates
+    await upsertBroadcastSubscription({
+      communityId,
+      stripeCustomerId: sub.customer as string,
+      stripeSubscriptionId: sub.id,
+      status: sub.status as 'active' | 'past_due' | 'canceled' | 'incomplete',
+      currentPeriodEnd: (sub as any).current_period_end ? new Date((sub as any).current_period_end * 1000) : null,
+    });
+  } else {
+    await markBroadcastSubscriptionStatus(
+      sub.id,
+      sub.status as 'active' | 'past_due' | 'canceled' | 'incomplete',
+      (sub as any).current_period_end ? new Date((sub as any).current_period_end * 1000) : null
+    );
+  }
   return true;
 }
 
