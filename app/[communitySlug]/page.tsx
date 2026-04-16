@@ -1118,12 +1118,6 @@ export default function CommunityPage() {
           </div>
         </div>
 
-      <footer className="bg-card border-t border-border/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 text-center text-sm text-muted-foreground">
-          © 2025 DanceHub. All rights reserved.
-        </div>
-      </footer>
-
       {/* Modals */}
       {selectedThread && (
         <ThreadModal
