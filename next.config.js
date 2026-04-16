@@ -5,6 +5,12 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  experimental: {
+    // Default in 14.2 is 30s, which serves a stale RSC snapshot on soft-nav
+    // (force-dynamic only controls server caches, not the client Router Cache).
+    // Setting to 0 makes <Link> navigations wait for fresh data.
+    staleTimes: { dynamic: 0 },
+  },
   images: {
     remotePatterns: [
       {
