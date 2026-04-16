@@ -93,7 +93,7 @@ export async function POST(
       previewText,
       recipients,
       fromName: community.name,
-      replyTo: session.user.email,
+      replyTo: 'hello@dance-hub.io',
     });
 
     await sql`

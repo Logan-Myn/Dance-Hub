@@ -167,26 +167,6 @@ export function EmailComposer(props: Props) {
           </p>
         </section>
 
-        <section className="space-y-3 pt-6 border-t border-border/50">
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-1">
-              From
-            </p>
-            <p className="text-sm text-foreground leading-snug">
-              {props.communityName}
-              <span className="block text-xs text-muted-foreground">
-                community@dance-hub.io
-              </span>
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-1">
-              Reply-to
-            </p>
-            <p className="text-sm text-foreground break-all">{props.ownerEmail}</p>
-          </div>
-        </section>
-
         <section className="pt-6 border-t border-border/50">
           <QuotaBadge {...props.quota} />
         </section>

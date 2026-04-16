@@ -34,7 +34,7 @@ export async function POST(
         },
       ],
       fromName: community.name,
-      replyTo: session.user.email,
+      replyTo: 'hello@dance-hub.io',
     });
 
     return NextResponse.json({ status: result.status, failedCount: result.failedCount });
