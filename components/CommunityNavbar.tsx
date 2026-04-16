@@ -8,6 +8,9 @@ interface CommunityNavbarProps {
   communitySlug: string;
   isMember: boolean;
   isOwner?: boolean;
+  // Legacy: pages that still render their own chrome pass this. Active tab is
+  // now derived from usePathname; remove once all pages are migrated.
+  activePage?: string;
 }
 
 export default function CommunityNavbar({ communitySlug, isMember, isOwner = false }: CommunityNavbarProps) {
