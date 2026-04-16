@@ -70,6 +70,13 @@ export async function GET(request: NextRequest) {
             WHERE unsubscribe_token = ${token}
           `;
           break;
+        case 'teacher_broadcast':
+          await sql`
+            UPDATE email_preferences
+            SET teacher_broadcast = false, updated_at = NOW()
+            WHERE unsubscribe_token = ${token}
+          `;
+          break;
         default:
           // Unknown type, unsubscribe from all non-transactional
           await sql`
