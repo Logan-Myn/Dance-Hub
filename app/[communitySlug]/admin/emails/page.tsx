@@ -1,6 +1,4 @@
 import Link from 'next/link';
-import { headers } from 'next/headers';
-import { unstable_noStore as noStore } from 'next/cache';
 import { queryOne, query } from '@/lib/db';
 import { getQuota } from '@/lib/broadcasts/quota';
 import { QuotaBadge } from '@/components/emails/QuotaBadge';
@@ -9,55 +7,32 @@ import {
   BroadcastHistoryItem,
 } from '@/components/emails/BroadcastHistoryList';
 
+// force-dynamic alone wasn't enough: the Neon HTTP driver's fetch() responses
+// were being served from Next.js's Data Cache on soft-nav, returning stale
+// empty results. force-no-store opts every fetch in this segment out of it.
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
-export const revalidate = 0;
 
 export default async function EmailsListPage({
   params,
 }: {
   params: { communitySlug: string };
 }) {
-  noStore();
-  const h = headers();
-  const reqId = Math.random().toString(36).slice(2, 8);
-  const isRsc = h.get('rsc') ?? h.get('next-router-state-tree') ? 'rsc' : 'html';
-
-  console.log('[emails-page] start', {
-    reqId,
-    kind: isRsc,
-    slug: params.communitySlug,
-    ts: new Date().toISOString(),
-  });
-
   const community = await queryOne<{ id: string; name: string }>`
     SELECT id, name FROM communities WHERE slug = ${params.communitySlug}
   `;
-
-  console.log('[emails-page] community-lookup', {
-    reqId,
-    found: !!community,
-    communityId: community?.id,
-  });
-
   if (!community) return null;
 
-  const broadcasts = await query<BroadcastHistoryItem>`
-    SELECT id, subject, recipient_count, status, sent_at, created_at::text AS created_at
-    FROM email_broadcasts
-    WHERE community_id = ${community.id}
-    ORDER BY created_at DESC
-    LIMIT 100
-  `;
-
-  console.log('[emails-page] broadcasts-result', {
-    reqId,
-    communityId: community.id,
-    broadcastCount: broadcasts.length,
-    firstSubject: broadcasts[0]?.subject,
-  });
-
-  const quota = await getQuota(community.id);
+  const [quota, broadcasts] = await Promise.all([
+    getQuota(community.id),
+    query<BroadcastHistoryItem>`
+      SELECT id, subject, recipient_count, status, sent_at, created_at::text AS created_at
+      FROM email_broadcasts
+      WHERE community_id = ${community.id}
+      ORDER BY created_at DESC
+      LIMIT 100
+    `,
+  ]);
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-1 duration-500">
