@@ -8,8 +8,6 @@ import { Users, ExternalLink, Search, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
 import Image from "next/image";
-import Navbar from "@/app/components/Navbar";
-import CommunityNavbar from "@/components/CommunityNavbar";
 import CommunitySettingsModal from "@/components/CommunitySettingsModal";
 import PaymentModal from "@/components/PaymentModal";
 import { PreRegistrationPaymentModal } from "@/components/PreRegistrationPaymentModal";
@@ -972,7 +970,7 @@ export default function CommunityPage() {
 
   if (!community) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
+      <div className="flex justify-center items-center py-16">
         <div>Community not found</div>
       </div>
     );
@@ -1002,16 +1000,8 @@ export default function CommunityPage() {
   const currentUserName = currentUserMember?.profile?.display_name || currentUserMember?.profile?.full_name || currentUser?.name || "User";
 
   return (
-    <div className="flex flex-col min-h-screen bg-background font-sans">
-      <Navbar />
-      <CommunityNavbar
-        communitySlug={communitySlug}
-        activePage="community"
-        isMember={isMember}
-        isOwner={isCreator}
-      />
-      <main className="flex-grow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* Curved Community Header */}
           <CommunityHeader
             name={community.name}
@@ -1127,13 +1117,6 @@ export default function CommunityPage() {
             </div>
           </div>
         </div>
-      </main>
-
-      <footer className="bg-card border-t border-border/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 text-center text-sm text-muted-foreground">
-          © 2025 DanceHub. All rights reserved.
-        </div>
-      </footer>
 
       {/* Modals */}
       {selectedThread && (
@@ -1268,6 +1251,6 @@ export default function CommunityPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }

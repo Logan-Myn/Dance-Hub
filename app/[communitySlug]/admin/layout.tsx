@@ -1,8 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth-session';
 import { queryOne } from '@/lib/db';
-import Navbar from '@/app/components/Navbar';
-import CommunityNavbar from '@/components/CommunityNavbar';
 import { AdminNav } from '@/components/admin/AdminNav';
 
 export default async function AdminLayout({
@@ -29,25 +27,14 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background font-sans">
-      <Navbar />
-      <CommunityNavbar
-        communitySlug={params.communitySlug}
-        activePage="admin"
-        isMember={true}
-        isOwner={true}
-      />
-      <main className="flex-grow">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
-          <div className="flex flex-col sm:flex-row gap-3 lg:gap-4">
-            <AdminNav
-              communitySlug={params.communitySlug}
-              communityName={community.name}
-            />
-            <div className="flex-1 min-w-0">{children}</div>
-          </div>
-        </div>
-      </main>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14 font-sans">
+      <div className="flex flex-col sm:flex-row gap-3 lg:gap-4">
+        <AdminNav
+          communitySlug={params.communitySlug}
+          communityName={community.name}
+        />
+        <div className="flex-1 min-w-0">{children}</div>
+      </div>
     </div>
   );
 }

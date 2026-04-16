@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react";
 import { useParams, notFound } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import Navbar from "@/app/components/Navbar";
-import CommunityNavbar from "@/components/CommunityNavbar";
 import PageBuilder from "@/components/PageBuilder";
 import { Section } from "@/types/page-builder";
 import { toast } from "react-hot-toast";
@@ -139,23 +137,20 @@ export default function AboutPage() {
 
   if (error) {
     return (
-      <div className="flex flex-col min-h-screen bg-background">
-        <Navbar />
-        <main className="flex-grow flex items-center justify-center">
-          <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-8 max-w-md text-center">
-            <h2 className="font-display text-xl font-semibold text-destructive mb-2">
-              Error loading community
-            </h2>
-            <p className="text-muted-foreground">{error.message}</p>
-          </div>
-        </main>
+      <div className="flex items-center justify-center py-16">
+        <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-8 max-w-md text-center">
+          <h2 className="font-display text-xl font-semibold text-destructive mb-2">
+            Error loading community
+          </h2>
+          <p className="text-muted-foreground">{error.message}</p>
+        </div>
       </div>
     );
   }
 
   if (isLoading || !community) {
     return (
-      <div className="flex justify-center items-center min-h-screen bg-background">
+      <div className="flex justify-center items-center py-16">
         <div className="relative">
           <div className="h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
           <div className="absolute inset-0 flex items-center justify-center">
@@ -169,36 +164,25 @@ export default function AboutPage() {
   const isCreator = user?.id === community.created_by;
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <Navbar />
-      <CommunityNavbar
-        communitySlug={communitySlug}
-        activePage="about"
-        isMember={isMember}
-        isOwner={isCreator}
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageBuilder
+        initialSections={community.about_page?.sections || []}
+        onChange={handleSectionsChange}
+        onSave={handleSave}
+        isEditing={isCreator}
+        isSaving={isSaving}
+        communityData={{
+          id: community.id,
+          slug: communitySlug,
+          name: community.name,
+          membershipEnabled: community.membership_enabled,
+          membershipPrice: community.membership_price,
+          stripeAccountId: community.stripe_account_id,
+          isMember: isMember,
+          status: community.status,
+          opening_date: community.opening_date
+        }}
       />
-      <main className="flex-grow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <PageBuilder
-            initialSections={community.about_page?.sections || []}
-            onChange={handleSectionsChange}
-            onSave={handleSave}
-            isEditing={isCreator}
-            isSaving={isSaving}
-            communityData={{
-              id: community.id,
-              slug: communitySlug,
-              name: community.name,
-              membershipEnabled: community.membership_enabled,
-              membershipPrice: community.membership_price,
-              stripeAccountId: community.stripe_account_id,
-              isMember: isMember,
-              status: community.status,
-              opening_date: community.opening_date
-            }}
-          />
-        </div>
-      </main>
     </div>
   );
-} 
+}

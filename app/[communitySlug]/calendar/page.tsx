@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react";
 import { notFound, useParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import Navbar from "@/app/components/Navbar";
-import CommunityNavbar from "@/components/CommunityNavbar";
 import WeekCalendar from "@/components/WeekCalendar";
 import { toast } from "react-hot-toast";
 
@@ -90,11 +88,8 @@ export default function CommunityCalendarPage() {
 
   if (isLoading || isAuthLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-        </div>
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
       </div>
     );
   }
@@ -104,31 +99,21 @@ export default function CommunityCalendarPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <CommunityNavbar
-        communitySlug={communitySlug}
-        activePage="calendar"
-        isMember={isMember}
-        isOwner={isCreator}
-      />
-      
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            {community.name} Calendar
-          </h1>
-          <p className="mt-2 text-gray-600">
-            View and join scheduled live dance classes
-          </p>
-        </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">
+          {community.name} Calendar
+        </h1>
+        <p className="mt-2 text-gray-600">
+          View and join scheduled live dance classes
+        </p>
+      </div>
 
-        <WeekCalendar
-          communityId={community.id}
-          communitySlug={communitySlug}
-          isTeacher={isCreator}
-        />
-      </main>
+      <WeekCalendar
+        communityId={community.id}
+        communitySlug={communitySlug}
+        isTeacher={isCreator}
+      />
     </div>
   );
 }

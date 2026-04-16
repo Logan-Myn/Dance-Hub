@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react";
 import { notFound, useParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import Navbar from "@/app/components/Navbar";
-import CommunityNavbar from "@/components/CommunityNavbar";
 import PrivateLessonsPage from "@/components/PrivateLessonsPage";
 import { toast } from "react-hot-toast";
 import { Users } from "lucide-react";
@@ -91,14 +89,11 @@ export default function CommunityPrivateLessonsPage() {
 
   if (isLoading || isAuthLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        <div className="flex flex-col items-center justify-center py-16">
-          <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center animate-pulse">
-            <Users className="w-6 h-6 text-primary" />
-          </div>
-          <p className="mt-4 text-muted-foreground font-medium">Loading private lessons...</p>
+      <div className="flex flex-col items-center justify-center py-16">
+        <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center animate-pulse">
+          <Users className="w-6 h-6 text-primary" />
         </div>
+        <p className="mt-4 text-muted-foreground font-medium">Loading private lessons...</p>
       </div>
     );
   }
@@ -108,23 +103,13 @@ export default function CommunityPrivateLessonsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <CommunityNavbar
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PrivateLessonsPage
         communitySlug={communitySlug}
-        activePage="private-lessons"
+        communityId={community.id}
+        isCreator={isCreator}
         isMember={isMember}
-        isOwner={isCreator}
       />
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <PrivateLessonsPage
-          communitySlug={communitySlug}
-          communityId={community.id}
-          isCreator={isCreator}
-          isMember={isMember}
-        />
-      </main>
     </div>
   );
 } 
