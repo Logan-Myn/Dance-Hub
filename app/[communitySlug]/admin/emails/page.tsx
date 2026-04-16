@@ -32,6 +32,13 @@ export default async function EmailsListPage({
     `,
   ]);
 
+  console.log('[emails-page] render', {
+    slug: params.communitySlug,
+    communityId: community.id,
+    broadcastCount: broadcasts.length,
+    ts: new Date().toISOString(),
+  });
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-1 duration-500">
       <header className="flex flex-wrap items-end justify-between gap-6 mb-10">
