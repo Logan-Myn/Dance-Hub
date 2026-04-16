@@ -8,8 +8,6 @@ import CourseCard from "@/components/CourseCard";
 import CreateCourseModal from "@/components/CreateCourseModal";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
-import Navbar from "@/app/components/Navbar";
-import CommunityNavbar from "@/components/CommunityNavbar";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { Plus, BookOpen, Lock } from "lucide-react";
@@ -213,31 +211,20 @@ export default function ClassroomPage() {
   // Show loading state for data fetching if we're confirmed as a member
   if (isCommunityLoading || isCoursesLoading) {
     return (
-      <div className="flex flex-col min-h-screen bg-background">
-        <Navbar />
-        <CommunityNavbar
-          communitySlug={communitySlug}
-          activePage="classroom"
-          isMember={isMember}
-          isOwner={isCreator}
-        />
-        <main className="flex-grow">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {/* Header skeleton */}
-            <div className="flex justify-between items-center mb-8">
-              <div className="h-10 w-40 bg-muted/50 rounded-xl animate-pulse" />
-              {isCreator && (
-                <div className="h-10 w-36 bg-muted/50 rounded-xl animate-pulse" />
-              )}
-            </div>
-            {/* Course grid skeleton */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map((i) => (
-                <CourseCardSkeleton key={i} />
-              ))}
-            </div>
-          </div>
-        </main>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header skeleton */}
+        <div className="flex justify-between items-center mb-8">
+          <div className="h-10 w-40 bg-muted/50 rounded-xl animate-pulse" />
+          {isCreator && (
+            <div className="h-10 w-36 bg-muted/50 rounded-xl animate-pulse" />
+          )}
+        </div>
+        {/* Course grid skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <CourseCardSkeleton key={i} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -245,24 +232,15 @@ export default function ClassroomPage() {
   // Show error state if any error occurred
   if (error || communityError) {
     return (
-      <div className="flex flex-col min-h-screen bg-background">
-        <Navbar />
-        <CommunityNavbar
-          communitySlug={communitySlug}
-          activePage="classroom"
-          isMember={isMember}
-          isOwner={isCreator}
-        />
-        <main className="flex-grow flex items-center justify-center">
-          <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-8 max-w-md text-center">
-            <h2 className="font-display text-xl font-semibold text-destructive mb-2">
-              Error loading classroom
-            </h2>
-            <p className="text-muted-foreground">
-              {(error || communityError)?.message}
-            </p>
-          </div>
-        </main>
+      <div className="flex items-center justify-center py-16">
+        <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-8 max-w-md text-center">
+          <h2 className="font-display text-xl font-semibold text-destructive mb-2">
+            Error loading classroom
+          </h2>
+          <p className="text-muted-foreground">
+            {(error || communityError)?.message}
+          </p>
+        </div>
       </div>
     );
   }
@@ -273,40 +251,31 @@ export default function ClassroomPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <Navbar />
-      <CommunityNavbar
-        communitySlug={communitySlug}
-        activePage="classroom"
-        isMember={isMember}
-        isOwner={isCreator}
-      />
-      <main className="flex-grow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-            <div>
-              <h1 className="font-display text-3xl md:text-4xl font-semibold text-foreground">
-                Classroom
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                {courses.length > 0
-                  ? `${courses.length} course${courses.length !== 1 ? 's' : ''} available`
-                  : 'Explore courses and expand your skills'}
-              </p>
-            </div>
-            {isCreator && (
-              <Button
-                onClick={() => setIsCreateCourseModalOpen(true)}
-                className={cn(
-                  "bg-primary hover:bg-primary/90 text-primary-foreground",
-                  "rounded-xl px-5 h-11 font-medium",
-                  "transition-all duration-200 ease-out",
-                  "shadow-sm hover:shadow-md"
-                )}
-              >
-                <Plus className="h-5 w-5 mr-2" />
-                Create Course
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+        <div>
+          <h1 className="font-display text-3xl md:text-4xl font-semibold text-foreground">
+            Classroom
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            {courses.length > 0
+              ? `${courses.length} course${courses.length !== 1 ? 's' : ''} available`
+              : 'Explore courses and expand your skills'}
+          </p>
+        </div>
+        {isCreator && (
+          <Button
+            onClick={() => setIsCreateCourseModalOpen(true)}
+            className={cn(
+              "bg-primary hover:bg-primary/90 text-primary-foreground",
+              "rounded-xl px-5 h-11 font-medium",
+              "transition-all duration-200 ease-out",
+              "shadow-sm hover:shadow-md"
+            )}
+          >
+            <Plus className="h-5 w-5 mr-2" />
+            Create Course
               </Button>
             )}
           </div>
@@ -332,20 +301,18 @@ export default function ClassroomPage() {
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
-              <EmptyState isCreator={isCreator} />
-            </div>
-          )}
+      ) : (
+        <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
+          <EmptyState isCreator={isCreator} />
         </div>
+      )}
 
-        <CreateCourseModal
-          isOpen={isCreateCourseModalOpen}
-          onClose={() => setIsCreateCourseModalOpen(false)}
-          onCreateCourse={handleCreateCourse}
-          communityId={community.id}
-        />
-      </main>
+      <CreateCourseModal
+        isOpen={isCreateCourseModalOpen}
+        onClose={() => setIsCreateCourseModalOpen(false)}
+        onCreateCourse={handleCreateCourse}
+        communityId={community.id}
+      />
     </div>
   );
 }
