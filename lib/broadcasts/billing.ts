@@ -1,7 +1,6 @@
 import { stripe } from '@/lib/stripe';
 import { sql, queryOne } from '@/lib/db';
 import { BROADCAST_PRICE_ID_ENV } from './constants';
-import Stripe from 'stripe';
 
 export interface CreateSubscriptionIntentInput {
   communityId: string;
@@ -15,8 +14,12 @@ export interface CreateSubscriptionIntentResult {
 
 /**
  * Create a Stripe Subscription in incomplete state so the frontend can
- * confirm payment via Elements (in-app, no redirect). Returns the
+ * confirm payment via PaymentElement (in-app, no redirect). Returns the
  * client_secret for stripe.confirmPayment().
+ *
+ * Note: Stripe API 2025-12-15.clover removed invoice.payment_intent.
+ * We retrieve the auto-created PaymentIntent via paymentIntents.list()
+ * on the customer instead.
  */
 export async function createBroadcastSubscriptionIntent(
   input: CreateSubscriptionIntentInput
@@ -24,8 +27,7 @@ export async function createBroadcastSubscriptionIntent(
   const priceId = process.env[BROADCAST_PRICE_ID_ENV];
   if (!priceId) throw new Error(`Missing ${BROADCAST_PRICE_ID_ENV}`);
 
-  // Reuse existing Stripe customer if the owner already has one (e.g. from
-  // a prior membership purchase), otherwise create a fresh one.
+  // Reuse existing Stripe customer if available, otherwise create one
   let customerId: string;
   const existing = await queryOne<{ stripe_customer_id: string }>`
     SELECT stripe_customer_id
@@ -55,19 +57,22 @@ export async function createBroadcastSubscriptionIntent(
       communityId: input.communityId,
       purpose: 'broadcast_subscription',
     },
-    expand: ['latest_invoice.payment_intent'],
   });
 
-  const invoice = subscription.latest_invoice as Stripe.Invoice;
-  const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent;
+  // Stripe API 2025-12-15.clover removed invoice.payment_intent.
+  // The PaymentIntent is still auto-created — retrieve it via the customer.
+  const paymentIntents = await stripe.paymentIntents.list({
+    customer: customerId,
+    limit: 1,
+  });
+  const paymentIntent = paymentIntents.data[0];
 
   if (!paymentIntent?.client_secret) {
     throw new Error('Stripe did not return a client_secret');
   }
 
   // Create the DB row immediately (status=incomplete). The webhook handler
-  // will update it to 'active' when Stripe fires customer.subscription.updated
-  // after payment confirmation.
+  // will update it to 'active' when payment confirms.
   await upsertBroadcastSubscription({
     communityId: input.communityId,
     stripeCustomerId: customerId,

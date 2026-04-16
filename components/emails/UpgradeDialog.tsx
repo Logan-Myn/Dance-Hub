@@ -23,7 +23,7 @@ const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 );
 
-// ── Inner form rendered inside <Elements> ──────────────────────────
+// ── Payment form (inside Elements provider) ────────────────────────
 
 function PaymentForm({
   communitySlug,
@@ -37,7 +37,7 @@ function PaymentForm({
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
 
-  // Poll for subscription activation after payment confirmation
+  // Poll quota to detect when subscription becomes active
   useEffect(() => {
     if (!processing) return;
     const id = setInterval(async () => {
@@ -49,7 +49,7 @@ function PaymentForm({
         const data = await res.json();
         if (data.tier === 'paid' || data.tier === 'vip') {
           setProcessing(false);
-          toast.success('Subscription active! You can now send unlimited broadcasts.');
+          toast.success('Subscription active!');
           onSuccess();
         }
       } catch {}
@@ -90,9 +90,6 @@ function PaymentForm({
         <p className="text-sm text-muted-foreground">
           Activating your subscription...
         </p>
-        <p className="text-xs text-muted-foreground">
-          This may take a few moments
-        </p>
       </div>
     );
   }
@@ -120,20 +117,17 @@ export interface UpgradeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   communitySlug: string;
-  onSuccess?: () => void;
 }
 
 export function UpgradeDialog({
   open,
   onOpenChange,
   communitySlug,
-  onSuccess,
 }: UpgradeDialogProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loadingIntent, setLoadingIntent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch client_secret when the dialog opens
   useEffect(() => {
     if (!open) {
       setClientSecret(null);
@@ -169,8 +163,6 @@ export function UpgradeDialog({
 
   const handleSuccess = () => {
     onOpenChange(false);
-    onSuccess?.();
-    // Reload the page to refresh quota state
     window.location.reload();
   };
 

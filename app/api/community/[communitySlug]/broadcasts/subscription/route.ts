@@ -17,7 +17,7 @@ export async function POST(
       communityId: community.id,
       ownerEmail: session.user.email,
     });
-    return NextResponse.json({ clientSecret, subscriptionId });
+    return NextResponse.json({ clientSecret });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Internal error';
     console.error('[broadcasts:subscription:POST] failed', err);
