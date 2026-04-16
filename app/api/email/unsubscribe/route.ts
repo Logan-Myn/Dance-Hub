@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type'); // Optional: specific email type to unsubscribe from
 
     if (!token) {
-      return NextResponse.redirect(new URL('/unsubscribe/error', request.url));
+      return NextResponse.redirect(new URL('/unsubscribe/error', process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io'));
     }
 
     // Find the email preferences by unsubscribe token
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 
     if (!preferences) {
       console.error('Error fetching preferences: not found');
-      return NextResponse.redirect(new URL('/unsubscribe/invalid', request.url));
+      return NextResponse.redirect(new URL('/unsubscribe/invalid', process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io'));
     }
 
     // Update preferences based on type
@@ -112,10 +112,10 @@ export async function GET(request: NextRequest) {
     `;
 
     // Redirect to success page
-    return NextResponse.redirect(new URL('/unsubscribe/success', request.url));
+    return NextResponse.redirect(new URL('/unsubscribe/success', process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io'));
   } catch (error) {
     console.error('Unsubscribe error:', error);
-    return NextResponse.redirect(new URL('/unsubscribe/error', request.url));
+    return NextResponse.redirect(new URL('/unsubscribe/error', process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io'));
   }
 }
 
