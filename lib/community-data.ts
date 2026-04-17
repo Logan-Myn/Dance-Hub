@@ -16,6 +16,10 @@ export interface CommunityRow {
   custom_links?: unknown;
   status?: string | null;
   opening_date?: string | Date | null;
+  about_page?: {
+    sections?: unknown[];
+    meta?: { last_updated?: string; published_version?: string };
+  } | null;
 }
 
 // cache() dedupes calls within a single server render pass. Layout and
