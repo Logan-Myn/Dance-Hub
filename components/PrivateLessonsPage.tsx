@@ -83,6 +83,13 @@ export default function PrivateLessonsPage({
     router.refresh();
   };
 
+  // Mutations from inside the management modal (delete, toggle, edit) need
+  // to bubble back here so the page grid + RSC cache also re-sync.
+  const handleManagementMutation = () => {
+    fetchLessons();
+    router.refresh();
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
@@ -215,6 +222,7 @@ export default function PrivateLessonsPage({
           onClose={() => setIsManagementModalOpen(false)}
           communityId={communityId}
           communitySlug={communitySlug}
+          onLessonsChanged={handleManagementMutation}
         />
       )}
     </div>
