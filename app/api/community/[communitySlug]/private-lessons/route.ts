@@ -3,12 +3,10 @@ import { query, queryOne } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { CreatePrivateLessonData } from "@/types/private-lessons";
 
-interface CommunityWithOwner {
+interface Community {
   id: string;
   created_by: string;
 }
-
-interface Community extends CommunityWithOwner {}
 
 interface PrivateLesson {
   id: string;
@@ -34,7 +32,7 @@ export async function GET(
     const wantsAll = searchParams.get('include_inactive') === 'true';
 
     // Get community ID from slug (also need created_by to authorize ?include_inactive)
-    const community = await queryOne<CommunityWithOwner>`
+    const community = await queryOne<Community>`
       SELECT id, created_by
       FROM communities
       WHERE slug = ${communitySlug}
