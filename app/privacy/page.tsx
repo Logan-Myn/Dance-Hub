@@ -4,18 +4,24 @@ import Navbar from "@/app/components/Navbar";
 import { Footer } from "@/components/landing/footer";
 import { Shield, Mail, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getSession } from "@/lib/auth-session";
+import { getProfileForUser } from "@/lib/community-data";
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: "Privacy Policy - DanceHub",
   description: "Learn how DanceHub collects, uses, and protects your personal information.",
 };
 
-export default function PrivacyPolicyPage() {
+export default async function PrivacyPolicyPage() {
   const lastUpdated = "January 25, 2025";
+  const session = await getSession();
+  const profile = session ? await getProfileForUser(session.user.id) : null;
 
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-neutral-950">
-      <Navbar />
+      <Navbar initialUser={session?.user ?? null} initialProfile={profile} />
 
       <main className="flex-grow">
         {/* Header */}

@@ -15,15 +15,38 @@ interface Profile {
   avatar_url: string | null;
 }
 
-export default function Navbar() {
-  const { user, loading: isAuthLoading } = useAuth();
+interface InitialUser {
+  id: string;
+  email: string;
+  name: string;
+  image?: string | null;
+}
+
+interface NavbarProps {
+  /** Server-resolved user — when provided, the SSR'd HTML already shows
+   *  the authed nav, so users don't see the avatar/menu pop in. */
+  initialUser?: InitialUser | null;
+  initialProfile?: Profile | null;
+}
+
+export default function Navbar({ initialUser, initialProfile }: NavbarProps = {}) {
+  const { user: contextUser, loading: isAuthLoading } = useAuth();
   const { showAuthModal } = useAuthModal();
 
-  // Use SWR for profile fetching
+  // Once the AuthContext finishes hydrating use its value (lets the nav
+  // react to sign-in/out without a refresh). Until then fall back to the
+  // server-resolved user so first paint already has the right state.
+  const user = isAuthLoading ? (initialUser ?? null) : contextUser;
+
   const { data: profile } = useSWR<Profile>(
     user ? `profile:${user.id}` : null,
-    fetcher
+    fetcher,
+    { fallbackData: initialProfile ?? undefined },
   );
+
+  // Skip the spinner placeholder if the server already told us who the
+  // user is — there's no perceptible loading.
+  const showLoadingPlaceholder = isAuthLoading && !initialUser && initialUser !== null;
 
   return (
     <nav className="border-b py-4 px-6">
@@ -33,8 +56,7 @@ export default function Navbar() {
         </Link>
 
         <div className="flex gap-4 items-center">
-          {isAuthLoading ? (
-            // Show empty space while loading to prevent layout shift
+          {showLoadingPlaceholder ? (
             <div className="w-[200px]" />
           ) : user ? (
             <>
