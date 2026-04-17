@@ -1,5 +1,6 @@
 import { cache } from 'react';
 import { query, queryOne } from './db';
+import type { PrivateLesson } from '@/types/private-lessons';
 
 export interface CommunityRow {
   id: string;
@@ -86,6 +87,60 @@ export const getLiveClassesForWeek = cache(async (
   return rows.map((r) => ({
     ...r,
     scheduled_start_time: toIso(r.scheduled_start_time),
+    created_at: toIso(r.created_at),
+    updated_at: toIso(r.updated_at),
+  }));
+});
+
+// Row shape straight out of the DB (matches the private_lessons table) —
+// differs from the client-side PrivateLesson type in that nullable fields
+// arrive as `null` and timestamps as Date objects.
+interface PrivateLessonRow {
+  id: string;
+  community_id: string;
+  teacher_id: string | null;
+  title: string;
+  description: string | null;
+  duration_minutes: number;
+  regular_price: number | string;
+  member_price: number | string | null;
+  member_discount_percentage: number | string;
+  is_active: boolean;
+  max_bookings_per_month: number | null;
+  requirements: string | null;
+  location_type: 'online' | 'in_person' | 'both';
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+// Pre-fetch active private lessons for a community so the page can render
+// with initial data (no client-side spinner on first paint).
+export const getActivePrivateLessons = cache(async (communityId: string): Promise<PrivateLesson[]> => {
+  const rows = await query<PrivateLessonRow>`
+    SELECT *
+    FROM private_lessons
+    WHERE community_id = ${communityId}
+      AND is_active = true
+    ORDER BY created_at DESC
+  `;
+  const toIso = (v: Date | string): string =>
+    v instanceof Date ? v.toISOString() : v;
+  const toNum = (v: number | string | null | undefined): number | undefined =>
+    v == null ? undefined : typeof v === 'number' ? v : parseFloat(v);
+  return rows.map((r) => ({
+    id: r.id,
+    community_id: r.community_id,
+    teacher_id: r.teacher_id ?? '',
+    title: r.title,
+    description: r.description ?? undefined,
+    duration_minutes: r.duration_minutes,
+    regular_price: toNum(r.regular_price)!,
+    member_price: toNum(r.member_price),
+    member_discount_percentage: toNum(r.member_discount_percentage)!,
+    is_active: r.is_active,
+    max_bookings_per_month: r.max_bookings_per_month ?? undefined,
+    requirements: r.requirements ?? undefined,
+    location_type: r.location_type,
     created_at: toIso(r.created_at),
     updated_at: toIso(r.updated_at),
   }));
