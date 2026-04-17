@@ -9,13 +9,20 @@ export interface CommunityRow {
   description: string | null;
   image_url: string | null;
   slug: string;
+  membership_enabled?: boolean | null;
+  membership_price?: number | string | null;
+  stripe_account_id?: string | null;
+  thread_categories?: unknown;
+  custom_links?: unknown;
+  status?: string | null;
+  opening_date?: string | Date | null;
 }
 
 // cache() dedupes calls within a single server render pass. Layout and
 // pages can both call this and only one DB round-trip happens.
 export const getCommunityBySlug = cache(async (slug: string) => {
   return queryOne<CommunityRow>`
-    SELECT id, created_by, name, description, image_url, slug
+    SELECT *
     FROM communities WHERE slug = ${slug}
   `;
 });

@@ -55,9 +55,26 @@ export default async function CommunityFeedPage({
     redirect(`/${params.communitySlug}/about`);
   }
 
+  // Transform DB row to the front-end shape FeedClient already expects
+  // (matches what lib/fetcher.ts emits for the 'community:' SWR key).
+  const initialCommunity = {
+    ...community,
+    imageUrl: community.image_url ?? null,
+    threadCategories: community.thread_categories ?? [],
+    customLinks: community.custom_links ?? [],
+    membershipEnabled: community.membership_enabled ?? false,
+    membershipPrice: community.membership_price ?? 0,
+    stripeAccountId: community.stripe_account_id ?? null,
+    opening_date:
+      community.opening_date instanceof Date
+        ? community.opening_date.toISOString()
+        : community.opening_date ?? null,
+  };
+
   return (
     <FeedClient
       communitySlug={params.communitySlug}
+      initialCommunity={initialCommunity as never}
       isCreator={isCreator}
       isAdmin={isAdmin}
       isMember={membership.isMember}

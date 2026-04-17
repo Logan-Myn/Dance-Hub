@@ -188,6 +188,7 @@ const reservedPaths = [
 
 interface FeedClientProps {
   communitySlug: string;
+  initialCommunity: Community;
   isCreator: boolean;
   isAdmin: boolean;
   isMember: boolean;
@@ -199,6 +200,7 @@ interface FeedClientProps {
 
 export default function FeedClient({
   communitySlug,
+  initialCommunity,
   isCreator: initialIsCreator,
   isAdmin: initialIsAdmin,
   isMember: initialIsMember,
@@ -242,7 +244,7 @@ export default function FeedClient({
   );
 
   const [isLoading, setIsLoading] = useState(false);
-  const [community, setCommunity] = useState<Community | null>(null);
+  const [community, setCommunity] = useState<Community | null>(initialCommunity);
   const [members, setMembers] = useState<Member[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [isMember, setIsMember] = useState(initialIsMember);
