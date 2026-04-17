@@ -28,10 +28,12 @@ export async function GET(
 ) {
   try {
     const { communitySlug } = params;
+    const { searchParams } = new URL(request.url);
+    const wantsAll = searchParams.get('include_inactive') === 'true';
 
-    // Get community ID from slug
+    // Get community ID from slug (also need created_by to authorize ?include_inactive)
     const community = await queryOne<Community>`
-      SELECT id
+      SELECT id, created_by
       FROM communities
       WHERE slug = ${communitySlug}
     `;
@@ -43,14 +45,29 @@ export async function GET(
       );
     }
 
-    // Get all active private lessons for this community
-    const lessons = await query<PrivateLesson>`
-      SELECT *
-      FROM private_lessons
-      WHERE community_id = ${community.id}
-        AND is_active = true
-      ORDER BY created_at DESC
-    `;
+    // include_inactive lets the community owner see deactivated lessons in
+    // the management modal. Silently ignore the param for non-owners so the
+    // public endpoint can't be coaxed into leaking inactive lessons.
+    let includeInactive = false;
+    if (wantsAll) {
+      const session = await getSession();
+      includeInactive = !!session && session.user.id === community.created_by;
+    }
+
+    const lessons = includeInactive
+      ? await query<PrivateLesson>`
+          SELECT *
+          FROM private_lessons
+          WHERE community_id = ${community.id}
+          ORDER BY created_at DESC
+        `
+      : await query<PrivateLesson>`
+          SELECT *
+          FROM private_lessons
+          WHERE community_id = ${community.id}
+            AND is_active = true
+          ORDER BY created_at DESC
+        `;
 
     return NextResponse.json({ lessons });
   } catch (error) {
@@ -125,7 +142,9 @@ export async function POST(
       );
     }
 
-    // Create the private lesson
+    // Create the private lesson — honor the is_active flag from the form
+    // (defaulting to true) so a creator can save a draft as deactivated.
+    const isActive = (lessonData as { is_active?: boolean }).is_active ?? true;
     const lesson = await queryOne<PrivateLesson>`
       INSERT INTO private_lessons (
         community_id,
@@ -144,7 +163,7 @@ export async function POST(
         ${lessonData.duration_minutes},
         ${lessonData.regular_price},
         ${lessonData.member_price || null},
-        true
+        ${isActive}
       )
       RETURNING *
     `;

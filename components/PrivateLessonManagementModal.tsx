@@ -5,6 +5,16 @@ import { Dialog, Transition } from "@headlessui/react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import TeacherCalendarAvailability from './TeacherCalendarAvailability';
 import CreatePrivateLessonModal from './CreatePrivateLessonModal';
 import { Loader2, Edit, BookOpen, Users, Calendar, X } from "lucide-react";
@@ -17,6 +27,10 @@ interface PrivateLessonManagementModalProps {
   onClose: () => void;
   communityId: string;
   communitySlug: string;
+  /** Fires after any mutation that changes the lesson set (delete, toggle).
+   *  Parent should use this to re-sync its own list (fetchLessons +
+   *  router.refresh) so the page grid reflects the change. */
+  onLessonsChanged?: () => void;
 }
 
 type TabType = 'details' | 'schedule';
@@ -26,6 +40,7 @@ export default function PrivateLessonManagementModal({
   onClose,
   communityId,
   communitySlug,
+  onLessonsChanged,
 }: PrivateLessonManagementModalProps) {
   const [activeTab, setActiveTab] = useState<TabType>('details');
   const { user, session } = useAuth();
@@ -46,12 +61,19 @@ export default function PrivateLessonManagementModal({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<any>(null);
 
+  // Delete confirmation state — replaces the native confirm() dialog so the
+  // delete prompt matches the AlertDialog used elsewhere in the app.
+  const [lessonToDelete, setLessonToDelete] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Utility functions
+  // Match PrivateLessonCard / LessonBookingModal: prices are stored as
+  // dollars in DECIMAL(10,2), formatted as EUR currency without dividing.
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-EU', {
       style: 'currency',
-      currency: 'USD'
-    }).format(price / 100);
+      currency: 'EUR',
+    }).format(price);
   };
 
   const formatDate = (dateString: string) => {
@@ -78,7 +100,7 @@ export default function PrivateLessonManagementModal({
       if (isOpen) {
         setIsLoadingLessons(true);
         try {
-          const response = await fetch(`/api/community/${communitySlug}/private-lessons`);
+          const response = await fetch(`/api/community/${communitySlug}/private-lessons?include_inactive=true`);
           if (!response.ok) throw new Error("Failed to fetch private lessons");
           const data = await response.json();
           setPrivateLessons(data.lessons || []);
@@ -132,7 +154,9 @@ export default function PrivateLessonManagementModal({
         throw new Error('Authentication required');
       }
 
-      const response = await fetch(`/api/community/${communitySlug}/private-lessons/${lessonId}/toggle`, {
+      // PATCH on /[lessonId] only updates is_active (the dedicated toggle
+      // endpoint at /toggle was a leftover URL that was never implemented).
+      const response = await fetch(`/api/community/${communitySlug}/private-lessons/${lessonId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -150,18 +174,18 @@ export default function PrivateLessonManagementModal({
       ));
       
       toast.success(`Lesson ${!currentStatus ? 'activated' : 'deactivated'} successfully`);
+      onLessonsChanged?.();
     } catch (error) {
       console.error('Error toggling lesson status:', error);
       toast.error('Failed to update lesson status');
     }
   };
 
-  // Handle lesson deletion
-  const handleDeleteLesson = async (lessonId: string) => {
-    if (!confirm('Are you sure you want to delete this lesson? This action cannot be undone.')) {
-      return;
-    }
-
+  // Confirmed lesson deletion (called from the AlertDialog).
+  const confirmDeleteLesson = async () => {
+    if (!lessonToDelete) return;
+    const lessonId = lessonToDelete.id;
+    setIsDeleting(true);
     try {
       if (!session) {
         throw new Error('Authentication required');
@@ -176,9 +200,13 @@ export default function PrivateLessonManagementModal({
       // Remove from local state
       setPrivateLessons(prev => prev.filter(lesson => lesson.id !== lessonId));
       toast.success('Private lesson deleted successfully');
+      setLessonToDelete(null);
+      onLessonsChanged?.();
     } catch (error) {
       console.error('Error deleting lesson:', error);
       toast.error('Failed to delete lesson');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -218,7 +246,7 @@ export default function PrivateLessonManagementModal({
     const refetchLessons = async () => {
       setIsLoadingLessons(true);
       try {
-        const response = await fetch(`/api/community/${communitySlug}/private-lessons`);
+        const response = await fetch(`/api/community/${communitySlug}/private-lessons?include_inactive=true`);
         if (!response.ok) throw new Error("Failed to fetch private lessons");
         const data = await response.json();
         setPrivateLessons(data.lessons || []);
@@ -233,6 +261,7 @@ export default function PrivateLessonManagementModal({
     refetchLessons();
     setIsEditModalOpen(false);
     setEditingLesson(null);
+    onLessonsChanged?.();
   };
 
   const renderDetailsTab = () => (
@@ -366,7 +395,7 @@ export default function PrivateLessonManagementModal({
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => handleDeleteLesson(lesson.id)}
+                      onClick={() => setLessonToDelete(lesson)}
                       className="rounded-lg"
                     >
                       Delete
@@ -597,6 +626,32 @@ export default function PrivateLessonManagementModal({
         onSuccess={handleEditSuccess}
         editingLesson={editingLesson}
       />
+
+      {/* Delete confirmation — same shape as the calendar delete dialog. */}
+      <AlertDialog
+        open={!!lessonToDelete}
+        onOpenChange={(open) => { if (!open) setLessonToDelete(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this private lesson?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{lessonToDelete?.title}&rdquo; will be removed and members
+              won&apos;t be able to book it anymore. This can&apos;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteLesson}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Transition>
   );
 }

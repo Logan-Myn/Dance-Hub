@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { PrivateLesson } from "@/types/private-lessons";
 import PrivateLessonCard from "./PrivateLessonCard";
 import LessonBookingModal from "./LessonBookingModal";
@@ -17,6 +18,8 @@ interface PrivateLessonsPageProps {
   communityId: string;
   isCreator: boolean;
   isMember: boolean;
+  /** Server-fetched lessons — skips the first client fetch + spinner. */
+  initialLessons?: PrivateLesson[];
 }
 
 export default function PrivateLessonsPage({
@@ -24,22 +27,35 @@ export default function PrivateLessonsPage({
   communityId,
   isCreator,
   isMember,
+  initialLessons,
 }: PrivateLessonsPageProps) {
   const { user } = useAuth();
-  const [lessons, setLessons] = useState<PrivateLesson[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  const [lessons, setLessons] = useState<PrivateLesson[]>(initialLessons ?? []);
+  const [isLoading, setIsLoading] = useState(!initialLessons);
   const [selectedLesson, setSelectedLesson] = useState<PrivateLesson | null>(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isManagementModalOpen, setIsManagementModalOpen] = useState(false);
+  const skipInitialFetch = useRef(!!initialLessons);
 
   useEffect(() => {
+    if (skipInitialFetch.current) {
+      skipInitialFetch.current = false;
+      return;
+    }
     fetchLessons();
   }, [communitySlug]);
 
   const fetchLessons = async () => {
     try {
-      const response = await fetch(`/api/community/${communitySlug}/private-lessons`);
+      // Owners get inactive lessons too so they stay in the grid (with the
+      // 'Hidden' badge) after a deactivate/edit-toggle in the management
+      // modal — same as the server-side initialLessons behavior.
+      const url = isCreator
+        ? `/api/community/${communitySlug}/private-lessons?include_inactive=true`
+        : `/api/community/${communitySlug}/private-lessons`;
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch lessons');
       }
@@ -67,7 +83,17 @@ export default function PrivateLessonsPage({
   };
 
   const handleCreateSuccess = () => {
-    fetchLessons(); // Refresh the lessons list
+    fetchLessons(); // Refresh the lessons list locally
+    // Purge the Next.js Router Cache so nav-away-and-back shows the new
+    // lesson from the server-fetched initialLessons.
+    router.refresh();
+  };
+
+  // Mutations from inside the management modal (delete, toggle, edit) need
+  // to bubble back here so the page grid + RSC cache also re-sync.
+  const handleManagementMutation = () => {
+    fetchLessons();
+    router.refresh();
   };
 
   if (isLoading) {
@@ -202,6 +228,7 @@ export default function PrivateLessonsPage({
           onClose={() => setIsManagementModalOpen(false)}
           communityId={communityId}
           communitySlug={communitySlug}
+          onLessonsChanged={handleManagementMutation}
         />
       )}
     </div>

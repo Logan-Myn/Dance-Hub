@@ -3,7 +3,7 @@
 import { PrivateLesson } from "@/types/private-lessons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Clock, MapPin, Users, Percent, Video, Building, Globe } from "lucide-react";
+import { Clock, MapPin, Users, Percent, Video, Building, Globe, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PrivateLessonCardProps {
@@ -79,12 +79,20 @@ export default function PrivateLessonCard({
               </p>
             )}
           </div>
-          {hasDiscount && (
-            <Badge className="bg-emerald-100 text-emerald-700 border-0 rounded-full px-2.5 py-1 flex-shrink-0">
-              <Percent className="w-3 h-3 mr-1" />
-              {lesson.member_discount_percentage}% off
-            </Badge>
-          )}
+          <div className="flex flex-col gap-1.5 items-end flex-shrink-0">
+            {!lesson.is_active && (
+              <Badge className="bg-slate-200 text-slate-700 border-0 rounded-full px-2.5 py-1">
+                <EyeOff className="w-3 h-3 mr-1" />
+                Hidden
+              </Badge>
+            )}
+            {hasDiscount && (
+              <Badge className="bg-emerald-100 text-emerald-700 border-0 rounded-full px-2.5 py-1">
+                <Percent className="w-3 h-3 mr-1" />
+                {lesson.member_discount_percentage}% off
+              </Badge>
+            )}
+          </div>
         </div>
       </div>
 
@@ -157,13 +165,24 @@ export default function PrivateLessonCard({
             </div>
           </div>
 
-          <Button
-            onClick={() => onBook(lesson.id)}
-            className="w-full rounded-xl bg-primary hover:bg-primary/90 transition-all duration-200 h-12 font-semibold"
-            size="lg"
-          >
-            Book Lesson
-          </Button>
+          {lesson.is_active ? (
+            <Button
+              onClick={() => onBook(lesson.id)}
+              className="w-full rounded-xl bg-primary hover:bg-primary/90 transition-all duration-200 h-12 font-semibold"
+              size="lg"
+            >
+              Book Lesson
+            </Button>
+          ) : (
+            <Button
+              disabled
+              variant="outline"
+              className="w-full rounded-xl h-12 font-medium text-muted-foreground"
+              size="lg"
+            >
+              Not available — activate in Manage Lessons
+            </Button>
+          )}
         </div>
       </div>
     </div>
