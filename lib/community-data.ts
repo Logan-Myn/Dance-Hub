@@ -63,12 +63,17 @@ export interface LiveClassWithDetails {
 
 // Pre-fetch live classes for a given week so the calendar page can render
 // with initial data (no client-side spinner on first paint).
+//
+// The neon driver returns timestamptz columns as JS Date objects, which
+// survive RSC serialization as Dates — but the /api/.../live-classes route
+// returns them as ISO strings (via JSON.stringify). Callers downstream
+// (date-fns parseISO, WeekCalendar) assume strings, so we normalize here.
 export const getLiveClassesForWeek = cache(async (
   communityId: string,
   weekStartISO: string, // 'yyyy-MM-dd'
   weekEndISO: string,   // 'yyyy-MM-dd'
 ) => {
-  return query<LiveClassWithDetails>`
+  const rows = await query<LiveClassWithDetails>`
     SELECT *
     FROM live_classes_with_details
     WHERE community_id = ${communityId}
@@ -76,4 +81,12 @@ export const getLiveClassesForWeek = cache(async (
       AND scheduled_start_time <= ${`${weekEndISO}T23:59:59`}
     ORDER BY scheduled_start_time ASC
   `;
+  const toIso = (v: unknown): string =>
+    v instanceof Date ? v.toISOString() : (v as string);
+  return rows.map((r) => ({
+    ...r,
+    scheduled_start_time: toIso(r.scheduled_start_time),
+    created_at: toIso(r.created_at),
+    updated_at: toIso(r.updated_at),
+  }));
 });
