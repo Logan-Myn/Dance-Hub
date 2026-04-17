@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import { XMarkIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -142,16 +141,8 @@ export default function LiveClassModal({
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
+          <DialogTitle>
             {isEdit ? "Edit Live Class" : "Schedule Live Class"}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="h-6 w-6 p-0"
-            >
-              <XMarkIcon className="h-4 w-4" />
-            </Button>
           </DialogTitle>
         </DialogHeader>
 

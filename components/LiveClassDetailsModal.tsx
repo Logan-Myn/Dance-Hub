@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
-import { XMarkIcon, ClockIcon, CalendarIcon, VideoCameraIcon, PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { ClockIcon, CalendarIcon, VideoCameraIcon, PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -108,17 +108,7 @@ export default function LiveClassDetailsModal({
       <Dialog open={true} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span>Live Class Details</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onClose}
-                className="h-6 w-6 p-0"
-              >
-                <XMarkIcon className="h-4 w-4" />
-              </Button>
-            </DialogTitle>
+            <DialogTitle>Live Class Details</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
