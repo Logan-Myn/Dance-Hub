@@ -159,6 +159,53 @@ export const getActivePrivateLessons = cache(async (
   }));
 });
 
+// Full membership status for the feed page, which needs to distinguish
+// active members from pre-registered ones and surface subscription state.
+// Returns null fields when the user has no row in community_members.
+export interface MembershipStatus {
+  isMember: boolean;
+  isPreRegistered: boolean;
+  status: string | null;
+  subscriptionStatus: string | null;
+  currentPeriodEnd: string | null;
+}
+
+export const getMembershipStatus = cache(async (
+  communityId: string,
+  userId: string,
+): Promise<MembershipStatus> => {
+  const member = await queryOne<{
+    status: string;
+    subscription_status: string | null;
+    current_period_end: Date | string | null;
+  }>`
+    SELECT status, subscription_status, current_period_end
+    FROM community_members
+    WHERE community_id = ${communityId}
+      AND user_id = ${userId}
+  `;
+  if (!member) {
+    return { isMember: false, isPreRegistered: false, status: null, subscriptionStatus: null, currentPeriodEnd: null };
+  }
+  const periodEnd = member.current_period_end
+    ? (member.current_period_end instanceof Date
+        ? member.current_period_end
+        : new Date(member.current_period_end))
+    : null;
+  const inGrace =
+    member.subscription_status === 'canceling' && periodEnd && periodEnd > new Date();
+  const isPreRegistered =
+    member.status === 'pre_registered' || member.status === 'pending_pre_registration';
+  const isMember = member.status === 'active' || !!inGrace;
+  return {
+    isMember,
+    isPreRegistered,
+    status: member.status,
+    subscriptionStatus: member.subscription_status,
+    currentPeriodEnd: periodEnd ? periodEnd.toISOString() : null,
+  };
+});
+
 // Site-wide admin flag from profiles.is_admin (mapped from better-auth user
 // id via auth_user_id). Used by classroom to give admins blanket access.
 export const getUserIsAdmin = cache(async (authUserId: string): Promise<boolean> => {
