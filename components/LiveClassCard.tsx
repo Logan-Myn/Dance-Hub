@@ -29,6 +29,13 @@ export default function LiveClassCard({ liveClass, communitySlug, onClick }: Liv
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
   const startTime = parseISO(liveClass.scheduled_start_time);
   const endTime = new Date(startTime.getTime() + liveClass.duration_minutes * 60000);
+  // A scheduled class whose end time has elapsed without going live/ending
+  // explicitly is effectively in the past — style it differently from future
+  // scheduled classes so it reads as "passed" at a glance.
+  const isPast =
+    liveClass.status === 'scheduled' &&
+    !liveClass.is_currently_active &&
+    endTime < new Date();
 
   const getBackgroundColor = () => {
     if (liveClass.is_currently_active) {
@@ -39,6 +46,9 @@ export default function LiveClassCard({ liveClass, communitySlug, onClick }: Liv
     }
     if (liveClass.status === 'cancelled') {
       return 'bg-gray-300 hover:bg-gray-400 text-gray-700 border-gray-400 line-through';
+    }
+    if (isPast || liveClass.status === 'ended') {
+      return 'bg-slate-200 hover:bg-slate-300 text-slate-600 border-slate-400';
     }
     return 'bg-blue-500 hover:bg-blue-600 text-white border-blue-600';
   };

@@ -57,6 +57,11 @@ export default function LiveClassDetailsModal({
 }: LiveClassDetailsModalProps) {
   const startTime = parseISO(liveClass.scheduled_start_time);
   const endTime = new Date(startTime.getTime() + liveClass.duration_minutes * 60000);
+  // Scheduled-but-already-elapsed = effectively past.
+  const isPast =
+    liveClass.status === 'scheduled' &&
+    !liveClass.is_currently_active &&
+    endTime < new Date();
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -74,13 +79,20 @@ export default function LiveClassDetailsModal({
     if (liveClass.status === 'cancelled') {
       return <Badge variant="destructive">Cancelled</Badge>;
     }
+    if (isPast) {
+      return <Badge variant="secondary">Past</Badge>;
+    }
     return <Badge variant="outline">Scheduled</Badge>;
   };
 
   const canJoin = liveClass.is_currently_active || liveClass.is_starting_soon;
-  // Mutations allowed only for future / upcoming classes. Past (ended) and
+  // Mutations allowed only for future / upcoming classes. Past, ended, and
   // cancelled classes are read-only.
-  const canMutate = isTeacher && liveClass.status !== 'ended' && liveClass.status !== 'cancelled';
+  const canMutate =
+    isTeacher &&
+    liveClass.status !== 'ended' &&
+    liveClass.status !== 'cancelled' &&
+    !isPast;
 
   const handleDelete = async () => {
     setDeleting(true);
