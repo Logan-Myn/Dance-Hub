@@ -258,10 +258,11 @@ export async function DELETE(
       );
     }
 
-    // Soft delete by setting is_active to false
+    // Hard delete — the lesson_bookings FK cascades, so any completed /
+    // cancelled booking history will go with it. Pending/scheduled bookings
+    // are blocked above so this is safe.
     const lesson = await queryOne<PrivateLesson>`
-      UPDATE private_lessons
-      SET is_active = false, updated_at = NOW()
+      DELETE FROM private_lessons
       WHERE id = ${lessonId}
         AND community_id = ${community.id}
       RETURNING *

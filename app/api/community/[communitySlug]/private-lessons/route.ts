@@ -142,7 +142,9 @@ export async function POST(
       );
     }
 
-    // Create the private lesson
+    // Create the private lesson — honor the is_active flag from the form
+    // (defaulting to true) so a creator can save a draft as deactivated.
+    const isActive = (lessonData as { is_active?: boolean }).is_active ?? true;
     const lesson = await queryOne<PrivateLesson>`
       INSERT INTO private_lessons (
         community_id,
@@ -161,7 +163,7 @@ export async function POST(
         ${lessonData.duration_minutes},
         ${lessonData.regular_price},
         ${lessonData.member_price || null},
-        true
+        ${isActive}
       )
       RETURNING *
     `;
