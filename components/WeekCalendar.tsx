@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { format, addDays, startOfWeek, endOfWeek, isSameDay, parseISO } from "date-fns";
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ const HALF_HOURS = [0, 30]; // Support 30-minute increments
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function WeekCalendar({ communityId, communitySlug, isTeacher, initialClasses }: WeekCalendarProps) {
+  const router = useRouter();
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [liveClasses, setLiveClasses] = useState<LiveClass[]>(initialClasses ?? []);
   const [loading, setLoading] = useState(!initialClasses);
@@ -127,6 +129,9 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
 
   const handleClassCreated = () => {
     fetchLiveClasses();
+    // Purge the Next.js Router Cache so navigating away from /calendar and
+    // back picks up the new class instead of serving the pre-create RSC.
+    router.refresh();
     setShowCreateModal(false);
     setSelectedDateTime(null);
   };
