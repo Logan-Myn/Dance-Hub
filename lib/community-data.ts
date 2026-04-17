@@ -9,13 +9,20 @@ export interface CommunityRow {
   description: string | null;
   image_url: string | null;
   slug: string;
+  membership_enabled?: boolean | null;
+  membership_price?: number | string | null;
+  stripe_account_id?: string | null;
+  thread_categories?: unknown;
+  custom_links?: unknown;
+  status?: string | null;
+  opening_date?: string | Date | null;
 }
 
 // cache() dedupes calls within a single server render pass. Layout and
 // pages can both call this and only one DB round-trip happens.
 export const getCommunityBySlug = cache(async (slug: string) => {
   return queryOne<CommunityRow>`
-    SELECT id, created_by, name, description, image_url, slug
+    SELECT *
     FROM communities WHERE slug = ${slug}
   `;
 });
@@ -157,6 +164,190 @@ export const getActivePrivateLessons = cache(async (
     created_at: toIso(r.created_at),
     updated_at: toIso(r.updated_at),
   }));
+});
+
+// Pre-fetched community threads for the feed page so the thread list
+// renders in the same paint as the chrome. Mirrors the shape returned by
+// /api/community/[slug]/threads so SWR can hydrate from this directly.
+export interface CommunityThread {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  userId: string;
+  category: string;
+  categoryId: string | null;
+  likesCount: number;
+  commentsCount: number;
+  likes: string[];
+  comments: Array<{
+    id: string;
+    thread_id: string;
+    user_id: string;
+    content: string;
+    created_at: string;
+    parent_id: string | null;
+    author: { name: string; image: string };
+    likes: string[];
+    likes_count: number;
+  }>;
+  pinned: boolean;
+  author: { name: string; image: string };
+}
+
+interface ThreadQueryRow {
+  id: string;
+  title: string;
+  content: string;
+  created_at: Date | string;
+  user_id: string;
+  category_name: string | null;
+  category_id: string | null;
+  pinned: boolean | null;
+  profile_id: string | null;
+  profile_full_name: string | null;
+  profile_avatar_url: string | null;
+  profile_display_name: string | null;
+  likes: string[] | null;
+  likes_count: number;
+  comments_count: number;
+}
+
+interface CommentQueryRow {
+  id: string;
+  thread_id: string;
+  user_id: string;
+  content: string;
+  created_at: Date | string;
+  parent_id: string | null;
+  author: { name: string; image: string } | null;
+  likes: string[] | null;
+  likes_count: number;
+}
+
+export const getCommunityThreads = cache(async (communityId: string): Promise<CommunityThread[]> => {
+  const threads = await query<ThreadQueryRow>`
+    SELECT
+      t.id,
+      t.title,
+      t.content,
+      t.created_at,
+      t.user_id,
+      t.category_name,
+      t.category_id,
+      t.pinned,
+      p.id as profile_id,
+      p.full_name as profile_full_name,
+      p.avatar_url as profile_avatar_url,
+      p.display_name as profile_display_name,
+      COALESCE(t.likes, ARRAY[]::TEXT[]) as likes,
+      COALESCE(array_length(t.likes, 1), 0)::int as likes_count,
+      (SELECT COUNT(*) FROM comments c WHERE c.thread_id = t.id)::int as comments_count
+    FROM threads t
+    LEFT JOIN profiles p ON p.auth_user_id = t.user_id
+    WHERE t.community_id = ${communityId}
+    ORDER BY t.created_at DESC
+  `;
+
+  const threadIds = threads.map((t) => t.id);
+  const comments = threadIds.length > 0
+    ? await query<CommentQueryRow>`
+        SELECT
+          c.id, c.thread_id, c.user_id, c.content, c.created_at,
+          c.parent_id, c.author,
+          COALESCE(c.likes, ARRAY[]::TEXT[]) as likes,
+          COALESCE(c.likes_count, 0) as likes_count
+        FROM comments c
+        WHERE c.thread_id = ANY(${threadIds}::uuid[])
+        ORDER BY c.created_at ASC
+      `
+    : [];
+
+  const commentsByThread = new Map<string, CommentQueryRow[]>();
+  for (const c of comments) {
+    const arr = commentsByThread.get(c.thread_id) ?? [];
+    arr.push(c);
+    commentsByThread.set(c.thread_id, arr);
+  }
+
+  const toIso = (v: Date | string): string =>
+    v instanceof Date ? v.toISOString() : v;
+
+  return threads.map((t) => ({
+    id: t.id,
+    title: t.title,
+    content: t.content,
+    createdAt: toIso(t.created_at),
+    userId: t.user_id,
+    author: {
+      name: t.profile_display_name || t.profile_full_name || 'Anonymous',
+      image: t.profile_avatar_url || '',
+    },
+    category: t.category_name || 'General',
+    categoryId: t.category_id,
+    likesCount: t.likes_count || 0,
+    commentsCount: t.comments_count || 0,
+    likes: t.likes || [],
+    comments: (commentsByThread.get(t.id) || []).map((c) => ({
+      id: c.id,
+      thread_id: c.thread_id,
+      user_id: c.user_id,
+      content: c.content,
+      created_at: toIso(c.created_at),
+      parent_id: c.parent_id,
+      author: c.author || { name: 'Anonymous', image: '' },
+      likes: c.likes || [],
+      likes_count: c.likes_count || 0,
+    })),
+    pinned: t.pinned ?? false,
+  }));
+});
+
+// Full membership status for the feed page, which needs to distinguish
+// active members from pre-registered ones and surface subscription state.
+// Returns null fields when the user has no row in community_members.
+export interface MembershipStatus {
+  isMember: boolean;
+  isPreRegistered: boolean;
+  status: string | null;
+  subscriptionStatus: string | null;
+  currentPeriodEnd: string | null;
+}
+
+export const getMembershipStatus = cache(async (
+  communityId: string,
+  userId: string,
+): Promise<MembershipStatus> => {
+  const member = await queryOne<{
+    status: string;
+    subscription_status: string | null;
+    current_period_end: Date | string | null;
+  }>`
+    SELECT status, subscription_status, current_period_end
+    FROM community_members
+    WHERE community_id = ${communityId}
+      AND user_id = ${userId}
+  `;
+  if (!member) {
+    return { isMember: false, isPreRegistered: false, status: null, subscriptionStatus: null, currentPeriodEnd: null };
+  }
+  const periodEnd = member.current_period_end
+    ? (member.current_period_end instanceof Date
+        ? member.current_period_end
+        : new Date(member.current_period_end))
+    : null;
+  const inGrace =
+    member.subscription_status === 'canceling' && periodEnd && periodEnd > new Date();
+  const isPreRegistered =
+    member.status === 'pre_registered' || member.status === 'pending_pre_registration';
+  const isMember = member.status === 'active' || !!inGrace;
+  return {
+    isMember,
+    isPreRegistered,
+    status: member.status,
+    subscriptionStatus: member.subscription_status,
+    currentPeriodEnd: periodEnd ? periodEnd.toISOString() : null,
+  };
 });
 
 // Site-wide admin flag from profiles.is_admin (mapped from better-auth user
