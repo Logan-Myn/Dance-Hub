@@ -113,16 +113,29 @@ interface PrivateLessonRow {
   updated_at: Date | string;
 }
 
-// Pre-fetch active private lessons for a community so the page can render
-// with initial data (no client-side spinner on first paint).
-export const getActivePrivateLessons = cache(async (communityId: string): Promise<PrivateLesson[]> => {
-  const rows = await query<PrivateLessonRow>`
-    SELECT *
-    FROM private_lessons
-    WHERE community_id = ${communityId}
-      AND is_active = true
-    ORDER BY created_at DESC
-  `;
+// Pre-fetch private lessons for a community so the page can render with
+// initial data (no client-side spinner on first paint). Pass
+// includeInactive=true when the viewer is the community owner so they can
+// see and manage hidden lessons inline (matches the classroom Private
+// badge pattern).
+export const getActivePrivateLessons = cache(async (
+  communityId: string,
+  includeInactive: boolean = false,
+): Promise<PrivateLesson[]> => {
+  const rows = includeInactive
+    ? await query<PrivateLessonRow>`
+        SELECT *
+        FROM private_lessons
+        WHERE community_id = ${communityId}
+        ORDER BY is_active DESC, created_at DESC
+      `
+    : await query<PrivateLessonRow>`
+        SELECT *
+        FROM private_lessons
+        WHERE community_id = ${communityId}
+          AND is_active = true
+        ORDER BY created_at DESC
+      `;
   const toIso = (v: Date | string): string =>
     v instanceof Date ? v.toISOString() : v;
   const toNum = (v: number | string | null | undefined): number | undefined =>

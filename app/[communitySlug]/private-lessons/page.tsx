@@ -23,7 +23,9 @@ export default async function CommunityPrivateLessonsPage({
   const isMember =
     !!session && (await getCommunityMembership(community.id, session.user.id));
 
-  const initialLessons = await getActivePrivateLessons(community.id);
+  // Owners see inactive lessons too (with a "Hidden" badge) — same pattern
+  // as classroom showing private courses to the teacher.
+  const initialLessons = await getActivePrivateLessons(community.id, isCreator);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
