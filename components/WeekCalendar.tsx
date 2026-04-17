@@ -48,6 +48,7 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
   const [selectedClass, setSelectedClass] = useState<LiveClass | null>(null);
+  const [editingClass, setEditingClass] = useState<LiveClass | null>(null);
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 0 });
   const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 0 });
@@ -134,6 +135,23 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
     router.refresh();
     setShowCreateModal(false);
     setSelectedDateTime(null);
+  };
+
+  const handleClassUpdated = () => {
+    fetchLiveClasses();
+    router.refresh();
+    setEditingClass(null);
+  };
+
+  const handleClassDeleted = () => {
+    fetchLiveClasses();
+    router.refresh();
+    setSelectedClass(null);
+  };
+
+  const openEditFromDetails = (liveClass: LiveClass) => {
+    setSelectedClass(null);
+    setEditingClass(liveClass);
   };
 
   if (loading) {
@@ -310,7 +328,21 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
         <LiveClassDetailsModal
           liveClass={selectedClass}
           communitySlug={communitySlug}
+          isTeacher={isTeacher}
           onClose={() => setSelectedClass(null)}
+          onEdit={openEditFromDetails}
+          onDeleted={handleClassDeleted}
+        />
+      )}
+
+      {/* Edit Live Class Modal (reuses the create modal in edit mode) */}
+      {editingClass && (
+        <LiveClassModal
+          communityId={communityId}
+          communitySlug={communitySlug}
+          existingClass={editingClass}
+          onClose={() => setEditingClass(null)}
+          onClassUpdated={handleClassUpdated}
         />
       )}
     </div>

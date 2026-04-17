@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,22 +17,37 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "react-hot-toast";
 
+interface ExistingClass {
+  id: string;
+  title: string;
+  description?: string | null;
+  scheduled_start_time: string;
+  duration_minutes: number;
+}
+
 interface LiveClassModalProps {
   communityId: string;
   communitySlug: string;
   initialDateTime?: Date | null;
+  /** When provided, modal runs in edit mode: pre-fills form, submits PUT. */
+  existingClass?: ExistingClass | null;
   onClose: () => void;
-  onClassCreated: () => void;
+  onClassCreated?: () => void;
+  onClassUpdated?: () => void;
 }
 
 export default function LiveClassModal({
   communityId,
   communitySlug,
   initialDateTime,
+  existingClass,
   onClose,
   onClassCreated,
+  onClassUpdated,
 }: LiveClassModalProps) {
   const { session } = useAuth();
+  const isEdit = !!existingClass;
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -45,6 +60,18 @@ export default function LiveClassModal({
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (existingClass) {
+      const start = parseISO(existingClass.scheduled_start_time);
+      setFormData({
+        title: existingClass.title,
+        description: existingClass.description ?? "",
+        scheduledDateTime: format(start, "yyyy-MM-dd"),
+        scheduledTime: format(start, "HH:mm"),
+        duration: String(existingClass.duration_minutes),
+        enableRecording: false,
+      });
+      return;
+    }
     if (initialDateTime) {
       const date = format(initialDateTime, 'yyyy-MM-dd');
       const time = format(initialDateTime, 'HH:mm');
@@ -54,7 +81,7 @@ export default function LiveClassModal({
         scheduledTime: time,
       }));
     }
-  }, [initialDateTime]);
+  }, [initialDateTime, existingClass]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,30 +96,36 @@ export default function LiveClassModal({
 
       const scheduledStartTime = new Date(`${formData.scheduledDateTime}T${formData.scheduledTime}`);
 
-      const response = await fetch(`/api/community/${communitySlug}/live-classes`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: formData.title,
-          description: formData.description,
-          scheduled_start_time: scheduledStartTime.toISOString(),
-          duration_minutes: parseInt(formData.duration),
-          community_id: communityId,
-          enable_recording: formData.enableRecording,
-        }),
+      const url = isEdit
+        ? `/api/community/${communitySlug}/live-classes/${existingClass!.id}`
+        : `/api/community/${communitySlug}/live-classes`;
+      const method = isEdit ? "PUT" : "POST";
+      const body: Record<string, unknown> = {
+        title: formData.title,
+        description: formData.description,
+        scheduled_start_time: scheduledStartTime.toISOString(),
+        duration_minutes: parseInt(formData.duration),
+      };
+      if (!isEdit) {
+        body.community_id = communityId;
+        body.enable_recording = formData.enableRecording;
+      }
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create live class");
+        throw new Error(errorData.error || (isEdit ? "Failed to update live class" : "Failed to create live class"));
       }
 
-      toast.success("Live class scheduled successfully!");
-      onClassCreated();
+      toast.success(isEdit ? "Live class updated!" : "Live class scheduled successfully!");
+      if (isEdit) onClassUpdated?.(); else onClassCreated?.();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to create live class";
+      const errorMessage = err instanceof Error ? err.message : (isEdit ? "Failed to update live class" : "Failed to create live class");
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -110,7 +143,7 @@ export default function LiveClassModal({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
-            Schedule Live Class
+            {isEdit ? "Edit Live Class" : "Schedule Live Class"}
             <Button
               variant="ghost"
               size="sm"
@@ -193,16 +226,18 @@ export default function LiveClassModal({
             />
           </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="enableRecording">Record this class</Label>
-            <Switch
-              id="enableRecording"
-              checked={formData.enableRecording}
-              onCheckedChange={(checked) =>
-                setFormData((prev) => ({ ...prev, enableRecording: checked }))
-              }
-            />
-          </div>
+          {!isEdit && (
+            <div className="flex items-center justify-between">
+              <Label htmlFor="enableRecording">Record this class</Label>
+              <Switch
+                id="enableRecording"
+                checked={formData.enableRecording}
+                onCheckedChange={(checked) =>
+                  setFormData((prev) => ({ ...prev, enableRecording: checked }))
+                }
+              />
+            </div>
+          )}
 
           <div className="flex justify-end space-x-3 pt-4">
             <Button
@@ -217,7 +252,9 @@ export default function LiveClassModal({
               type="submit"
               disabled={loading || !formData.title || !formData.scheduledDateTime || !formData.scheduledTime}
             >
-              {loading ? "Creating..." : "Schedule Class"}
+              {loading
+                ? (isEdit ? "Saving..." : "Creating...")
+                : (isEdit ? "Save changes" : "Schedule Class")}
             </Button>
           </div>
         </form>
