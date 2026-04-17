@@ -4,18 +4,24 @@ import Navbar from "@/app/components/Navbar";
 import { Footer } from "@/components/landing/footer";
 import { FileText, Mail, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getSession } from "@/lib/auth-session";
+import { getProfileForUser } from "@/lib/community-data";
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: "Terms of Service - DanceHub",
   description: "Read the terms and conditions for using DanceHub, the platform for dance communities.",
 };
 
-export default function TermsOfServicePage() {
+export default async function TermsOfServicePage() {
   const lastUpdated = "January 25, 2025";
+  const session = await getSession();
+  const profile = session ? await getProfileForUser(session.user.id) : null;
 
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-neutral-950">
-      <Navbar />
+      <Navbar initialUser={session?.user ?? null} initialProfile={profile} />
 
       <main className="flex-grow">
         {/* Header */}

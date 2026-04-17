@@ -363,6 +363,21 @@ export const getUserIsAdmin = cache(async (authUserId: string): Promise<boolean>
   return !!row?.is_admin;
 });
 
+// Profile shape used by the top-app Navbar. Cached so the same render can
+// resolve session + profile without two DB hits.
+export interface NavbarProfile {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+}
+
+export const getProfileForUser = cache(async (authUserId: string): Promise<NavbarProfile | null> => {
+  return queryOne<NavbarProfile>`
+    SELECT id, full_name, avatar_url
+    FROM profiles WHERE auth_user_id = ${authUserId}
+  `;
+});
+
 export interface CourseRow {
   id: string;
   title: string;
