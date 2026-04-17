@@ -3,10 +3,12 @@ import { query, queryOne } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { CreatePrivateLessonData } from "@/types/private-lessons";
 
-interface Community {
+interface CommunityWithOwner {
   id: string;
   created_by: string;
 }
+
+interface Community extends CommunityWithOwner {}
 
 interface PrivateLesson {
   id: string;
@@ -28,10 +30,12 @@ export async function GET(
 ) {
   try {
     const { communitySlug } = params;
+    const { searchParams } = new URL(request.url);
+    const wantsAll = searchParams.get('include_inactive') === 'true';
 
-    // Get community ID from slug
-    const community = await queryOne<Community>`
-      SELECT id
+    // Get community ID from slug (also need created_by to authorize ?include_inactive)
+    const community = await queryOne<CommunityWithOwner>`
+      SELECT id, created_by
       FROM communities
       WHERE slug = ${communitySlug}
     `;
@@ -43,14 +47,29 @@ export async function GET(
       );
     }
 
-    // Get all active private lessons for this community
-    const lessons = await query<PrivateLesson>`
-      SELECT *
-      FROM private_lessons
-      WHERE community_id = ${community.id}
-        AND is_active = true
-      ORDER BY created_at DESC
-    `;
+    // include_inactive lets the community owner see deactivated lessons in
+    // the management modal. Silently ignore the param for non-owners so the
+    // public endpoint can't be coaxed into leaking inactive lessons.
+    let includeInactive = false;
+    if (wantsAll) {
+      const session = await getSession();
+      includeInactive = !!session && session.user.id === community.created_by;
+    }
+
+    const lessons = includeInactive
+      ? await query<PrivateLesson>`
+          SELECT *
+          FROM private_lessons
+          WHERE community_id = ${community.id}
+          ORDER BY created_at DESC
+        `
+      : await query<PrivateLesson>`
+          SELECT *
+          FROM private_lessons
+          WHERE community_id = ${community.id}
+            AND is_active = true
+          ORDER BY created_at DESC
+        `;
 
     return NextResponse.json({ lessons });
   } catch (error) {

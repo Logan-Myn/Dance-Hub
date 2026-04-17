@@ -100,7 +100,7 @@ export default function PrivateLessonManagementModal({
       if (isOpen) {
         setIsLoadingLessons(true);
         try {
-          const response = await fetch(`/api/community/${communitySlug}/private-lessons`);
+          const response = await fetch(`/api/community/${communitySlug}/private-lessons?include_inactive=true`);
           if (!response.ok) throw new Error("Failed to fetch private lessons");
           const data = await response.json();
           setPrivateLessons(data.lessons || []);
@@ -154,7 +154,9 @@ export default function PrivateLessonManagementModal({
         throw new Error('Authentication required');
       }
 
-      const response = await fetch(`/api/community/${communitySlug}/private-lessons/${lessonId}/toggle`, {
+      // PATCH on /[lessonId] only updates is_active (the dedicated toggle
+      // endpoint at /toggle was a leftover URL that was never implemented).
+      const response = await fetch(`/api/community/${communitySlug}/private-lessons/${lessonId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -244,7 +246,7 @@ export default function PrivateLessonManagementModal({
     const refetchLessons = async () => {
       setIsLoadingLessons(true);
       try {
-        const response = await fetch(`/api/community/${communitySlug}/private-lessons`);
+        const response = await fetch(`/api/community/${communitySlug}/private-lessons?include_inactive=true`);
         if (!response.ok) throw new Error("Failed to fetch private lessons");
         const data = await response.json();
         setPrivateLessons(data.lessons || []);
