@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth-session';
 import {
   getCommunityBySlug,
+  getCommunityThreads,
   getMembershipStatus,
   getUserIsAdmin,
 } from '@/lib/community-data';
@@ -71,10 +72,13 @@ export default async function CommunityFeedPage({
         : community.opening_date ?? null,
   };
 
+  const initialThreads = await getCommunityThreads(community.id);
+
   return (
     <FeedClient
       communitySlug={params.communitySlug}
       initialCommunity={initialCommunity as never}
+      initialThreads={initialThreads as never}
       isCreator={isCreator}
       isAdmin={isAdmin}
       isMember={membership.isMember}
