@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { format, addDays, startOfWeek, endOfWeek, isSameDay, parseISO } from "date-fns";
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
@@ -12,11 +12,11 @@ import LiveClassDetailsModal from "./LiveClassDetailsModal";
 interface LiveClass {
   id: string;
   title: string;
-  description?: string;
+  description?: string | null;
   scheduled_start_time: string;
   duration_minutes: number;
   teacher_name: string;
-  teacher_avatar_url?: string;
+  teacher_avatar_url?: string | null;
   status: 'scheduled' | 'live' | 'ended' | 'cancelled';
   is_currently_active: boolean;
   is_starting_soon: boolean;
@@ -26,6 +26,9 @@ interface WeekCalendarProps {
   communityId: string;
   communitySlug: string;
   isTeacher: boolean;
+  /** Server-fetched classes for the current week — lets us skip the first
+   *  client fetch and paint without a spinner. */
+  initialClasses?: LiveClass[];
 }
 
 const DEFAULT_MIN_HOUR = 6;  // default start of visible day: 6 AM
@@ -33,10 +36,13 @@ const DEFAULT_MAX_HOUR = 23; // default end of visible day:   11 PM
 const HALF_HOURS = [0, 30]; // Support 30-minute increments
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-export default function WeekCalendar({ communityId, communitySlug, isTeacher }: WeekCalendarProps) {
+export default function WeekCalendar({ communityId, communitySlug, isTeacher, initialClasses }: WeekCalendarProps) {
   const [currentWeek, setCurrentWeek] = useState(new Date());
-  const [liveClasses, setLiveClasses] = useState<LiveClass[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [liveClasses, setLiveClasses] = useState<LiveClass[]>(initialClasses ?? []);
+  const [loading, setLoading] = useState(!initialClasses);
+  // Skip the first client fetch if the server already hydrated us with this
+  // week's classes; subsequent week navigations still fetch normally.
+  const skipInitialFetch = useRef(!!initialClasses);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
   const [selectedClass, setSelectedClass] = useState<LiveClass | null>(null);
@@ -70,6 +76,10 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher }: 
   }, [liveClasses]);
 
   useEffect(() => {
+    if (skipInitialFetch.current) {
+      skipInitialFetch.current = false;
+      return;
+    }
     fetchLiveClasses();
   }, [currentWeek, communityId]);
 

@@ -15,11 +15,11 @@ import Link from "next/link";
 interface LiveClass {
   id: string;
   title: string;
-  description?: string;
+  description?: string | null;
   scheduled_start_time: string;
   duration_minutes: number;
   teacher_name: string;
-  teacher_avatar_url?: string;
+  teacher_avatar_url?: string | null;
   status: 'scheduled' | 'live' | 'ended' | 'cancelled';
   is_currently_active: boolean;
   is_starting_soon: boolean;
