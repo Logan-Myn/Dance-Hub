@@ -67,11 +67,13 @@ export default function PrivateLessonManagementModal({
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Utility functions
+  // Match PrivateLessonCard / LessonBookingModal: prices are stored as
+  // dollars in DECIMAL(10,2), formatted as EUR currency without dividing.
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-EU', {
       style: 'currency',
-      currency: 'USD'
-    }).format(price / 100);
+      currency: 'EUR',
+    }).format(price);
   };
 
   const formatDate = (dateString: string) => {

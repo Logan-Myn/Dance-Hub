@@ -48,8 +48,8 @@ export default function CreatePrivateLessonModal({
         title: editingLesson.title || "",
         description: editingLesson.description || "",
         duration_minutes: editingLesson.duration_minutes || 60,
-        regular_price: editingLesson.regular_price ? (editingLesson.regular_price / 100).toString() : "",
-        member_price: editingLesson.member_price ? (editingLesson.member_price / 100).toString() : "",
+        regular_price: editingLesson.regular_price ? editingLesson.regular_price.toString() : "",
+        member_price: editingLesson.member_price ? editingLesson.member_price.toString() : "",
         location_type: editingLesson.location_type || "online",
         is_active: editingLesson.is_active !== undefined ? editingLesson.is_active : true,
         max_bookings_per_month: editingLesson.max_bookings_per_month || null,
@@ -109,7 +109,10 @@ export default function CreatePrivateLessonModal({
         ? `/api/community/${communitySlug}/private-lessons/${editingLesson.id}`
         : `/api/community/${communitySlug}/private-lessons`;
 
-      const method = editingLesson ? "PATCH" : "POST";
+      // Edits go through PUT (full update). PATCH on /lessonId only flips
+      // is_active and ignores everything else, which made edits silently
+      // fail to persist title/description/prices.
+      const method = editingLesson ? "PUT" : "POST";
 
       const response = await fetch(url, {
         method,
