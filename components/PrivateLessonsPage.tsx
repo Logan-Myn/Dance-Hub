@@ -49,7 +49,13 @@ export default function PrivateLessonsPage({
 
   const fetchLessons = async () => {
     try {
-      const response = await fetch(`/api/community/${communitySlug}/private-lessons`);
+      // Owners get inactive lessons too so they stay in the grid (with the
+      // 'Hidden' badge) after a deactivate/edit-toggle in the management
+      // modal — same as the server-side initialLessons behavior.
+      const url = isCreator
+        ? `/api/community/${communitySlug}/private-lessons?include_inactive=true`
+        : `/api/community/${communitySlug}/private-lessons`;
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch lessons');
       }
