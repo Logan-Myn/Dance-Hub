@@ -47,7 +47,7 @@ export default function LiveClassCard({ liveClass, communitySlug, onClick }: Liv
   };
 
   return (
-    <div className="relative w-full">
+    <div className={`relative w-full ${showTooltip ? 'z-50' : ''}`}>
       <div
         onClick={handleClick}
         className={`
