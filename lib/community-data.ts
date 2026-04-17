@@ -158,3 +158,180 @@ export const getActivePrivateLessons = cache(async (
     updated_at: toIso(r.updated_at),
   }));
 });
+
+// Site-wide admin flag from profiles.is_admin (mapped from better-auth user
+// id via auth_user_id). Used by classroom to give admins blanket access.
+export const getUserIsAdmin = cache(async (authUserId: string): Promise<boolean> => {
+  const row = await queryOne<{ is_admin: boolean }>`
+    SELECT is_admin FROM profiles WHERE auth_user_id = ${authUserId}
+  `;
+  return !!row?.is_admin;
+});
+
+export interface CourseRow {
+  id: string;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  slug: string;
+  community_id: string | null;
+  created_by: string | null;
+  is_public: boolean | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+// Matches types/course.ts (which CourseCard etc. expect): non-nullable
+// description / image_url. We coerce DB nulls to empty strings during
+// normalization below.
+export interface Course {
+  id: string;
+  title: string;
+  description: string;
+  image_url: string;
+  slug: string;
+  community_id: string;
+  created_by: string | null;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Pre-fetch courses for a community. includePrivate=true returns is_public=false
+// rows too — only the creator and site admins should pass true.
+export const getCoursesForCommunity = cache(async (
+  communityId: string,
+  includePrivate: boolean = false,
+): Promise<Course[]> => {
+  const rows = includePrivate
+    ? await query<CourseRow>`
+        SELECT *
+        FROM courses
+        WHERE community_id = ${communityId}
+        ORDER BY created_at DESC
+      `
+    : await query<CourseRow>`
+        SELECT *
+        FROM courses
+        WHERE community_id = ${communityId}
+          AND is_public = true
+        ORDER BY created_at DESC
+      `;
+  const toIsoStr = (v: Date | string): string =>
+    v instanceof Date ? v.toISOString() : v;
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    description: r.description ?? '',
+    image_url: r.image_url ?? '',
+    slug: r.slug,
+    community_id: r.community_id ?? communityId,
+    created_by: r.created_by,
+    is_public: r.is_public ?? true,
+    created_at: toIsoStr(r.created_at),
+    updated_at: toIsoStr(r.updated_at),
+  }));
+});
+
+// Pre-fetch a course with its chapters and lessons (and per-user completion
+// state). Mirrors the shape returned by /api/community/[slug]/courses/[slug]
+// so the client component's SWR can hydrate from it.
+interface ChapterRow {
+  id: string;
+  title: string;
+  chapter_position: number;
+  course_id: string;
+}
+
+interface LessonRow {
+  id: string;
+  title: string;
+  content: string | null;
+  video_asset_id: string | null;
+  chapter_id: string;
+  lesson_position: number;
+  playback_id: string | null;
+}
+
+export interface CourseChapterWithLessons extends ChapterRow {
+  lessons: Array<LessonRow & {
+    videoAssetId: string | null;
+    playbackId: string | null;
+    completed: boolean;
+  }>;
+}
+
+export interface CourseWithChapters extends Course {
+  chapters: CourseChapterWithLessons[];
+}
+
+export const getCourseWithChapters = cache(async (
+  communityId: string,
+  courseSlug: string,
+  userId: string | null,
+): Promise<CourseWithChapters | null> => {
+  const courseRow = await queryOne<CourseRow>`
+    SELECT *
+    FROM courses
+    WHERE community_id = ${communityId}
+      AND slug = ${courseSlug}
+  `;
+  if (!courseRow) return null;
+
+  const chapters = await query<ChapterRow>`
+    SELECT *
+    FROM chapters
+    WHERE course_id = ${courseRow.id}
+    ORDER BY chapter_position ASC
+  `;
+
+  const chapterIds = chapters.map((c) => c.id);
+  const lessons = chapterIds.length > 0
+    ? await query<LessonRow>`
+        SELECT *
+        FROM lessons
+        WHERE chapter_id = ANY(${chapterIds})
+        ORDER BY lesson_position ASC
+      `
+    : [];
+
+  let completedLessonIds = new Set<string>();
+  if (userId) {
+    const completions = await query<{ lesson_id: string }>`
+      SELECT lesson_id FROM lesson_completions WHERE user_id = ${userId}
+    `;
+    completedLessonIds = new Set(completions.map((c) => c.lesson_id));
+  }
+
+  const lessonsByChapter = new Map<string, CourseChapterWithLessons['lessons']>();
+  for (const l of lessons) {
+    const arr = lessonsByChapter.get(l.chapter_id) ?? [];
+    arr.push({
+      ...l,
+      videoAssetId: l.video_asset_id,
+      playbackId: l.playback_id,
+      completed: completedLessonIds.has(l.id),
+    });
+    lessonsByChapter.set(l.chapter_id, arr);
+  }
+
+  const toIsoStr = (v: Date | string): string =>
+    v instanceof Date ? v.toISOString() : v;
+
+  return {
+    id: courseRow.id,
+    title: courseRow.title,
+    description: courseRow.description ?? '',
+    image_url: courseRow.image_url ?? '',
+    slug: courseRow.slug,
+    community_id: courseRow.community_id ?? communityId,
+    created_by: courseRow.created_by,
+    is_public: courseRow.is_public ?? true,
+    created_at: toIsoStr(courseRow.created_at),
+    updated_at: toIsoStr(courseRow.updated_at),
+    chapters: chapters.map((c) => ({
+      ...c,
+      lessons: lessonsByChapter.get(c.id) ?? [],
+    })),
+  };
+});
