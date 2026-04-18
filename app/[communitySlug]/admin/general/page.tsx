@@ -15,6 +15,7 @@ interface CommunityRow {
   slug: string;
   status: string | null;
   opening_date: string | null;
+  can_change_opening_date: boolean | null;
 }
 
 export default async function GeneralSettingsPage({
@@ -23,7 +24,7 @@ export default async function GeneralSettingsPage({
   params: { communitySlug: string };
 }) {
   const community = await queryOne<CommunityRow>`
-    SELECT id, name, description, image_url, custom_links, slug, status, opening_date
+    SELECT id, name, description, image_url, custom_links, slug, status, opening_date, can_change_opening_date
     FROM communities
     WHERE slug = ${params.communitySlug}
   `;
@@ -32,6 +33,11 @@ export default async function GeneralSettingsPage({
   const initialCustomLinks = Array.isArray(community.custom_links)
     ? (community.custom_links as { title: string; url: string }[])
     : [];
+
+  // `can_change_opening_date` is a direct column on `communities` (see the GET
+  // handler in app/api/community/[communitySlug]/route.ts). Default to true
+  // when null so first-time editors aren't blocked.
+  const canChangeOpeningDate = community.can_change_opening_date ?? true;
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-1 duration-500">
@@ -48,8 +54,9 @@ export default async function GeneralSettingsPage({
         initialImageUrl={community.image_url ?? ''}
         initialCustomLinks={initialCustomLinks}
         currentSlug={community.slug}
-        currentStatus={community.status ?? 'active'}
-        currentOpeningDate={community.opening_date}
+        initialStatus={community.status ?? 'active'}
+        initialOpeningDate={community.opening_date}
+        canChangeOpeningDate={canChangeOpeningDate}
       />
     </div>
   );

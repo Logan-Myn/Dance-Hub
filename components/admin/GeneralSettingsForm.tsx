@@ -7,12 +7,21 @@ import { Loader2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { uploadFileToStorage, STORAGE_FOLDERS } from "@/lib/storage-client";
 
 interface CustomLink {
   title: string;
   url: string;
 }
+
+type CommunityStatus = "active" | "pre_registration" | "inactive";
 
 interface GeneralSettingsFormProps {
   communitySlug: string;
@@ -23,8 +32,9 @@ interface GeneralSettingsFormProps {
   // Passed through to the update route so we don't clobber columns this page
   // doesn't edit (the route PUTs all of them unconditionally).
   currentSlug: string;
-  currentStatus: string;
-  currentOpeningDate: string | null;
+  initialStatus: string;
+  initialOpeningDate: string | null;
+  canChangeOpeningDate: boolean;
 }
 
 // Port of formatUrl from CommunitySettingsModal.tsx line 165.
@@ -36,6 +46,11 @@ function formatUrl(url: string): string {
   return `https://${url}`;
 }
 
+function normalizeStatus(status: string): CommunityStatus {
+  if (status === "pre_registration" || status === "inactive") return status;
+  return "active";
+}
+
 export function GeneralSettingsForm({
   communitySlug,
   initialName,
@@ -43,14 +58,19 @@ export function GeneralSettingsForm({
   initialImageUrl,
   initialCustomLinks,
   currentSlug,
-  currentStatus,
-  currentOpeningDate,
+  initialStatus,
+  initialOpeningDate,
+  canChangeOpeningDate,
 }: GeneralSettingsFormProps) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
   const [imageUrl, setImageUrl] = useState(initialImageUrl);
   const [links, setLinks] = useState<CustomLink[]>(initialCustomLinks);
+  const [communityStatus, setCommunityStatus] = useState<CommunityStatus>(
+    normalizeStatus(initialStatus)
+  );
+  const [openingDate, setOpeningDate] = useState<string>(initialOpeningDate ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -76,6 +96,34 @@ export function GeneralSettingsForm({
 
   async function handleSaveChanges() {
     if (isSaving) return;
+
+    // Validation for pre-registration (ported from CommunitySettingsModal
+    // handleSaveChanges lines 647-671). Runs BEFORE the fetch + loading toast.
+    if (communityStatus === "pre_registration") {
+      if (!openingDate) {
+        toast.error("Opening date is required for pre-registration mode");
+        return;
+      }
+
+      const openingDateTime = new Date(openingDate);
+      const now = new Date();
+
+      if (openingDateTime <= now) {
+        toast.error("Opening date must be in the future");
+        return;
+      }
+
+      const oneMonthFromNow = new Date();
+      oneMonthFromNow.setMonth(oneMonthFromNow.getMonth() + 1);
+
+      if (openingDateTime > oneMonthFromNow) {
+        const confirm = window.confirm(
+          "Opening date is more than 1 month away. Are you sure you want to set this date?"
+        );
+        if (!confirm) return;
+      }
+    }
+
     setIsSaving(true);
 
     const loadingToast = toast.loading("Saving your changes...", {
@@ -89,18 +137,15 @@ export function GeneralSettingsForm({
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)+/g, "");
 
-      // The update route PUTs every column unconditionally (slug, status,
-      // opening_date, image_url) — pass the current values through so this
-      // form only mutates name/description/customLinks and leaves the rest
-      // alone.
       const requestBody = {
         name,
         description,
         imageUrl,
         customLinks: links,
         slug: newSlug,
-        status: currentStatus,
-        opening_date: currentOpeningDate,
+        status: communityStatus,
+        opening_date:
+          communityStatus === "pre_registration" ? openingDate : null,
       };
 
       const response = await fetch(`/api/community/${communitySlug}/update`, {
@@ -220,6 +265,102 @@ export function GeneralSettingsForm({
             placeholder="Tell people what your community is about..."
           />
         </div>
+      </div>
+
+      {/* Status & Availability */}
+      <div className="bg-card rounded-2xl p-6 border border-border/50 space-y-4">
+        <h3 className="font-display text-lg font-semibold text-foreground">
+          Status & Availability
+        </h3>
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-2">
+            Community Status
+          </label>
+          <Select
+            value={communityStatus}
+            onValueChange={(value: CommunityStatus) => setCommunityStatus(value)}
+          >
+            <SelectTrigger className="w-full rounded-xl border-border/50">
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value="active">
+                Active - Members can join and access content
+              </SelectItem>
+              <SelectItem value="pre_registration">
+                Pre-Registration - Accept pre-registrations only
+              </SelectItem>
+              <SelectItem value="inactive">
+                Inactive - Community is closed
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          {communityStatus === "pre_registration" && (
+            <div className="mt-3 p-4 bg-primary/5 border border-primary/20 rounded-xl">
+              <p className="text-sm text-foreground">
+                <strong>Pre-Registration Mode:</strong> Students can save their
+                payment method now and will be automatically charged on the
+                opening date.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Opening Date (conditional on pre-registration status) */}
+        {communityStatus === "pre_registration" && (
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Opening Date & Time (your local time)
+            </label>
+            <Input
+              type="datetime-local"
+              value={
+                openingDate
+                  ? (() => {
+                      // Convert UTC to local datetime-local format
+                      const date = new Date(openingDate);
+                      const year = date.getFullYear();
+                      const month = String(date.getMonth() + 1).padStart(2, "0");
+                      const day = String(date.getDate()).padStart(2, "0");
+                      const hours = String(date.getHours()).padStart(2, "0");
+                      const minutes = String(date.getMinutes()).padStart(2, "0");
+                      return `${year}-${month}-${day}T${hours}:${minutes}`;
+                    })()
+                  : ""
+              }
+              onChange={(e) =>
+                setOpeningDate(
+                  e.target.value ? new Date(e.target.value).toISOString() : ""
+                )
+              }
+              min={(() => {
+                // Get current local time for min value
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, "0");
+                const day = String(now.getDate()).padStart(2, "0");
+                const hours = String(now.getHours()).padStart(2, "0");
+                const minutes = String(now.getMinutes()).padStart(2, "0");
+                return `${year}-${month}-${day}T${hours}:${minutes}`;
+              })()}
+              className="rounded-xl border-border/50"
+              disabled={!canChangeOpeningDate}
+            />
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Pre-registered members will be automatically charged on this date.
+            </p>
+
+            {!canChangeOpeningDate && (
+              <div className="mt-3 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                  Opening date changes are currently restricted. Contact support
+                  if you need to modify the date.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Cover Image */}
