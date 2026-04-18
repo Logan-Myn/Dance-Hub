@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { notFound, useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -297,14 +297,21 @@ export default function FeedClient({
     }
   }, [isCreator, communitySlug, startNextStep]);
 
-  // Track when tour is completed or skipped
+  // Track when tour is completed or skipped.
+  // tourWasActive guards against a mount-time race: without it, this effect
+  // runs on initial render (when currentTour is already null and
+  // isNextStepVisible is already false), marks the tour completed, and writes
+  // to localStorage BEFORE the tour-init effect's setTimeout can fire —
+  // preventing the tour from ever starting.
+  const tourWasActive = useRef(false);
   useEffect(() => {
-    if (isCreator && !isNextStepVisible && currentTour === null) {
-      // Tour has ended (completed or skipped)
+    if (currentTour === 'onboarding') {
+      tourWasActive.current = true;
+    }
+    if (isCreator && !isNextStepVisible && currentTour === null && tourWasActive.current) {
+      // Tour was active during this session and has now ended.
       const tourKey = `onboarding-tour-completed-${communitySlug}`;
-      const hasCompletedTour = localStorage.getItem(tourKey);
-      
-      if (!hasCompletedTour) {
+      if (!localStorage.getItem(tourKey)) {
         localStorage.setItem(tourKey, 'true');
         toast.success('Welcome to your community! 🎉');
       }
