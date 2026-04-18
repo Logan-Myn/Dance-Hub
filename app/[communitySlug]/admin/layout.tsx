@@ -13,18 +13,11 @@ export default async function AdminLayout({
   const session = await getSession();
   if (!session) redirect('/auth/login');
 
-  const community = await queryOne<{ id: string; created_by: string; name: string; is_broadcast_vip: boolean }>`
-    SELECT id, created_by, name, is_broadcast_vip FROM communities WHERE slug = ${params.communitySlug}
+  const community = await queryOne<{ id: string; created_by: string; name: string }>`
+    SELECT id, created_by, name FROM communities WHERE slug = ${params.communitySlug}
   `;
   if (!community) redirect(`/${params.communitySlug}`);
   if (community.created_by !== session.user.id) redirect(`/${params.communitySlug}`);
-
-  // Kill-switch: admin section is only accessible when the feature flag is on,
-  // or when this community is explicitly marked VIP (pilot / gift access).
-  const broadcastsEnabled = process.env.NEXT_PUBLIC_BROADCASTS_ENABLED === 'true';
-  if (!broadcastsEnabled && !community.is_broadcast_vip) {
-    redirect(`/${params.communitySlug}`);
-  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14 font-sans">
