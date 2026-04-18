@@ -325,46 +325,32 @@ export default function FeedClient({
             console.log('Tour step changed:', stepIndex, 'Selector:', selector);
             
             if (selector) {
-              const settingsStepSelectors = ['#settings-general', '#settings-subscriptions', '#settings-thread_categories'];
-              
-              if (settingsStepSelectors.includes(selector)) {
-                // Open settings modal for settings steps with delay for proper positioning
-                console.log('Opening settings modal for step:', selector);
-                setShowSettingsModal(true);
-                
-                // Wait for modal to render and then ensure proper positioning
-                const waitForModalAndReposition = () => {
+              const selectorToRoute: Record<string, string> = {
+                '#settings-general': `/${communitySlug}/admin/general`,
+                '#settings-subscriptions': `/${communitySlug}/admin/subscriptions`,
+                '#settings-thread_categories': `/${communitySlug}/admin/thread-categories`,
+              };
+
+              if (selector in selectorToRoute) {
+                router.push(selectorToRoute[selector]);
+
+                // Wait for the new page to render before letting the tour highlight the target.
+                const waitAndReposition = () => {
                   setTimeout(() => {
-                    // Check if the target element is visible and accessible
-                    const targetElement = document.querySelector(selector);
-                    if (targetElement && (targetElement as HTMLElement).offsetParent !== null) {
-                      // Element is visible, trigger repositioning
-                      console.log('Modal rendered, triggering reposition for:', selector);
-                      
-                      // Trigger multiple events to ensure tour library recalculates position
+                    const target = document.querySelector(selector);
+                    if (target && (target as HTMLElement).offsetParent !== null) {
                       window.dispatchEvent(new Event('resize'));
-                      
-                      // Use requestAnimationFrame for better timing with browser rendering
-                      requestAnimationFrame(() => {
-                        window.dispatchEvent(new Event('scroll'));
-                      });
+                      requestAnimationFrame(() => window.dispatchEvent(new Event('scroll')));
                     } else {
-                      // If element not ready, wait a bit more and try again
-                      console.log('Element not ready, retrying...', selector);
-                      setTimeout(waitForModalAndReposition, 100);
+                      setTimeout(waitAndReposition, 100);
                     }
                   }, 150);
                 };
-                
-                waitForModalAndReposition();
+                waitAndReposition();
               } else if (selector === '#member-count') {
-                // Close settings modal when we move to member count
-                console.log('Closing settings modal for step:', selector);
-                setShowSettingsModal(false);
+                router.push(`/${communitySlug}`);
               } else if (selector === '#manage-community-button') {
-                // Ensure settings modal is closed before the manage community button step
-                console.log('Ensuring settings modal is closed for manage community button step');
-                setShowSettingsModal(false);
+                router.push(`/${communitySlug}`);
               }
             }
           }
