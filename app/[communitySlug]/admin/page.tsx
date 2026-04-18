@@ -1,4 +1,4 @@
-import { queryOne, query } from '@/lib/db';
+import { queryOne } from '@/lib/db';
 import { DashboardKpis } from '@/components/admin/DashboardKpis';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +18,7 @@ export default async function AdminDashboardPage({
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const thirtyDaysAgoIso = thirtyDaysAgo.toISOString();
 
-  const [totalMembersResult, newMembersResult, activeMembersResult, threadsData] =
+  const [totalMembersResult, newMembersResult, activeMembersResult, threadsResult] =
     await Promise.all([
       queryOne<{ count: number }>`
         SELECT COUNT(*)::int AS count
@@ -39,8 +39,8 @@ export default async function AdminDashboardPage({
         WHERE community_id = ${community.id}
           AND status = 'active'
       `,
-      query<{ id: string }>`
-        SELECT id
+      queryOne<{ count: number }>`
+        SELECT COUNT(*)::int AS count
         FROM threads
         WHERE community_id = ${community.id}
       `,
@@ -49,9 +49,12 @@ export default async function AdminDashboardPage({
   const stats = {
     totalMembers: totalMembersResult?.count ?? 0,
     activeMembers: activeMembersResult?.count ?? 0,
-    totalThreads: threadsData?.length ?? 0,
+    totalThreads: threadsResult?.count ?? 0,
+    newMembersThisMonth: newMembersResult?.count ?? 0,
+    // TODO: plumb live Stripe data for Monthly Revenue + MoM growth.
+    // The old modal's `/api/community/[slug]/stats` returns 0 for both too — the
+    // Stripe aggregation isn't wired up yet. Tracked as follow-up after this refactor.
     monthlyRevenue: 0,
-    membershipGrowth: newMembersResult?.count ?? 0,
     revenueGrowth: 0,
   };
 

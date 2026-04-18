@@ -6,7 +6,7 @@ interface DashboardKpisProps {
     activeMembers: number;
     totalThreads: number;
     monthlyRevenue: number;
-    membershipGrowth: number;
+    newMembersThisMonth: number;
     revenueGrowth: number;
   };
 }
@@ -28,7 +28,7 @@ export function DashboardKpis({ stats }: DashboardKpisProps) {
           </p>
           <p className="text-sm text-primary font-medium">
             <TrendingUp className="h-4 w-4 inline mr-1" />+
-            {stats.membershipGrowth}% this month
+            {stats.newMembersThisMonth} this month
           </p>
         </div>
 
