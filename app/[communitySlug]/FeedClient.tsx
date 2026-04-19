@@ -8,7 +8,6 @@ import { Users, ExternalLink, Search, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
 import Image from "next/image";
-import CommunitySettingsModal from "@/components/CommunitySettingsModal";
 import PaymentModal from "@/components/PaymentModal";
 import { PreRegistrationPaymentModal } from "@/components/PreRegistrationPaymentModal";
 import { PreRegistrationComingSoon } from "@/components/PreRegistrationComingSoon";
@@ -142,23 +141,6 @@ interface ThreadCategoriesProps {
   onSelectCategory: (category: string | null) => void;
 }
 
-interface CommunitySettingsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  communityId: string;
-  communitySlug: string;
-  communityName: string;
-  communityDescription: string;
-  imageUrl: string;
-  customLinks: CustomLink[];
-  stripeAccountId: string | null;
-  threadCategories: ThreadCategory[];
-  onImageUpdate: (newImageUrl: string) => void;
-  onCommunityUpdate: (updates: Partial<Community>) => void;
-  onCustomLinksUpdate: (newLinks: CustomLink[]) => void;
-  onThreadCategoriesUpdate: (categories: ThreadCategory[]) => void;
-}
-
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -253,7 +235,6 @@ export default function FeedClient({
   const [isPreRegistered, setIsPreRegistered] = useState(initialIsPreRegistered);
   const [isCreator, setIsCreator] = useState(initialIsCreator);
   const [error, setError] = useState<Error | null>(null);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(
     null
   );
@@ -267,7 +248,6 @@ export default function FeedClient({
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [totalMembers, setTotalMembers] = useState(0);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [newThreadId, setNewThreadId] = useState<string | null>(null);
   const [lastCreatedThread, setLastCreatedThread] = useState<string | null>(
     null
@@ -1111,31 +1091,6 @@ export default function FeedClient({
           isCreator={currentUser?.id === community.created_by}
         />
       )}
-
-      <CommunitySettingsModal
-        isOpen={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
-        communityId={community.id}
-        communitySlug={communitySlug}
-        communityName={community.name}
-        communityDescription={community.description}
-        imageUrl={community.imageUrl}
-        customLinks={community.customLinks || []}
-        stripeAccountId={community.stripeAccountId || null}
-        threadCategories={community.threadCategories || []}
-        onImageUpdate={(newImageUrl) => {
-          setCommunity((prev) => ({ ...prev!, imageUrl: newImageUrl }));
-        }}
-        onCommunityUpdate={(updates) => {
-          setCommunity((prev) => ({ ...prev!, ...updates }));
-        }}
-        onCustomLinksUpdate={(newLinks) => {
-          setCommunity((prev) => ({ ...prev!, customLinks: newLinks }));
-        }}
-        onThreadCategoriesUpdate={(categories) => {
-          setCommunity((prev) => ({ ...prev!, threadCategories: categories }));
-        }}
-      />
 
       <PaymentModal
         isOpen={showPaymentModal}
