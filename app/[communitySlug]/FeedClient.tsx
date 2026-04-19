@@ -281,20 +281,23 @@ export default function FeedClient({
 
   const { startNextStep, currentTour, isNextStepVisible } = useNextStep();
 
-  // Initialize the onboarding tour for creators
+  // Initialize the onboarding tour for creators.
+  // Guard with a ref so we only schedule the timer once per mount —
+  // useNextStep()'s startNextStep isn't a stable reference, so without the
+  // ref the effect re-runs on every render and its cleanup cancels the
+  // setTimeout before the 1500ms delay elapses.
+  const tourScheduledRef = useRef(false);
   useEffect(() => {
     if (!isCreator) return;
+    if (tourScheduledRef.current) return;
 
     const tourKey = `onboarding-tour-completed-${communitySlug}`;
-    const hasCompletedTour = localStorage.getItem(tourKey);
-    
-    if (!hasCompletedTour) {
-      // Add a small delay to ensure page is fully loaded
-      const timer = setTimeout(() => {
-        startNextStep('onboarding');
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
+    if (localStorage.getItem(tourKey)) return;
+
+    tourScheduledRef.current = true;
+    setTimeout(() => {
+      startNextStep('onboarding');
+    }, 1500);
   }, [isCreator, communitySlug, startNextStep]);
 
   // Track when tour is completed or skipped.
