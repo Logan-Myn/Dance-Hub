@@ -165,6 +165,19 @@ html {
   margin: 0.5em 0;
 }
 
+/* Safe-area padding for sticky-bottom elements (iOS home indicator). */
+@layer utilities {
+  .pb-safe {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .pt-safe {
+    padding-top: max(0.25rem, env(safe-area-inset-top));
+  }
+  .h-safe-bottom {
+    height: env(safe-area-inset-bottom);
+  }
+}
+
 @theme inline {
   @keyframes meteor {
   0% {

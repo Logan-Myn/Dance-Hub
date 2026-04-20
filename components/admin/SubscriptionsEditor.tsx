@@ -669,7 +669,7 @@ export function SubscriptionsEditor({
           ) : payoutData ? (
             <div className="space-y-6">
               {/* Current Balance */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-primary/5 rounded-xl p-4 border border-primary/10">
                   <p className="text-sm text-muted-foreground mb-1">
                     Available
