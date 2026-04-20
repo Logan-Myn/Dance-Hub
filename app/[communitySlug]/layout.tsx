@@ -7,6 +7,7 @@ import {
 } from '@/lib/community-data';
 import Navbar from '@/app/components/Navbar';
 import CommunityNavbar from '@/components/CommunityNavbar';
+import MobileNav from '@/components/MobileNav';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -30,16 +31,32 @@ export default async function CommunityLayout({
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
-      <Navbar
-        initialUser={session?.user ?? null}
-        initialProfile={navProfile}
-      />
-      <CommunityNavbar
+      {/* Desktop nav — hidden below md */}
+      <div className="hidden md:block">
+        <Navbar
+          initialUser={session?.user ?? null}
+          initialProfile={navProfile}
+        />
+        <CommunityNavbar
+          communitySlug={params.communitySlug}
+          isMember={isMember}
+          isOwner={isOwner}
+        />
+      </div>
+
+      {/* Mobile nav — hidden at md+ */}
+      <MobileNav
         communitySlug={params.communitySlug}
+        communityName={community.name}
+        communityImageUrl={community.image_url}
         isMember={isMember}
         isOwner={isOwner}
+        user={session?.user ?? null}
+        profile={navProfile}
       />
-      <main className="flex-grow">{children}</main>
+
+      {/* pb-20 gives the mobile bottom tab bar breathing room; md:pb-0 removes it on desktop */}
+      <main className="flex-grow pb-20 md:pb-0">{children}</main>
     </div>
   );
 }
