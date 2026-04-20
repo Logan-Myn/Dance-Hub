@@ -117,7 +117,7 @@ export default function ThreadCardFluid({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className={cn(
-        "group relative bg-card rounded-2xl p-5 cursor-pointer",
+        "group relative bg-card rounded-2xl p-4 sm:p-5 cursor-pointer",
         "border-2 border-transparent",
         "transition-all duration-300 ease-out",
         "hover:shadow-lg hover:border-primary/20",
@@ -196,7 +196,7 @@ export default function ThreadCardFluid({
           onClick={handleLike}
           disabled={isLiking || !user}
           className={cn(
-            "flex items-center gap-1.5 text-sm font-medium",
+            "flex items-center gap-1.5 text-sm font-medium min-h-[44px]",
             "transition-all duration-200",
             "rounded-full px-3 py-1.5 -ml-3",
             "hover:bg-primary/10",
@@ -217,7 +217,7 @@ export default function ThreadCardFluid({
 
         <button
           className={cn(
-            "flex items-center gap-1.5 text-sm font-medium text-muted-foreground",
+            "flex items-center gap-1.5 text-sm font-medium text-muted-foreground min-h-[44px]",
             "transition-all duration-200",
             "rounded-full px-3 py-1.5",
             "hover:bg-primary/10 hover:text-primary"
