@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { notFound, useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -8,7 +8,6 @@ import { Users, ExternalLink, Search, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
 import Image from "next/image";
-import CommunitySettingsModal from "@/components/CommunitySettingsModal";
 import PaymentModal from "@/components/PaymentModal";
 import { PreRegistrationPaymentModal } from "@/components/PreRegistrationPaymentModal";
 import { PreRegistrationComingSoon } from "@/components/PreRegistrationComingSoon";
@@ -142,23 +141,6 @@ interface ThreadCategoriesProps {
   onSelectCategory: (category: string | null) => void;
 }
 
-interface CommunitySettingsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  communityId: string;
-  communitySlug: string;
-  communityName: string;
-  communityDescription: string;
-  imageUrl: string;
-  customLinks: CustomLink[];
-  stripeAccountId: string | null;
-  threadCategories: ThreadCategory[];
-  onImageUpdate: (newImageUrl: string) => void;
-  onCommunityUpdate: (updates: Partial<Community>) => void;
-  onCustomLinksUpdate: (newLinks: CustomLink[]) => void;
-  onThreadCategoriesUpdate: (categories: ThreadCategory[]) => void;
-}
-
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -253,7 +235,6 @@ export default function FeedClient({
   const [isPreRegistered, setIsPreRegistered] = useState(initialIsPreRegistered);
   const [isCreator, setIsCreator] = useState(initialIsCreator);
   const [error, setError] = useState<Error | null>(null);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(
     null
   );
@@ -267,7 +248,6 @@ export default function FeedClient({
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [totalMembers, setTotalMembers] = useState(0);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [newThreadId, setNewThreadId] = useState<string | null>(null);
   const [lastCreatedThread, setLastCreatedThread] = useState<string | null>(
     null
@@ -281,30 +261,40 @@ export default function FeedClient({
 
   const { startNextStep, currentTour, isNextStepVisible } = useNextStep();
 
-  // Initialize the onboarding tour for creators
+  // Initialize the onboarding tour for creators.
+  // Guard with a ref so we only schedule the timer once per mount —
+  // useNextStep()'s startNextStep isn't a stable reference, so without the
+  // ref the effect re-runs on every render and its cleanup cancels the
+  // setTimeout before the 1500ms delay elapses.
+  const tourScheduledRef = useRef(false);
   useEffect(() => {
     if (!isCreator) return;
+    if (tourScheduledRef.current) return;
 
     const tourKey = `onboarding-tour-completed-${communitySlug}`;
-    const hasCompletedTour = localStorage.getItem(tourKey);
-    
-    if (!hasCompletedTour) {
-      // Add a small delay to ensure page is fully loaded
-      const timer = setTimeout(() => {
-        startNextStep('onboarding');
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
+    if (localStorage.getItem(tourKey)) return;
+
+    tourScheduledRef.current = true;
+    setTimeout(() => {
+      startNextStep('onboarding');
+    }, 1500);
   }, [isCreator, communitySlug, startNextStep]);
 
-  // Track when tour is completed or skipped
+  // Track when tour is completed or skipped.
+  // tourWasActive guards against a mount-time race: without it, this effect
+  // runs on initial render (when currentTour is already null and
+  // isNextStepVisible is already false), marks the tour completed, and writes
+  // to localStorage BEFORE the tour-init effect's setTimeout can fire —
+  // preventing the tour from ever starting.
+  const tourWasActive = useRef(false);
   useEffect(() => {
-    if (isCreator && !isNextStepVisible && currentTour === null) {
-      // Tour has ended (completed or skipped)
+    if (currentTour === 'onboarding') {
+      tourWasActive.current = true;
+    }
+    if (isCreator && !isNextStepVisible && currentTour === null && tourWasActive.current) {
+      // Tour was active during this session and has now ended.
       const tourKey = `onboarding-tour-completed-${communitySlug}`;
-      const hasCompletedTour = localStorage.getItem(tourKey);
-      
-      if (!hasCompletedTour) {
+      if (!localStorage.getItem(tourKey)) {
         localStorage.setItem(tourKey, 'true');
         toast.success('Welcome to your community! 🎉');
       }
@@ -325,46 +315,32 @@ export default function FeedClient({
             console.log('Tour step changed:', stepIndex, 'Selector:', selector);
             
             if (selector) {
-              const settingsStepSelectors = ['#settings-general', '#settings-subscriptions', '#settings-thread_categories'];
-              
-              if (settingsStepSelectors.includes(selector)) {
-                // Open settings modal for settings steps with delay for proper positioning
-                console.log('Opening settings modal for step:', selector);
-                setShowSettingsModal(true);
-                
-                // Wait for modal to render and then ensure proper positioning
-                const waitForModalAndReposition = () => {
+              const selectorToRoute: Record<string, string> = {
+                '#settings-general': `/${communitySlug}/admin/general`,
+                '#settings-subscriptions': `/${communitySlug}/admin/subscriptions`,
+                '#settings-thread_categories': `/${communitySlug}/admin/thread-categories`,
+              };
+
+              if (selector in selectorToRoute) {
+                router.push(selectorToRoute[selector]);
+
+                // Wait for the new page to render before letting the tour highlight the target.
+                const waitAndReposition = () => {
                   setTimeout(() => {
-                    // Check if the target element is visible and accessible
-                    const targetElement = document.querySelector(selector);
-                    if (targetElement && (targetElement as HTMLElement).offsetParent !== null) {
-                      // Element is visible, trigger repositioning
-                      console.log('Modal rendered, triggering reposition for:', selector);
-                      
-                      // Trigger multiple events to ensure tour library recalculates position
+                    const target = document.querySelector(selector);
+                    if (target && (target as HTMLElement).offsetParent !== null) {
                       window.dispatchEvent(new Event('resize'));
-                      
-                      // Use requestAnimationFrame for better timing with browser rendering
-                      requestAnimationFrame(() => {
-                        window.dispatchEvent(new Event('scroll'));
-                      });
+                      requestAnimationFrame(() => window.dispatchEvent(new Event('scroll')));
                     } else {
-                      // If element not ready, wait a bit more and try again
-                      console.log('Element not ready, retrying...', selector);
-                      setTimeout(waitForModalAndReposition, 100);
+                      setTimeout(waitAndReposition, 100);
                     }
                   }, 150);
                 };
-                
-                waitForModalAndReposition();
+                waitAndReposition();
               } else if (selector === '#member-count') {
-                // Close settings modal when we move to member count
-                console.log('Closing settings modal for step:', selector);
-                setShowSettingsModal(false);
+                router.push(`/${communitySlug}`);
               } else if (selector === '#manage-community-button') {
-                // Ensure settings modal is closed before the manage community button step
-                console.log('Ensuring settings modal is closed for manage community button step');
-                setShowSettingsModal(false);
+                router.push(`/${communitySlug}`);
               }
             }
           }
@@ -964,7 +940,7 @@ export default function FeedClient({
             membersCount={totalMembers}
             members={members}
             isCreator={isCreator}
-            onManageClick={() => setShowSettingsModal(true)}
+            onManageClick={() => router.push(`/${communitySlug}/admin`)}
           />
 
           <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
@@ -1115,31 +1091,6 @@ export default function FeedClient({
           isCreator={currentUser?.id === community.created_by}
         />
       )}
-
-      <CommunitySettingsModal
-        isOpen={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
-        communityId={community.id}
-        communitySlug={communitySlug}
-        communityName={community.name}
-        communityDescription={community.description}
-        imageUrl={community.imageUrl}
-        customLinks={community.customLinks || []}
-        stripeAccountId={community.stripeAccountId || null}
-        threadCategories={community.threadCategories || []}
-        onImageUpdate={(newImageUrl) => {
-          setCommunity((prev) => ({ ...prev!, imageUrl: newImageUrl }));
-        }}
-        onCommunityUpdate={(updates) => {
-          setCommunity((prev) => ({ ...prev!, ...updates }));
-        }}
-        onCustomLinksUpdate={(newLinks) => {
-          setCommunity((prev) => ({ ...prev!, customLinks: newLinks }));
-        }}
-        onThreadCategoriesUpdate={(categories) => {
-          setCommunity((prev) => ({ ...prev!, threadCategories: categories }));
-        }}
-      />
 
       <PaymentModal
         isOpen={showPaymentModal}

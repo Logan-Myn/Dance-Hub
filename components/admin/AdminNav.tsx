@@ -12,6 +12,10 @@ export function AdminNav({
 }) {
   const pathname = usePathname();
   const items = [
+    { href: `/${communitySlug}/admin/general`, label: 'General' },
+    { href: `/${communitySlug}/admin/members`, label: 'Members' },
+    { href: `/${communitySlug}/admin/subscriptions`, label: 'Subscriptions' },
+    { href: `/${communitySlug}/admin/thread-categories`, label: 'Thread Categories' },
     { href: `/${communitySlug}/admin/emails`, label: 'Broadcasts' },
   ];
 
