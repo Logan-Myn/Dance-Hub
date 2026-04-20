@@ -20,8 +20,8 @@ export default async function AdminLayout({
   if (community.created_by !== session.user.id) redirect(`/${params.communitySlug}`);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14 font-sans">
-      <div className="flex flex-col sm:flex-row gap-3 lg:gap-4">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10 lg:py-14 font-sans pb-24 md:pb-14">
+      <div className="flex flex-col md:flex-row gap-3 lg:gap-4">
         <AdminNav
           communitySlug={params.communitySlug}
           communityName={community.name}
