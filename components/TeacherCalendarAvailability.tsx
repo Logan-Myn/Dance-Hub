@@ -316,7 +316,7 @@ export default function TeacherCalendarAvailability({
             {/* Add New Slot Form */}
             <div className="space-y-4">
               <h4 className="font-medium">Add Time Slot</h4>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="start-time">Start Time</Label>
                   <Input

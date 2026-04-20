@@ -193,7 +193,7 @@ export default function CreatePrivateLessonModal({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="duration">Duration (minutes)</Label>
                 <Select
@@ -238,7 +238,7 @@ export default function CreatePrivateLessonModal({
           {/* Pricing */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Pricing</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="regular_price">Regular Price ($) *</Label>
                 <Input

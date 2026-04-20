@@ -344,7 +344,7 @@ export default function PrivateLessonManagementModal({
 
                     <p className="text-muted-foreground mb-4">{lesson.description}</p>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
                         <span className="text-muted-foreground">Duration:</span>
                         <p className="font-medium text-foreground">{lesson.duration_minutes} min</p>
@@ -449,7 +449,7 @@ export default function PrivateLessonManagementModal({
                       </Badge>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-3">
                       <div>
                         <span className="text-muted-foreground">Student:</span>
                         <p className="font-medium text-foreground">{booking.student_name || booking.student_email}</p>
