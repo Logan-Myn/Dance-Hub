@@ -18,13 +18,14 @@ export default async function ThreadRoutePage({
   if (!thread) notFound();
 
   const session = await getSession();
-  const isCreator = !!session && thread.userId === session.user.id;
+  const isCreator = !!session && community.created_by === session.user.id;
 
   return (
     <ThreadPageClient
       communitySlug={params.communitySlug}
       thread={thread}
       isCreator={isCreator}
+      threadCategories={community.thread_categories}
     />
   );
 }

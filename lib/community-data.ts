@@ -358,7 +358,7 @@ export const getThreadById = cache(
         name: row.profile_display_name || row.profile_full_name || 'Anonymous',
         image: row.profile_avatar_url || '',
       },
-      category: row.category_name || 'Uncategorized',
+      category: row.category_name || 'General',
       categoryId: row.category_id,
       likesCount: row.likes_count,
       commentsCount: row.comments_count,

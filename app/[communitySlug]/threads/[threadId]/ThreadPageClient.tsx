@@ -33,16 +33,35 @@ type ThreadData = {
   pinned: boolean;
 };
 
+type ThreadCategory = {
+  id: string;
+  name: string;
+  iconType?: string;
+};
+
 export default function ThreadPageClient({
   communitySlug,
   thread,
   isCreator,
+  threadCategories,
 }: {
   communitySlug: string;
   thread: ThreadData;
   isCreator: boolean;
+  threadCategories?: unknown;
 }) {
   const router = useRouter();
+
+  // Resolve category_type from the community's thread_categories using
+  // thread.categoryId — mirrors FeedClient's iconType lookup so the pill
+  // renders with the same icon + color as the desktop modal path.
+  const categories = Array.isArray(threadCategories)
+    ? (threadCategories as ThreadCategory[])
+    : [];
+  const matchedCategory = thread.categoryId
+    ? categories.find((c) => c.id === thread.categoryId)
+    : undefined;
+  const categoryType = matchedCategory?.iconType;
 
   // ThreadView expects fields under the names the modal already uses.
   const viewThread: ThreadViewProps['thread'] = {
@@ -55,6 +74,7 @@ export default function ThreadPageClient({
     likes_count: thread.likesCount,
     comments_count: thread.commentsCount,
     category: thread.category,
+    category_type: categoryType,
     likes: thread.likes,
     comments: thread.comments.map((c) => ({
       ...c,
@@ -84,7 +104,8 @@ export default function ThreadPageClient({
       >
         <ArrowLeft className="h-5 w-5" />
       </Link>
-      <div className="text-sm font-medium text-muted-foreground">Thread</div>
+      <h1 className="sr-only">{thread.title}</h1>
+      <div className="text-sm font-medium text-muted-foreground" aria-hidden="true">Thread</div>
     </div>
   );
 
