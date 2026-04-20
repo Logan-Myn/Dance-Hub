@@ -1,12 +1,23 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Bell, Home, BookOpen, GraduationCap, Calendar, MoreHorizontal, Info, Settings, Users, User, LogOut, Repeat } from 'lucide-react';
+import { Home, BookOpen, GraduationCap, Calendar, MoreHorizontal, Info, Settings, Users, User, LogOut, Repeat } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import NotificationsButton from '@/components/NotificationsButton';
+import { signOut } from '@/lib/auth';
+import { useAuthModal } from '@/contexts/AuthModalContext';
 
 type MobileNavProps = {
   communitySlug: string;
@@ -36,6 +47,8 @@ export default function MobileNav({
   profile,
 }: MobileNavProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { showAuthModal } = useAuthModal();
   const [moreOpen, setMoreOpen] = useState(false);
 
   const broadcastsEnabled = process.env.NEXT_PUBLIC_BROADCASTS_ENABLED === 'true';
@@ -56,6 +69,26 @@ export default function MobileNav({
   const communityInitial = communityName.trim()[0]?.toUpperCase() ?? '?';
   const userInitial = (profile?.full_name ?? user?.email ?? '?').trim()[0]?.toUpperCase() ?? '?';
 
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast.success('Successfully signed out');
+      router.push('/');
+    } catch (error) {
+      toast.error('Error signing out');
+    }
+  };
+
+  const handleSignOutClick = async () => {
+    setMoreOpen(false);
+    await handleSignOut();
+  };
+
+  const handleSignInClick = () => {
+    showAuthModal('signin');
+    setMoreOpen(false);
+  };
+
   return (
     <>
       {/* Top header */}
@@ -68,13 +101,7 @@ export default function MobileNav({
             </Avatar>
             <span className="font-semibold text-sm truncate max-w-[180px]">{communityName}</span>
           </Link>
-          <Link
-            href="/notifications"
-            aria-label="Notifications"
-            className="p-2 rounded-full hover:bg-muted"
-          >
-            <Bell className="h-5 w-5" />
-          </Link>
+          <NotificationsButton />
         </div>
       </header>
 
@@ -117,6 +144,12 @@ export default function MobileNav({
                 </button>
               </SheetTrigger>
               <SheetContent side="bottom" className="pb-safe rounded-t-2xl">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>More menu</SheetTitle>
+                  <SheetDescription>
+                    Navigate to community, account, or admin sections.
+                  </SheetDescription>
+                </SheetHeader>
                 {/* Community section */}
                 <div className="flex items-center gap-3 pb-4 border-b border-border/50 mb-2">
                   <Avatar className="h-10 w-10">
@@ -148,12 +181,22 @@ export default function MobileNav({
                   <MoreItem href="/discovery" icon={Repeat} label="Switch community" onNavigate={() => setMoreOpen(false)} />
                   <MoreItem href="/dashboard" icon={Users} label="My Dashboard" onNavigate={() => setMoreOpen(false)} />
                   {user ? (
-                    <MoreItem href="/profile" icon={User} label="Profile" onNavigate={() => setMoreOpen(false)} />
+                    <MoreItem
+                      href="/dashboard/settings"
+                      icon={Settings}
+                      label="Settings"
+                      onNavigate={() => setMoreOpen(false)}
+                    />
                   ) : null}
                   {user ? (
-                    <MoreItem href="/auth/sign-out" icon={LogOut} label="Sign out" onNavigate={() => setMoreOpen(false)} destructive />
+                    <MoreAction
+                      icon={LogOut}
+                      label="Sign out"
+                      onClick={handleSignOutClick}
+                      destructive
+                    />
                   ) : (
-                    <MoreItem href="/auth/sign-in" icon={User} label="Sign in" onNavigate={() => setMoreOpen(false)} />
+                    <MoreAction icon={User} label="Sign in" onClick={handleSignInClick} />
                   )}
                 </ul>
 
@@ -176,6 +219,13 @@ export default function MobileNav({
   );
 }
 
+type MoreItemBaseProps = {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  highlight?: boolean;
+  destructive?: boolean;
+};
+
 function MoreItem({
   href,
   icon: Icon,
@@ -183,14 +233,7 @@ function MoreItem({
   onNavigate,
   highlight,
   destructive,
-}: {
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  onNavigate: () => void;
-  highlight?: boolean;
-  destructive?: boolean;
-}) {
+}: MoreItemBaseProps & { href: string; onNavigate: () => void }) {
   return (
     <li>
       <Link
@@ -205,6 +248,31 @@ function MoreItem({
         <Icon className="h-4 w-4" />
         <span>{label}</span>
       </Link>
+    </li>
+  );
+}
+
+function MoreAction({
+  icon: Icon,
+  label,
+  onClick,
+  highlight,
+  destructive,
+}: MoreItemBaseProps & { onClick: () => void | Promise<void> }) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          'w-full flex items-center gap-3 py-3 text-sm min-h-[44px] text-left',
+          highlight && 'text-primary font-medium',
+          destructive && 'text-destructive'
+        )}
+      >
+        <Icon className="h-4 w-4" />
+        <span>{label}</span>
+      </button>
     </li>
   );
 }

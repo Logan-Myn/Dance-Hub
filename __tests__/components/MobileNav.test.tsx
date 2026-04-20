@@ -1,9 +1,26 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import MobileNav from '@/components/MobileNav';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/bachataflow',
   useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+}));
+
+jest.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => ({ session: null, user: null, loading: false }),
+}));
+
+jest.mock('@/contexts/AuthModalContext', () => ({
+  useAuthModal: () => ({ showAuthModal: jest.fn() }),
+}));
+
+jest.mock('@/lib/auth', () => ({
+  signOut: jest.fn(),
+}));
+
+jest.mock('react-hot-toast', () => ({
+  __esModule: true,
+  default: { success: jest.fn(), error: jest.fn() },
 }));
 
 const baseProps = {
@@ -81,5 +98,14 @@ describe('MobileNav', () => {
     render(<MobileNav {...baseProps} />);
     const community = screen.getByRole('link', { name: /community/i });
     expect(community.getAttribute('aria-current')).toBe('page');
+  });
+
+  it('calls signOut when Sign out is tapped', async () => {
+    const { signOut } = require('@/lib/auth');
+    (signOut as jest.Mock).mockClear();
+    render(<MobileNav {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /more/i }));
+    fireEvent.click(screen.getByRole('button', { name: /sign out/i }));
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
   });
 });

@@ -55,8 +55,8 @@ export default async function CommunityLayout({
         profile={navProfile}
       />
 
-      {/* pb-20 gives the mobile bottom tab bar breathing room; md:pb-0 removes it on desktop */}
-      <main className="flex-grow pb-20 md:pb-0">{children}</main>
+      {/* Clear the mobile bottom tab bar (~5rem) plus any iOS safe-area inset; md:pb-0 removes it on desktop */}
+      <main className="flex-grow pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
     </div>
   );
 }
