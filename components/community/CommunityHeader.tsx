@@ -42,7 +42,7 @@ export default function CommunityHeader({
   return (
     <div className="relative mb-8">
       {/* Background with gradient overlay */}
-      <div className="relative h-64 md:h-72 overflow-hidden rounded-3xl">
+      <div className="relative h-56 sm:h-64 md:h-72 overflow-hidden rounded-3xl">
         <Image
           src={imageUrl || "/placeholder.svg"}
           alt={name}
@@ -55,8 +55,8 @@ export default function CommunityHeader({
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
 
         {/* Content */}
-        <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-8">
-          <h1 className="font-display text-3xl md:text-4xl font-semibold text-white mb-2 drop-shadow-lg">
+        <div className="absolute inset-0 flex flex-col justify-end p-4 sm:p-6 md:p-8">
+          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold text-white mb-2 drop-shadow-lg">
             {name}
           </h1>
           <p className="text-white/90 text-sm md:text-base max-w-2xl mb-4 line-clamp-2">

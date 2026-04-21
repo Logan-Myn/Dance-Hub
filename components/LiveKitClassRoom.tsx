@@ -185,7 +185,7 @@ function CallInterface({
   const visibleCount = remoteTrackRefs.length + (showLocalVideo ? 1 : 0);
 
   return (
-    <div className="h-full flex flex-col bg-gray-900">
+    <div className="h-full w-full min-w-0 overflow-x-hidden flex flex-col bg-gray-900">
       <RoomAudioRenderer />
 
       {/* Feedback toasts */}
@@ -201,30 +201,37 @@ function CallInterface({
       )}
 
       {/* Header */}
-      <div className="bg-gray-800 px-6 py-4 border-b border-gray-700">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="text-2xl font-bold text-blue-500">DanceHub</div>
+      <div className="bg-gray-800 px-3 py-2 sm:px-6 sm:py-4 border-b border-gray-700">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <div className="text-lg sm:text-2xl font-bold text-blue-500 shrink-0">DanceHub</div>
             {classTitle && (
               <>
-                <div className="text-gray-500">|</div>
-                <div className="text-white font-medium">{classTitle}</div>
+                <div className="text-gray-500 hidden sm:block">|</div>
+                <div className="text-white font-medium text-sm sm:text-base truncate">{classTitle}</div>
               </>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-sm text-gray-400">
-              {participants.length} participant{participants.length !== 1 ? "s" : ""}
+            <span className="text-xs sm:text-sm text-gray-400">
+              {participants.length}
+              <span className="hidden sm:inline"> participant{participants.length !== 1 ? "s" : ""}</span>
             </span>
           </div>
         </div>
       </div>
 
-      {/* Main content area: video grid + chat */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main content area: video grid + chat
+          Mobile (chat open): stacks as a bottom sheet — video on top, chat on bottom 50%.
+          Desktop: chat is an 80-wide side panel. */}
+      <div
+        className={`flex-1 overflow-hidden flex ${
+          isChatOpen ? "flex-col sm:flex-row" : "flex-row"
+        }`}
+      >
         {/* Participant Grid */}
-        <div className="flex-1 min-h-0 p-4">
+        <div className="flex-1 min-h-0 min-w-0 p-2 sm:p-4">
           {visibleCount === 0 ? (
             <div className="h-full flex items-center justify-center">
               <p className="text-gray-500 text-sm">No one has their camera on yet</p>
@@ -235,8 +242,8 @@ function CallInterface({
                 visibleCount <= 1
                   ? "grid-cols-1"
                   : visibleCount <= 4
-                    ? "grid-cols-2"
-                    : "grid-cols-3"
+                    ? "grid-cols-1 sm:grid-cols-2"
+                    : "grid-cols-2 sm:grid-cols-3"
               }`}
             >
               {/* Local participant — only when cam is on */}
@@ -276,9 +283,10 @@ function CallInterface({
           )}
         </div>
 
-        {/* Chat Panel */}
+        {/* Chat — bottom sheet on mobile (50% height, video stays visible above),
+            side panel on desktop (80-wide). */}
         {isChatOpen && (
-          <div className="w-80 flex-shrink-0">
+          <div className="h-1/2 w-full min-w-0 overflow-hidden shrink-0 border-t border-gray-700 sm:h-auto sm:w-80 sm:border-t-0">
             <LiveKitChat
               onClose={toggleChat}
               isTeacher={isTeacher}

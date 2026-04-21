@@ -57,7 +57,7 @@ export function MembersTable({ communitySlug, members }: MembersTableProps) {
   }
 
   return (
-    <div className="bg-card rounded-2xl border border-border/50 overflow-hidden">
+    <div className="bg-card rounded-2xl border border-border/50 overflow-x-auto">
       <table className="min-w-full">
         <thead>
           <tr className="border-b border-border/50 bg-muted/30">

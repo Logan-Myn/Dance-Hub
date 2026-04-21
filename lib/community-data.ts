@@ -307,6 +307,78 @@ export const getCommunityThreads = cache(async (communityId: string): Promise<Co
   }));
 });
 
+export const getThreadById = cache(
+  async (communityId: string, threadId: string): Promise<CommunityThread | null> => {
+    const row = await queryOne<ThreadQueryRow>`
+      SELECT
+        t.id,
+        t.title,
+        t.content,
+        t.created_at,
+        t.user_id,
+        t.category_name,
+        t.category_id,
+        t.pinned,
+        p.id as profile_id,
+        p.full_name as profile_full_name,
+        p.avatar_url as profile_avatar_url,
+        p.display_name as profile_display_name,
+        COALESCE(t.likes, ARRAY[]::TEXT[]) as likes,
+        COALESCE(array_length(t.likes, 1), 0)::int as likes_count,
+        (SELECT COUNT(*) FROM comments c WHERE c.thread_id = t.id)::int as comments_count
+      FROM threads t
+      LEFT JOIN profiles p ON p.auth_user_id = t.user_id
+      WHERE t.id = ${threadId}
+        AND t.community_id = ${communityId}
+    `;
+
+    if (!row) return null;
+
+    const comments = await query<CommentQueryRow>`
+      SELECT
+        c.id, c.thread_id, c.user_id, c.content, c.created_at,
+        c.parent_id, c.author,
+        COALESCE(c.likes, ARRAY[]::TEXT[]) as likes,
+        COALESCE(c.likes_count, 0) as likes_count
+      FROM comments c
+      WHERE c.thread_id = ${threadId}
+      ORDER BY c.created_at ASC
+    `;
+
+    const toIso = (v: Date | string): string =>
+      v instanceof Date ? v.toISOString() : v;
+
+    return {
+      id: row.id,
+      title: row.title,
+      content: row.content,
+      createdAt: toIso(row.created_at),
+      userId: row.user_id,
+      author: {
+        name: row.profile_display_name || row.profile_full_name || 'Anonymous',
+        image: row.profile_avatar_url || '',
+      },
+      category: row.category_name || 'General',
+      categoryId: row.category_id,
+      likesCount: row.likes_count,
+      commentsCount: row.comments_count,
+      likes: row.likes ?? [],
+      comments: comments.map((c) => ({
+        id: c.id,
+        thread_id: c.thread_id,
+        user_id: c.user_id,
+        content: c.content,
+        created_at: toIso(c.created_at),
+        parent_id: c.parent_id,
+        author: c.author ?? { name: 'Anonymous', image: '' },
+        likes: c.likes ?? [],
+        likes_count: c.likes_count,
+      })),
+      pinned: !!row.pinned,
+    };
+  },
+);
+
 // Full membership status for the feed page, which needs to distinguish
 // active members from pre-registered ones and surface subscription state.
 // Returns null fields when the user has no row in community_members.

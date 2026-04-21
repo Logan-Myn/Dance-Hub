@@ -39,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { useNextStep } from "nextstepjs";
 import { setStepChangeCallback, clearStepChangeCallback } from "@/components/NextStepWrapper";
 import { tourSteps } from "@/lib/tourSteps";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 interface CustomLink {
   title: string;
@@ -194,6 +195,7 @@ export default function FeedClient({
   accessEndDate: initialAccessEndDate,
 }: FeedClientProps) {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const { user: currentUser, loading: isAuthLoading } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -929,6 +931,14 @@ export default function FeedClient({
   const currentUserAvatar = currentUserMember?.profile?.avatar_url || currentUser?.image || "";
   const currentUserName = currentUserMember?.profile?.display_name || currentUserMember?.profile?.full_name || currentUser?.name || "User";
 
+  const handleThreadClick = (thread: Thread) => {
+    if (isMobile) {
+      router.push(`/${communitySlug}/threads/${thread.id}`);
+    } else {
+      setSelectedThread(thread);
+    }
+  };
+
   return (
     <>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -1013,7 +1023,7 @@ export default function FeedClient({
                     }
                     likes={thread.likes}
                     pinned={thread.pinned}
-                    onClick={() => setSelectedThread(thread)}
+                    onClick={() => handleThreadClick(thread)}
                     onLikeUpdate={handleLikeUpdate}
                   />
                 ))}
