@@ -228,20 +228,21 @@ export default function LiveKitChat({
       </div>
 
       {/* Input */}
-      <div className="p-3 border-t border-gray-700 bg-gray-800">
-        <div className="flex items-center gap-2">
+      <div className="px-4 py-3 border-t border-gray-700 bg-gray-800">
+        <div className="flex items-center gap-3">
           <input
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
-            className="flex-1 bg-gray-700 text-white text-base sm:text-sm rounded-lg px-3 py-2 placeholder-gray-400 outline-none focus:ring-1 focus:ring-blue-500"
+            className="flex-1 min-w-0 bg-gray-700 text-white text-base sm:text-sm rounded-full px-4 py-2.5 sm:py-2 placeholder-gray-400 outline-none focus:ring-1 focus:ring-blue-500"
           />
           <button
             onClick={handleSend}
             disabled={!inputText.trim()}
-            className="p-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="shrink-0 h-10 w-10 sm:h-9 sm:w-9 flex items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            aria-label="Send"
           >
             <PaperAirplaneIcon className="h-4 w-4" />
           </button>
