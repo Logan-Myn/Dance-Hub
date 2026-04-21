@@ -286,7 +286,7 @@ function CallInterface({
         {/* Chat — bottom sheet on mobile (50% height, video stays visible above),
             side panel on desktop (80-wide). */}
         {isChatOpen && (
-          <div className="h-1/2 w-full shrink-0 border-t border-gray-700 sm:h-auto sm:w-80 sm:border-t-0">
+          <div className="h-1/2 w-full min-w-0 overflow-hidden shrink-0 border-t border-gray-700 sm:h-auto sm:w-80 sm:border-t-0">
             <LiveKitChat
               onClose={toggleChat}
               isTeacher={isTeacher}

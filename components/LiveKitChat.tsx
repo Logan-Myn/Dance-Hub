@@ -144,7 +144,7 @@ export default function LiveKitChat({
   );
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 sm:border-l border-gray-700">
+    <div className="flex flex-col h-full w-full min-w-0 overflow-hidden bg-gray-900 sm:border-l border-gray-700">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-gray-800">
         <h3 className="text-white font-medium text-sm">Chat</h3>
@@ -215,7 +215,7 @@ export default function LiveKitChat({
             <div key={msg.id} className={`flex flex-col ${msg.isLocal ? "items-end" : "items-start"}`}>
               <span className="text-xs text-gray-500 mb-1">{msg.sender}</span>
               <div
-                className={`rounded-lg px-3 py-2 max-w-[85%] text-sm ${
+                className={`rounded-lg px-3 py-2 max-w-[85%] text-sm break-words ${
                   msg.isLocal ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-100"
                 }`}
               >
