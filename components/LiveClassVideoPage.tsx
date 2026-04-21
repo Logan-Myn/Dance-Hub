@@ -179,7 +179,7 @@ export default function LiveClassVideoPage({ classId, liveClass }: LiveClassVide
   }
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen overflow-x-hidden bg-gray-900">
       {!hasJoined || !videoToken ? (
         // Pre-join lobby
         <div className="min-h-screen flex items-center justify-center p-4">

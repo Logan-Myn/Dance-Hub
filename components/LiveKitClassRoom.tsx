@@ -185,7 +185,7 @@ function CallInterface({
   const visibleCount = remoteTrackRefs.length + (showLocalVideo ? 1 : 0);
 
   return (
-    <div className="h-full flex flex-col bg-gray-900">
+    <div className="h-full w-full min-w-0 overflow-x-hidden flex flex-col bg-gray-900">
       <RoomAudioRenderer />
 
       {/* Feedback toasts */}
