@@ -222,10 +222,16 @@ function CallInterface({
         </div>
       </div>
 
-      {/* Main content area: video grid + chat */}
-      <div className="flex-1 flex overflow-hidden relative">
+      {/* Main content area: video grid + chat
+          Mobile (chat open): stacks as a bottom sheet — video on top, chat on bottom 50%.
+          Desktop: chat is an 80-wide side panel. */}
+      <div
+        className={`flex-1 overflow-hidden flex ${
+          isChatOpen ? "flex-col sm:flex-row" : "flex-row"
+        }`}
+      >
         {/* Participant Grid */}
-        <div className="flex-1 min-h-0 p-2 sm:p-4">
+        <div className="flex-1 min-h-0 min-w-0 p-2 sm:p-4">
           {visibleCount === 0 ? (
             <div className="h-full flex items-center justify-center">
               <p className="text-gray-500 text-sm">No one has their camera on yet</p>
@@ -277,9 +283,10 @@ function CallInterface({
           )}
         </div>
 
-        {/* Chat Panel — full-screen overlay on mobile, side panel on desktop */}
+        {/* Chat — bottom sheet on mobile (50% height, video stays visible above),
+            side panel on desktop (80-wide). */}
         {isChatOpen && (
-          <div className="absolute inset-0 z-20 sm:static sm:inset-auto sm:w-80 sm:flex-shrink-0">
+          <div className="h-1/2 w-full shrink-0 border-t border-gray-700 sm:h-auto sm:w-80 sm:border-t-0">
             <LiveKitChat
               onClose={toggleChat}
               isTeacher={isTeacher}
