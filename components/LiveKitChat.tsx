@@ -144,7 +144,7 @@ export default function LiveKitChat({
   );
 
   return (
-    <div className="flex flex-col h-full bg-gray-850 border-l border-gray-700">
+    <div className="flex flex-col h-full bg-gray-900 sm:border-l border-gray-700">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-gray-800">
         <h3 className="text-white font-medium text-sm">Chat</h3>
