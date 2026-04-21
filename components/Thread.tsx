@@ -166,19 +166,21 @@ export default function Thread({
   return (
     <div className="space-y-4">
       {/* Header with user info and category selection */}
-      <div className="flex items-center space-x-2">
-        <Avatar className="h-10 w-10">
+      <div className="flex items-start space-x-2">
+        <Avatar className="h-10 w-10 shrink-0">
           <AvatarImage
             src={userAvatarUrl || ""}
             alt={userDisplayName}
           />
           <AvatarFallback>{userInitial}</AvatarFallback>
         </Avatar>
-        <div className="text-sm flex items-center space-x-2">
-          <span className="font-medium">{userDisplayName}</span>
-          <span className="text-gray-500">posting in</span>
+        <div className="text-sm flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-0 sm:space-x-2 flex-1 min-w-0">
+          <div className="flex items-center gap-1">
+            <span className="font-medium">{userDisplayName}</span>
+            <span className="text-gray-500">posting in</span>
+          </div>
           <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger className="w-[200px] border-none bg-transparent hover:bg-gray-50 focus:ring-0">
+            <SelectTrigger className="w-full sm:w-[200px] border-none bg-transparent hover:bg-gray-50 focus:ring-0">
               <SelectValue placeholder="Choose a category" />
             </SelectTrigger>
             <SelectContent>
@@ -232,9 +234,9 @@ export default function Thread({
       />
 
       {/* Action buttons */}
-      <div className="flex justify-end space-x-2 pt-4 border-t">
+      <div className="flex flex-wrap items-center gap-2 pt-4 border-t">
         {isCreator && (
-          <div className="flex items-center space-x-2 mr-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto sm:mr-auto">
             <Switch
               checked={isPinned}
               onCheckedChange={setIsPinned}
@@ -246,16 +248,18 @@ export default function Thread({
             </label>
           </div>
         )}
-        <Button variant="ghost" onClick={onCancel} disabled={isSubmitting}>
-          CANCEL
-        </Button>
-        <Button
-          onClick={handleSubmit}
-          disabled={isSubmitting || !user}
-          className="bg-gray-200 hover:bg-gray-300 text-gray-800"
-        >
-          {isSubmitting ? "Posting..." : "POST"}
-        </Button>
+        <div className="flex gap-2 ml-auto">
+          <Button variant="ghost" onClick={onCancel} disabled={isSubmitting}>
+            CANCEL
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={isSubmitting || !user}
+            className="bg-gray-200 hover:bg-gray-300 text-gray-800"
+          >
+            {isSubmitting ? "Posting..." : "POST"}
+          </Button>
+        </div>
       </div>
     </div>
   );
