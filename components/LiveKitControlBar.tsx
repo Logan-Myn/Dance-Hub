@@ -100,8 +100,8 @@ export default function LiveKitControlBar({
   const isSharingScreen = isScreenShareEnabled;
 
   return (
-    <div className="bg-gray-800 border-t border-gray-700 px-6 py-4">
-      <div className="flex items-center justify-center gap-3">
+    <div className="bg-gray-800 border-t border-gray-700 px-2 py-2 sm:px-6 sm:py-4 pb-safe">
+      <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-3">
         {canSend ? (
           <>
             {/* Mic */}
@@ -109,12 +109,12 @@ export default function LiveKitControlBar({
               onClick={toggleAudio}
               size="lg"
               variant={isMuted ? "destructive" : "default"}
-              className={`rounded-full w-14 h-14 ${
+              className={`rounded-full w-11 h-11 sm:w-14 sm:h-14 ${
                 isMuted ? "bg-red-500 hover:bg-red-600" : "bg-gray-700 hover:bg-gray-600"
               }`}
               title={isMuted ? "Unmute" : "Mute"}
             >
-              {isMuted ? <MicrophoneOffIcon className="h-6 w-6" /> : <MicrophoneIcon className="h-6 w-6" />}
+              {isMuted ? <MicrophoneOffIcon className="h-5 w-5 sm:h-6 sm:w-6" /> : <MicrophoneIcon className="h-5 w-5 sm:h-6 sm:w-6" />}
             </Button>
 
             {/* Camera */}
@@ -122,12 +122,12 @@ export default function LiveKitControlBar({
               onClick={toggleVideo}
               size="lg"
               variant={isCamOff ? "destructive" : "default"}
-              className={`rounded-full w-14 h-14 ${
+              className={`rounded-full w-11 h-11 sm:w-14 sm:h-14 ${
                 isCamOff ? "bg-red-500 hover:bg-red-600" : "bg-gray-700 hover:bg-gray-600"
               }`}
               title={isCamOff ? "Turn on camera" : "Turn off camera"}
             >
-              {isCamOff ? <VideoCameraSlashIcon className="h-6 w-6" /> : <VideoCameraIcon className="h-6 w-6" />}
+              {isCamOff ? <VideoCameraSlashIcon className="h-5 w-5 sm:h-6 sm:w-6" /> : <VideoCameraIcon className="h-5 w-5 sm:h-6 sm:w-6" />}
             </Button>
 
             {/* Screen Share */}
@@ -135,12 +135,12 @@ export default function LiveKitControlBar({
               onClick={toggleScreenShare}
               size="lg"
               variant="default"
-              className={`rounded-full w-14 h-14 ${
+              className={`rounded-full w-11 h-11 sm:w-14 sm:h-14 ${
                 isSharingScreen ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-700 hover:bg-gray-600"
               }`}
               title={isSharingScreen ? "Stop sharing" : "Share screen"}
             >
-              <ArrowUpOnSquareIcon className="h-6 w-6" />
+              <ArrowUpOnSquareIcon className="h-5 w-5 sm:h-6 sm:w-6" />
             </Button>
 
             {/* Step down for approved students */}
@@ -149,10 +149,10 @@ export default function LiveKitControlBar({
                 onClick={stepDown}
                 size="lg"
                 variant="default"
-                className="rounded-full h-14 px-4 bg-gray-700 hover:bg-gray-600 gap-2"
+                className="rounded-full h-11 sm:h-14 px-3 sm:px-4 bg-gray-700 hover:bg-gray-600 gap-1.5 sm:gap-2"
                 title="Step down"
               >
-                <UserMinusIcon className="h-5 w-5" />
+                <UserMinusIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span className="text-xs">Step Down</span>
               </Button>
             )}
@@ -163,15 +163,15 @@ export default function LiveKitControlBar({
             onClick={requestParticipation}
             size="lg"
             variant="default"
-            className="rounded-full px-6 h-14 bg-yellow-500 hover:bg-yellow-600 text-black font-medium gap-2"
+            className="rounded-full px-4 sm:px-6 h-11 sm:h-14 bg-yellow-500 hover:bg-yellow-600 text-black font-medium gap-1.5 sm:gap-2"
             title="Raise hand to request mic/camera"
           >
-            <HandRaisedIcon className="h-6 w-6" />
+            <HandRaisedIcon className="h-5 w-5 sm:h-6 sm:w-6" />
             <span className="text-sm">Raise Hand</span>
           </Button>
         )}
 
-        <div className="mx-4 h-10 w-px bg-gray-700"></div>
+        <div className="hidden sm:block mx-4 h-10 w-px bg-gray-700"></div>
 
         {/* Chat */}
         {onToggleChat && (
@@ -179,12 +179,12 @@ export default function LiveKitControlBar({
             onClick={onToggleChat}
             size="lg"
             variant="default"
-            className={`rounded-full w-14 h-14 relative ${
+            className={`rounded-full w-11 h-11 sm:w-14 sm:h-14 relative ${
               isChatOpen ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-700 hover:bg-gray-600"
             }`}
             title={isChatOpen ? "Close chat" : "Open chat"}
           >
-            <ChatBubbleLeftIcon className="h-6 w-6" />
+            <ChatBubbleLeftIcon className="h-5 w-5 sm:h-6 sm:w-6" />
             {!isChatOpen && unreadCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
                 {unreadCount > 9 ? "9+" : unreadCount}
@@ -197,10 +197,10 @@ export default function LiveKitControlBar({
         <Button
           size="lg"
           variant="default"
-          className="rounded-full w-14 h-14 bg-gray-700 hover:bg-gray-600"
+          className="rounded-full w-11 h-11 sm:w-14 sm:h-14 bg-gray-700 hover:bg-gray-600"
           title="Settings"
         >
-          <Cog6ToothIcon className="h-6 w-6" />
+          <Cog6ToothIcon className="h-5 w-5 sm:h-6 sm:w-6" />
         </Button>
 
         {/* End Class (teacher only) */}
@@ -209,10 +209,10 @@ export default function LiveKitControlBar({
             onClick={onEndClass}
             size="lg"
             variant="destructive"
-            className="rounded-full h-14 px-4 bg-orange-600 hover:bg-orange-700 gap-2"
+            className="rounded-full h-11 sm:h-14 px-3 sm:px-4 bg-orange-600 hover:bg-orange-700 gap-1.5 sm:gap-2"
             title="End class for everyone"
           >
-            <StopCircleIcon className="h-5 w-5" />
+            <StopCircleIcon className="h-4 w-4 sm:h-5 sm:w-5" />
             <span className="text-xs">End Class</span>
           </Button>
         )}
@@ -222,15 +222,15 @@ export default function LiveKitControlBar({
           onClick={handleLeave}
           size="lg"
           variant="destructive"
-          className="rounded-full w-14 h-14 bg-red-600 hover:bg-red-700"
+          className="rounded-full w-11 h-11 sm:w-14 sm:h-14 bg-red-600 hover:bg-red-700"
           title="Leave class"
         >
-          <PhoneXMarkIcon className="h-6 w-6" />
+          <PhoneXMarkIcon className="h-5 w-5 sm:h-6 sm:w-6" />
         </Button>
       </div>
 
-      {/* Labels */}
-      <div className="flex items-center justify-center gap-3 mt-2">
+      {/* Labels (desktop only — hidden on mobile to save space) */}
+      <div className="hidden sm:flex items-center justify-center gap-3 mt-2">
         {canSend ? (
           <>
             <span className="text-xs text-gray-400 w-14 text-center">{isMuted ? "Unmute" : "Mute"}</span>

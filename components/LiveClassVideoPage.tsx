@@ -197,9 +197,9 @@ export default function LiveClassVideoPage({ classId, liveClass }: LiveClassVide
                 )}
               </div>
               
-              <CardTitle className="text-2xl mb-2">{liveClass.title}</CardTitle>
-              
-              <div className="flex items-center justify-center space-x-6 text-sm text-gray-600">
+              <CardTitle className="text-xl sm:text-2xl mb-2">{liveClass.title}</CardTitle>
+
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-gray-600">
                 <div className="flex items-center">
                   <ClockIcon className="h-4 w-4 mr-1" />
                   {format(startTime, 'h:mm a')} - {format(endTime, 'h:mm a')}
