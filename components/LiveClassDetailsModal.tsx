@@ -6,11 +6,11 @@ import { ClockIcon, CalendarIcon, VideoCameraIcon, PencilSquareIcon, TrashIcon }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -117,11 +117,11 @@ export default function LiveClassDetailsModal({
 
   return (
     <>
-      <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Live Class Details</DialogTitle>
-          </DialogHeader>
+      <ResponsiveDialog open={true} onOpenChange={onClose}>
+        <ResponsiveDialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>Live Class Details</ResponsiveDialogTitle>
+          </ResponsiveDialogHeader>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -205,8 +205,8 @@ export default function LiveClassDetailsModal({
               )}
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
 
       <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
         <AlertDialogContent>
