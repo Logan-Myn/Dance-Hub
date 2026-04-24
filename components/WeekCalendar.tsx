@@ -6,9 +6,11 @@ import { format, addDays, startOfWeek, endOfWeek, isSameDay, parseISO } from "da
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import LiveClassModal from "./LiveClassModal";
 import LiveClassCard from "./LiveClassCard";
 import LiveClassDetailsModal from "./LiveClassDetailsModal";
+import WeekCalendarDay from "./WeekCalendarDay";
 
 interface LiveClass {
   id: string;
@@ -39,6 +41,7 @@ const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", 
 
 export default function WeekCalendar({ communityId, communitySlug, isTeacher, initialClasses }: WeekCalendarProps) {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [liveClasses, setLiveClasses] = useState<LiveClass[]>(initialClasses ?? []);
   const [loading, setLoading] = useState(!initialClasses);
@@ -163,41 +166,57 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Week Navigation */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <Button
             variant="outline"
             size="sm"
             onClick={() => navigateWeek('prev')}
+            aria-label="Previous week"
+            className="shrink-0"
           >
             <ChevronLeftIcon className="h-4 w-4" />
           </Button>
-          <h2 className="text-xl font-semibold text-gray-900">
+          <h2 className="text-base sm:text-xl font-semibold text-gray-900 truncate">
             {format(weekStart, 'MMM d')} - {format(weekEnd, 'MMM d, yyyy')}
           </h2>
           <Button
             variant="outline"
             size="sm"
             onClick={() => navigateWeek('next')}
+            aria-label="Next week"
+            className="shrink-0"
           >
             <ChevronRightIcon className="h-4 w-4" />
           </Button>
         </div>
-        
+
         {isTeacher && (
           <Button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center space-x-2"
+            className="flex items-center gap-2 shrink-0"
+            aria-label="Schedule class"
           >
             <PlusIcon className="h-4 w-4" />
-            <span>Schedule Class</span>
+            <span className="hidden sm:inline">Schedule Class</span>
           </Button>
         )}
       </div>
 
-      {/* Calendar Grid */}
+      {/* Mobile: day view (day-picker strip + selected-day timeline) */}
+      {isMobile ? (
+        <WeekCalendarDay
+          weekStart={weekStart}
+          liveClasses={liveClasses}
+          visibleHours={visibleHours}
+          isTeacher={isTeacher}
+          communitySlug={communitySlug}
+          onClassClick={(lc) => setSelectedClass(lc)}
+        />
+      ) : (
+      /* Desktop: the original week grid */
       <Card className="shadow-sm">
         <CardContent className="p-0 overflow-x-auto">
           <div className="min-w-[800px]">
@@ -308,6 +327,7 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Create Live Class Modal */}
       {showCreateModal && (

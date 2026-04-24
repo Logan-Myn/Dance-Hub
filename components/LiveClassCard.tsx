@@ -4,6 +4,7 @@ import { format, parseISO } from "date-fns";
 import { PlayIcon, ClockIcon } from "@heroicons/react/24/solid";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 interface LiveClass {
   id: string;
@@ -27,6 +28,10 @@ interface LiveClassCardProps {
 export default function LiveClassCard({ liveClass, communitySlug, onClick }: LiveClassCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
+  // Skip the hover tooltip on touch devices — tap fires a synthetic
+  // mouseenter that briefly flashes the tooltip before the click handler
+  // opens the details bottom sheet.
+  const isMobile = useIsMobile();
   const startTime = parseISO(liveClass.scheduled_start_time);
   const endTime = new Date(startTime.getTime() + liveClass.duration_minutes * 60000);
   // A scheduled class whose end time has elapsed without going live/ending
@@ -60,7 +65,7 @@ export default function LiveClassCard({ liveClass, communitySlug, onClick }: Liv
 
   // Place the tooltip just below the card using its viewport rect.
   const showTooltip = () => {
-    if (!cardRef.current) return;
+    if (isMobile || !cardRef.current) return;
     const r = cardRef.current.getBoundingClientRect();
     setTooltipPos({ top: r.bottom + 4, left: r.left });
   };

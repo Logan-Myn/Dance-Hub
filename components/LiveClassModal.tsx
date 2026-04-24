@@ -8,11 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "react-hot-toast";
 
@@ -138,13 +138,13 @@ export default function LiveClassModal({
   };
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
+    <ResponsiveDialog open={true} onOpenChange={onClose}>
+      <ResponsiveDialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>
             {isEdit ? "Edit Live Class" : "Schedule Live Class"}
-          </DialogTitle>
-        </DialogHeader>
+          </ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
@@ -249,7 +249,7 @@ export default function LiveClassModal({
             </Button>
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
