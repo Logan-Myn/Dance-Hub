@@ -213,7 +213,6 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
           visibleHours={visibleHours}
           isTeacher={isTeacher}
           communitySlug={communitySlug}
-          onTimeSlotClick={handleTimeSlotClick}
           onClassClick={(lc) => setSelectedClass(lc)}
         />
       ) : (

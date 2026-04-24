@@ -25,7 +25,6 @@ interface WeekCalendarDayProps {
   visibleHours: number[];
   isTeacher: boolean;
   communitySlug: string;
-  onTimeSlotClick: (day: Date, hour: number, minutes?: number) => void;
   onClassClick: (liveClass: LiveClass) => void;
 }
 
@@ -38,7 +37,6 @@ export default function WeekCalendarDay({
   visibleHours,
   isTeacher,
   communitySlug,
-  onTimeSlotClick,
   onClassClick,
 }: WeekCalendarDayProps) {
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -109,17 +107,19 @@ export default function WeekCalendarDay({
         {format(selectedDay, 'EEEE, MMMM d')}
       </h3>
 
-      {/* Empty state for students on a day with no classes — skip the timeline
-          entirely since they can't schedule anything. Teachers always see the
-          timeline so they can tap free slots to add a class. */}
-      {selectedDayClasses.length === 0 && !isTeacher ? (
+      {/* Empty state — nobody taps slots to schedule on mobile, so we show a
+          friendlier placeholder instead of a dozen empty time rows. Teachers
+          use the Schedule Class button in the header. */}
+      {selectedDayClasses.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
             <p className="text-sm text-muted-foreground">
               No classes scheduled on {format(selectedDay, 'EEEE')}.
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Check other days in this week.
+              {isTeacher
+                ? 'Use Schedule Class to add one.'
+                : 'Check other days in this week.'}
             </p>
           </CardContent>
         </Card>
@@ -155,35 +155,22 @@ export default function WeekCalendarDay({
                       </span>
                     </div>
 
-                    {/* Slots column (full remaining width) */}
+                    {/* Slots column (full remaining width). Read-only on
+                        mobile — teachers use the Schedule Class button in
+                        the header to open the modal, so half-hour slots are
+                        purely visual ruling. */}
                     <div className="flex-1 relative">
                       <div className="flex flex-col h-full">
-                        {HALF_HOURS.map((minutes) => {
-                          const slotTime = new Date(selectedDay);
-                          slotTime.setHours(hour, minutes, 0, 0);
-                          const isPastSlot = slotTime < new Date();
-                          return (
-                            <button
-                              key={minutes}
-                              type="button"
-                              disabled={!isTeacher || isPastSlot}
-                              onClick={() => {
-                                if (!isPastSlot) {
-                                  onTimeSlotClick(selectedDay, hour, minutes);
-                                }
-                              }}
-                              aria-label={`${format(slotTime, 'h:mm a')} slot`}
-                              className={cn(
-                                "flex-1 text-left w-full",
-                                minutes === 30 &&
-                                  "border-t border-dashed border-gray-200",
-                                isTeacher && !isPastSlot
-                                  ? "active:bg-blue-50 cursor-pointer"
-                                  : "cursor-default",
-                              )}
-                            />
-                          );
-                        })}
+                        {HALF_HOURS.map((minutes) => (
+                          <div
+                            key={minutes}
+                            className={cn(
+                              "flex-1",
+                              minutes === 30 &&
+                                "border-t border-dashed border-gray-200",
+                            )}
+                          />
+                        ))}
                       </div>
 
                       {/* Classes overlaid — same absolute-positioned pattern as
