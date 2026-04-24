@@ -13,6 +13,8 @@ interface LiveClass {
   livekit_room_name: string | null;
   enable_recording: boolean;
   status: string;
+  scheduled_start_time: string;
+  duration_minutes: number;
 }
 
 interface LiveClassWithDetails {
@@ -123,7 +125,7 @@ export async function PUT(
 
     // Get the live class to check ownership
     const liveClass = await queryOne<LiveClass>`
-      SELECT teacher_id, livekit_room_name, enable_recording, status
+      SELECT teacher_id, livekit_room_name, enable_recording, status, scheduled_start_time, duration_minutes
       FROM live_classes
       WHERE id = ${params.classId}
         AND community_id = ${community.id}
@@ -146,6 +148,41 @@ export async function PUT(
 
     const body = await request.json();
     const { title, description, scheduled_start_time, duration_minutes, status, enable_recording } = body;
+
+    // If time or duration is changing, re-check for overlap with this teacher's
+    // other scheduled/live classes. Exclude this class from the check, and treat
+    // a transition to 'cancelled'/'ended' as harmless (those free up a slot).
+    const nextStatus = status ?? liveClass.status;
+    if (
+      (scheduled_start_time || duration_minutes) &&
+      nextStatus !== 'cancelled' &&
+      nextStatus !== 'ended'
+    ) {
+      const effectiveStart = new Date(scheduled_start_time ?? liveClass.scheduled_start_time);
+      const effectiveDuration = duration_minutes
+        ? parseInt(duration_minutes)
+        : liveClass.duration_minutes;
+      const effectiveEnd = new Date(effectiveStart.getTime() + effectiveDuration * 60000);
+      const conflict = await queryOne<{ id: string; title: string; scheduled_start_time: string }>`
+        SELECT id, title, scheduled_start_time
+        FROM live_classes
+        WHERE community_id = ${community.id}
+          AND teacher_id = ${liveClass.teacher_id}
+          AND id != ${params.classId}
+          AND status NOT IN ('cancelled', 'ended')
+          AND scheduled_start_time < ${effectiveEnd.toISOString()}::timestamptz
+          AND (scheduled_start_time + (duration_minutes || ' minutes')::interval) > ${effectiveStart.toISOString()}::timestamptz
+        LIMIT 1
+      `;
+      if (conflict) {
+        return NextResponse.json(
+          {
+            error: `This time overlaps with "${conflict.title}" scheduled at ${new Date(conflict.scheduled_start_time).toLocaleString()}. Pick a different time.`,
+          },
+          { status: 409 }
+        );
+      }
+    }
 
     // Update the live class using COALESCE for partial updates
     const updatedClass = await queryOne<UpdatedLiveClass>`

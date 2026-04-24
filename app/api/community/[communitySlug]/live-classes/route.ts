@@ -143,6 +143,31 @@ export async function POST(
       );
     }
 
+    // Reject if this teacher already has a non-cancelled / non-ended class
+    // whose time window overlaps the new one. Two windows overlap iff
+    // newStart < existingEnd && newEnd > existingStart.
+    const newDurationMin = parseInt(duration_minutes);
+    const newStart = new Date(scheduled_start_time);
+    const newEnd = new Date(newStart.getTime() + newDurationMin * 60000);
+    const conflict = await queryOne<{ id: string; title: string; scheduled_start_time: string }>`
+      SELECT id, title, scheduled_start_time
+      FROM live_classes
+      WHERE community_id = ${community.id}
+        AND teacher_id = ${user.id}
+        AND status NOT IN ('cancelled', 'ended')
+        AND scheduled_start_time < ${newEnd.toISOString()}::timestamptz
+        AND (scheduled_start_time + (duration_minutes || ' minutes')::interval) > ${newStart.toISOString()}::timestamptz
+      LIMIT 1
+    `;
+    if (conflict) {
+      return NextResponse.json(
+        {
+          error: `This time overlaps with "${conflict.title}" scheduled at ${new Date(conflict.scheduled_start_time).toLocaleString()}. Pick a different time.`,
+        },
+        { status: 409 }
+      );
+    }
+
     // Create the live class
     const liveClass = await queryOne<LiveClass>`
       INSERT INTO live_classes (
