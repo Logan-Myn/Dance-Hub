@@ -21,6 +21,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import Link from "next/link";
 import { toast } from "react-hot-toast";
 
@@ -55,6 +64,7 @@ export default function LiveClassDetailsModal({
   onEdit,
   onDeleted,
 }: LiveClassDetailsModalProps) {
+  const isMobile = useIsMobile();
   const startTime = parseISO(liveClass.scheduled_start_time);
   const endTime = new Date(startTime.getTime() + liveClass.duration_minutes * 60000);
   // Scheduled-but-already-elapsed = effectively past.
@@ -208,27 +218,57 @@ export default function LiveClassDetailsModal({
         </ResponsiveDialogContent>
       </ResponsiveDialog>
 
-      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this live class?</AlertDialogTitle>
-            <AlertDialogDescription>
-              &ldquo;{liveClass.title}&rdquo; will be removed from the calendar.
-              This can&apos;t be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleting}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {deleting ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {isMobile ? (
+        <Sheet open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+          <SheetContent side="bottom" className="rounded-t-2xl pb-safe">
+            <SheetHeader className="text-left">
+              <SheetTitle>Delete this live class?</SheetTitle>
+              <SheetDescription>
+                &ldquo;{liveClass.title}&rdquo; will be removed from the calendar.
+                This can&apos;t be undone.
+              </SheetDescription>
+            </SheetHeader>
+            <SheetFooter className="mt-4 flex-col-reverse gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setConfirmDeleteOpen(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this live class?</AlertDialogTitle>
+              <AlertDialogDescription>
+                &ldquo;{liveClass.title}&rdquo; will be removed from the calendar.
+                This can&apos;t be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                disabled={deleting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </>
   );
 }
