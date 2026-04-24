@@ -325,9 +325,9 @@ export default function PrivateLessonManagementModal({
         ) : (
           <div className="space-y-4">
             {Array.isArray(privateLessons) ? privateLessons.map((lesson) => (
-              <div key={lesson.id} className="bg-card rounded-2xl p-6 border border-border/50 hover:border-primary/20 transition-all duration-200">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
+              <div key={lesson.id} className="bg-card rounded-2xl p-4 sm:p-6 border border-border/50 hover:border-primary/20 transition-all duration-200">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">
                       <h4 className="font-display font-semibold text-lg text-foreground">{lesson.title}</h4>
                       <Badge
@@ -374,7 +374,7 @@ export default function PrivateLessonManagementModal({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 ml-4">
+                  <div className="flex flex-wrap items-center gap-2 sm:ml-4 sm:shrink-0">
                     <Button
                       variant="outline"
                       size="sm"
@@ -430,9 +430,9 @@ export default function PrivateLessonManagementModal({
         ) : (
           <div className="space-y-4">
             {Array.isArray(lessonBookings) ? lessonBookings.map((booking) => (
-              <div key={booking.id} className="bg-card rounded-2xl p-6 border border-border/50 hover:border-primary/20 transition-all duration-200">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
+              <div key={booking.id} className="bg-card rounded-2xl p-4 sm:p-6 border border-border/50 hover:border-primary/20 transition-all duration-200">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-3">
                       <h4 className="font-display font-semibold text-lg text-foreground">{booking.lesson_title}</h4>
                       <Badge
@@ -485,7 +485,7 @@ export default function PrivateLessonManagementModal({
                     )}
                   </div>
 
-                  <div className="flex flex-col gap-2 ml-4">
+                  <div className="flex flex-wrap sm:flex-col gap-2 sm:ml-4 sm:shrink-0">
                     {booking.payment_status === 'succeeded' && booking.scheduled_at && (
                       <Button
                         onClick={() => handleJoinVideoSession(booking)}
@@ -558,11 +558,11 @@ export default function PrivateLessonManagementModal({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="w-full max-w-6xl transform overflow-hidden rounded-3xl bg-background p-6 text-left align-middle shadow-xl transition-all border border-border/50">
-                <div className="flex items-center justify-between mb-6">
+              <Dialog.Panel className="w-full max-w-6xl transform overflow-hidden rounded-3xl bg-background p-4 sm:p-6 text-left align-middle shadow-xl transition-all border border-border/50">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
                   <Dialog.Title
                     as="h3"
-                    className="font-display text-xl font-semibold text-foreground"
+                    className="font-display text-lg sm:text-xl font-semibold text-foreground"
                   >
                     Manage Private Lessons
                   </Dialog.Title>
@@ -570,14 +570,14 @@ export default function PrivateLessonManagementModal({
                     variant="ghost"
                     size="sm"
                     onClick={onClose}
-                    className="rounded-full h-10 w-10 p-0 hover:bg-muted"
+                    className="rounded-full h-10 w-10 p-0 hover:bg-muted shrink-0"
                   >
                     <X className="h-5 w-5" />
                   </Button>
                 </div>
 
                 {/* Tabs Navigation */}
-                <div className="flex gap-2 mb-6">
+                <div className="flex gap-2 mb-4 sm:mb-6">
                   <button
                     onClick={() => setActiveTab('details')}
                     className={cn(
@@ -605,7 +605,7 @@ export default function PrivateLessonManagementModal({
                 </div>
 
                 {/* Tab Content */}
-                <div className="max-h-[600px] overflow-y-auto pr-2">
+                <div className="max-h-[70vh] sm:max-h-[600px] min-w-0 overflow-y-auto overflow-x-hidden sm:pr-2">
                   {activeTab === 'details' && renderDetailsTab()}
                   {activeTab === 'schedule' && renderScheduleTab()}
                 </div>
