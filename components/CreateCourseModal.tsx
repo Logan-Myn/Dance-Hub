@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+} from "@/components/ui/responsive-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -88,14 +95,14 @@ export default function CreateCourseModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Create Course</DialogTitle>
-          <DialogDescription>
+    <ResponsiveDialog open={isOpen} onOpenChange={onClose}>
+      <ResponsiveDialogContent className="sm:max-w-[425px]">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Create Course</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             Enter the details for the new course.
-          </DialogDescription>
-        </DialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-1 gap-4">
@@ -155,24 +162,24 @@ export default function CreateCourseModal({
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button 
-              type="button" 
-              variant="outline" 
+          <ResponsiveDialogFooter>
+            <Button
+              type="button"
+              variant="outline"
               onClick={onClose}
               disabled={isSubmitting}
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               type="submit"
               disabled={isSubmitting || !title.trim() || !description.trim()}
             >
               {isSubmitting ? 'Creating...' : 'Create Course'}
             </Button>
-          </DialogFooter>
+          </ResponsiveDialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 } 
