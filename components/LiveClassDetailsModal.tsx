@@ -118,7 +118,7 @@ export default function LiveClassDetailsModal({
   return (
     <>
       <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Live Class Details</DialogTitle>
           </DialogHeader>
