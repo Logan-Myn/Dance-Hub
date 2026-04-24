@@ -863,6 +863,7 @@ export default function CourseDetailClient({
       toast.success("Course updated successfully");
       setIsEditingCourse(false);
       mutateCourse();
+      router.refresh();
     } catch (error) {
       console.error("Error updating course:", error);
       toast.error("Error updating course");
