@@ -5,7 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from '@/components/ui/responsive-dialog';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Plus, Clock, X, Calendar } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -216,24 +221,24 @@ export default function TeacherCalendarAvailability({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
           <Calendar className="h-5 w-5" />
           Teaching Availability Calendar
         </h3>
-        <div className="text-sm text-gray-600">
+        <div className="text-xs sm:text-sm text-gray-600">
           Click on dates to set your availability
         </div>
       </div>
 
       {/* Calendar Header */}
       <Card>
-        <CardHeader className="pb-4">
+        <CardHeader className="pb-3 sm:pb-4 px-3 sm:px-6 pt-3 sm:pt-6">
           <div className="flex items-center justify-between">
             <Button variant="outline" size="sm" onClick={handlePrevMonth}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <CardTitle className="text-xl">
+            <CardTitle className="text-base sm:text-xl">
               {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
             </CardTitle>
             <Button variant="outline" size="sm" onClick={handleNextMonth}>
@@ -241,12 +246,13 @@ export default function TeacherCalendarAvailability({
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-2 sm:px-6 pb-3 sm:pb-6">
           {/* Days of week header */}
           <div className="grid grid-cols-7 gap-1 mb-2">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-              <div key={day} className="text-center text-sm font-medium text-gray-500 py-2">
-                {day}
+              <div key={day} className="text-center text-xs sm:text-sm font-medium text-gray-500 py-2">
+                <span className="sm:hidden">{day.charAt(0)}</span>
+                <span className="hidden sm:inline">{day}</span>
               </div>
             ))}
           </div>
@@ -265,7 +271,7 @@ export default function TeacherCalendarAvailability({
                   key={index}
                   onClick={() => handleDateClick(date)}
                   className={`
-                    relative min-h-[80px] p-1 border rounded-lg cursor-pointer transition-all
+                    relative min-h-[48px] sm:min-h-[80px] p-1 border rounded-lg cursor-pointer transition-all
                     ${!isCurrentMonthDay ? 'text-gray-400 bg-gray-50' : ''}
                     ${isPast ? 'cursor-not-allowed opacity-50' : ''}
                     ${isTodayDate ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}
@@ -273,23 +279,30 @@ export default function TeacherCalendarAvailability({
                     ${!isPast && isCurrentMonthDay ? 'hover:bg-blue-50 hover:border-blue-300' : ''}
                   `}
                 >
-                  <div className="text-sm font-medium">
+                  <div className="text-xs sm:text-sm font-medium">
                     {date.getDate()}
                   </div>
-                  
+
                   {hasAvailability && (
-                    <div className="mt-1 space-y-1">
-                      {dayAvailability.slots.slice(0, 2).map((slot, slotIndex) => (
-                        <div key={slotIndex} className="text-xs bg-green-100 text-green-800 px-1 py-0.5 rounded truncate">
-                          {formatTime(slot.start_time)}
-                        </div>
-                      ))}
-                      {dayAvailability.slots.length > 2 && (
-                        <div className="text-xs text-green-600 font-medium">
-                          +{dayAvailability.slots.length - 2} more
-                        </div>
-                      )}
-                    </div>
+                    <>
+                      {/* Mobile: just a dot under the day number — cells are too narrow for time chips */}
+                      <div className="sm:hidden mt-1 flex justify-center">
+                        <div className="h-1.5 w-1.5 rounded-full bg-green-500" aria-label={`${dayAvailability.slots.length} slot${dayAvailability.slots.length !== 1 ? 's' : ''}`} />
+                      </div>
+                      {/* Desktop: show first two time chips + counter */}
+                      <div className="hidden sm:block mt-1 space-y-1">
+                        {dayAvailability.slots.slice(0, 2).map((slot, slotIndex) => (
+                          <div key={slotIndex} className="text-xs bg-green-100 text-green-800 px-1 py-0.5 rounded truncate">
+                            {formatTime(slot.start_time)}
+                          </div>
+                        ))}
+                        {dayAvailability.slots.length > 2 && (
+                          <div className="text-xs text-green-600 font-medium">
+                            +{dayAvailability.slots.length - 2} more
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               );
@@ -299,18 +312,18 @@ export default function TeacherCalendarAvailability({
       </Card>
 
       {/* Day Availability Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              Set Availability for {selectedDate && formatDateString(selectedDate).toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
+      <ResponsiveDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <ResponsiveDialogContent className="max-w-md">
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>
+              Set Availability for {selectedDate && formatDateString(selectedDate).toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
               })}
-            </DialogTitle>
-          </DialogHeader>
+            </ResponsiveDialogTitle>
+          </ResponsiveDialogHeader>
 
           <div className="space-y-6">
             {/* Add New Slot Form */}
@@ -374,8 +387,8 @@ export default function TeacherCalendarAvailability({
               </div>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
     </div>
   );
 }
