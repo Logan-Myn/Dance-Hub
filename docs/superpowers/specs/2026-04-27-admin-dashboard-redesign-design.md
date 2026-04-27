@@ -99,7 +99,7 @@ Tile visibility depends on `community.membership_enabled`:
 | 1 | **Revenue this month** — `€X` · `+Y%` MoM | *hidden* | Stripe `charges.list` for `[startOfMonth, now]`, sum `amount/100` where `status='succeeded'`. Compare against `[startOfLastMonth, startOfMonth]` for MoM. |
 | 2 | **Members** — `N total` · `M paying` | **Members** — `N total` | `SELECT COUNT(*) FILTER (WHERE status='active') AS total, COUNT(*) FILTER (WHERE status='active' AND stripe_subscription_id IS NOT NULL) AS paying FROM community_members WHERE community_id=X AND user_id != created_by` |
 | 3 | **New members this month** — `N` · `+Y%` MoM | same | `WHERE joined_at >= startOfMonth AND user_id != created_by`. Compare with `[startOfLastMonth, startOfMonth]`. |
-| 4 | **Cancellations this month** — `N` · `M last month` | *hidden* | `WHERE status IN ('inactive','cancelled') AND updated_at >= startOfMonth`. (Schema does not have a dedicated `cancelled_at` column; `updated_at` is the closest proxy.) |
+| 4 | **Cancellations this month** — `N` · `M last month` | *hidden* | `WHERE status IN ('inactive','cancelled') AND updated_at >= startOfMonth`. Both statuses mean "no longer a member" (see Members tile semantics). Schema does not have a dedicated `cancelled_at` column; `updated_at` is the proxy. |
 | 5 | **Posts this month** — `N threads` · `M replies` | same | `SELECT COUNT(*) FROM threads WHERE community_id=X AND created_at >= startOfMonth` + `SELECT COUNT(*) FROM comments WHERE thread_id IN (...) AND created_at >= startOfMonth` |
 
 ### Edge cases
@@ -109,11 +109,11 @@ Tile visibility depends on `community.membership_enabled`:
 - Last-month and this-month both `0` → `+0%`.
 - All counts default to `0` when the underlying query returns no rows.
 
-### "Members" tile semantics — important
+### "Members" tile semantics
 
-`Total` here means **currently active members** (`status='active'`), not lifetime joined. Reasoning: for a teacher running a community, "I have 23 members" means people currently in the community, not "23 people have ever joined". This also resolves the original bug where Total counted any-status rows, making the number drift upward over time as people cancelled.
+`Total` means **currently active members** (`status='active'`). In this product there is no "inactive but still a member" state — when a subscription is cancelled or fails to be paid, the member is removed from the community. The DB stores two distinct cancellation statuses (`inactive` set by the Stripe webhook on `customer.subscription.deleted`, `cancelled` set by the manual `/leave` route), but both mean the same thing in product terms: the person is no longer a member. Active is the only "current member" state.
 
-`Paying` is the subset with an active Stripe subscription. On a free community, hide the `paying` line entirely.
+`Paying` is the subset of active members that also have a Stripe subscription. On a free community, hide the `paying` line entirely.
 
 ## Chart card
 
@@ -221,5 +221,4 @@ These don't block design approval; the implementation plan should resolve them:
 
 1. **Chart styling**: Recharts default theme, or wrap in shadcn's chart primitives (added to the project)? Defaulting to plain Recharts unless the codebase already uses shadcn-charts.
 2. **Activity-feed avatar source**: members have a `users.avatar_url`. Verify the join in the existing members-list query works the same way here. Failure mode: fall back to initials avatar.
-3. **"Cancelled" vs "Inactive" terminology** in the feed: schema uses both. The feed will show both as "cancelled" in plain language; data layer treats them as one bucket (mirroring tile 4).
-4. **Recharts bundle size**: Recharts isn't tiny (~90KB minzipped). Acceptable for an admin-only page that's not on the critical path. If concerns arise, lazy-load the chart island.
+3. **Recharts bundle size**: Recharts isn't tiny (~90KB minzipped). Acceptable for an admin-only page that's not on the critical path. If concerns arise, lazy-load the chart island.
