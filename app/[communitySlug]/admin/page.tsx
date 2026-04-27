@@ -28,7 +28,7 @@ type CommunityRow = {
 type MembersCounts = { total: number; paying: number };
 type CountRow = { count: number };
 type JoinEvent = { user_id: string; display_name: string | null; avatar_url: string | null; joined_at: Date };
-type CancelEvent = { user_id: string; display_name: string | null; avatar_url: string | null; updated_at: Date };
+type CancelEvent = { user_id: string; display_name: string | null; avatar_url: string | null; cancelled_at: Date };
 type PostEvent = { id: string; user_id: string; author_name: string | null; author_image: string | null; category_name: string | null; created_at: Date };
 
 export default async function AdminDashboardPage({
@@ -95,8 +95,8 @@ export default async function AdminDashboardPage({
       WHERE community_id = ${community.id}
         AND user_id != ${community.created_by}
         AND status IN ('inactive','cancelled')
-        AND updated_at >= ${thisMonth.start.toISOString()}
-        AND updated_at < ${thisMonth.end.toISOString()}
+        AND cancelled_at >= ${thisMonth.start.toISOString()}
+        AND cancelled_at < ${thisMonth.end.toISOString()}
     `,
     queryOne<CountRow>`
       SELECT COUNT(*)::int AS count
@@ -104,8 +104,8 @@ export default async function AdminDashboardPage({
       WHERE community_id = ${community.id}
         AND user_id != ${community.created_by}
         AND status IN ('inactive','cancelled')
-        AND updated_at >= ${lastMonth.start.toISOString()}
-        AND updated_at < ${lastMonth.end.toISOString()}
+        AND cancelled_at >= ${lastMonth.start.toISOString()}
+        AND cancelled_at < ${lastMonth.end.toISOString()}
     `,
     queryOne<CountRow>`
       SELECT COUNT(*)::int AS count
@@ -131,13 +131,13 @@ export default async function AdminDashboardPage({
         AND user_id != ${community.created_by}
         AND joined_at >= ${ninetyDaysAgo.toISOString()}
     `,
-    query<{ updated_at: Date }>`
-      SELECT updated_at
+    query<{ cancelled_at: Date }>`
+      SELECT cancelled_at
       FROM community_members
       WHERE community_id = ${community.id}
         AND user_id != ${community.created_by}
         AND status IN ('inactive','cancelled')
-        AND updated_at >= ${ninetyDaysAgo.toISOString()}
+        AND cancelled_at >= ${ninetyDaysAgo.toISOString()}
     `,
     query<JoinEvent>`
       SELECT user_id, formatted_display_name AS display_name, avatar_url, joined_at
@@ -148,12 +148,13 @@ export default async function AdminDashboardPage({
       LIMIT 10
     `,
     query<CancelEvent>`
-      SELECT user_id, formatted_display_name AS display_name, avatar_url, updated_at
+      SELECT user_id, formatted_display_name AS display_name, avatar_url, cancelled_at
       FROM community_members_with_profiles
       WHERE community_id = ${community.id}
         AND user_id != ${community.created_by}
         AND status IN ('inactive','cancelled')
-      ORDER BY updated_at DESC
+        AND cancelled_at IS NOT NULL
+      ORDER BY cancelled_at DESC
       LIMIT 10
     `,
     query<PostEvent>`
@@ -193,7 +194,7 @@ export default async function AdminDashboardPage({
     now,
     currentActiveCount: membersTotal,
     joins: joinsLast90.map((r) => ({ at: new Date(r.joined_at) })),
-    cancellations: cancelsLast90.map((r) => ({ at: new Date(r.updated_at) })),
+    cancellations: cancelsLast90.map((r) => ({ at: new Date(r.cancelled_at) })),
   });
 
   const joins: ActivityEvent[] = recentJoinEvents.map((r) => ({
@@ -205,7 +206,7 @@ export default async function AdminDashboardPage({
   }));
   const cancels: ActivityEvent[] = recentCancelEvents.map((r) => ({
     type: 'cancel',
-    at: new Date(r.updated_at),
+    at: new Date(r.cancelled_at),
     userId: r.user_id,
     displayName: r.display_name ?? 'Anonymous',
     avatarUrl: r.avatar_url,

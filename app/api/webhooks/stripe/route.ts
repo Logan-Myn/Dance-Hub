@@ -798,7 +798,8 @@ export async function POST(request: Request) {
             await sql`
               UPDATE community_members
               SET
-                status = 'inactive'
+                status = 'inactive',
+                cancelled_at = NOW()
               WHERE community_id = ${subscription.metadata.community_id}
                 AND user_id = ${subscription.metadata.user_id}
             `;
