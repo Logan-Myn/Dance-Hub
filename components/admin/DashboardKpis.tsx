@@ -5,7 +5,6 @@ export interface DashboardStats {
   monthlyRevenue: number;
   revenueGrowth: number;
   membersTotal: number;
-  membersPaying: number;
   newMembersThisMonth: number;
   newMembersGrowth: number;
   cancellationsThisMonth: number;
@@ -36,7 +35,6 @@ export function DashboardKpis({ stats }: { stats: DashboardStats }) {
       key="members"
       label="Members"
       value={stats.membersTotal.toString()}
-      sublineText={stats.isPaid ? `${stats.membersPaying} paying` : undefined}
       icon={<Users className="h-5 w-5 text-primary" />}
       iconBg="bg-primary/10"
     />

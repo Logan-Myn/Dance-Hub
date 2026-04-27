@@ -25,7 +25,7 @@ type CommunityRow = {
   stripe_account_id: string | null;
 };
 
-type MembersCounts = { total: number; paying: number };
+type MembersCounts = { total: number };
 type CountRow = { count: number };
 type JoinEvent = { user_id: string; display_name: string | null; avatar_url: string | null; joined_at: Date };
 type CancelEvent = { user_id: string; display_name: string | null; avatar_url: string | null; cancelled_at: Date };
@@ -66,9 +66,7 @@ export default async function AdminDashboardPage({
     failedPayments,
   ] = await Promise.all([
     queryOne<MembersCounts>`
-      SELECT
-        COUNT(*) FILTER (WHERE status='active')::int AS total,
-        COUNT(*) FILTER (WHERE status='active' AND stripe_subscription_id IS NOT NULL)::int AS paying
+      SELECT COUNT(*) FILTER (WHERE status='active')::int AS total
       FROM community_members
       WHERE community_id = ${community.id}
         AND user_id != ${community.created_by}
@@ -178,7 +176,6 @@ export default async function AdminDashboardPage({
   ]);
 
   const membersTotal = membersCountsRow?.total ?? 0;
-  const membersPaying = membersCountsRow?.paying ?? 0;
   const newMembersThisMonth = newMembersThisMonthRow?.count ?? 0;
   const newMembersLastMonth = newMembersLastMonthRow?.count ?? 0;
   const cancellationsThisMonth = cancellationsThisMonthRow?.count ?? 0;
@@ -191,7 +188,6 @@ export default async function AdminDashboardPage({
     monthlyRevenue: revenue.monthlyRevenue,
     revenueGrowth: revenue.revenueGrowth,
     membersTotal,
-    membersPaying,
     newMembersThisMonth,
     newMembersGrowth: computeMoMGrowth(newMembersThisMonth, newMembersLastMonth),
     cancellationsThisMonth,
