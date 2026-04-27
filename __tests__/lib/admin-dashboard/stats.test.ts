@@ -1,4 +1,4 @@
-import { getCalendarMonthRange, computeMoMGrowth, getMonthlyRevenue, getRevenueChart6Months } from '@/lib/admin-dashboard/stats';
+import { getCalendarMonthRange, computeMoMGrowth, getMonthlyRevenue, getRevenueChart6Months, buildMemberGrowthSeries } from '@/lib/admin-dashboard/stats';
 
 const mockChargesList = jest.fn();
 const mockAccountsRetrieve = jest.fn();
@@ -124,5 +124,61 @@ describe('getRevenueChart6Months', () => {
     const result = await getRevenueChart6Months('acct_x', new Date(2026, 3, 15));
     expect(result.every((p) => p.revenue === 0)).toBe(true);
     expect(mockChargesList).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildMemberGrowthSeries', () => {
+  it('produces a 90-day series ending at currentActive', () => {
+    const now = new Date(2026, 3, 15);
+    const series = buildMemberGrowthSeries({
+      now,
+      currentActiveCount: 10,
+      joins: [],
+      cancellations: [],
+    });
+    expect(series).toHaveLength(90);
+    expect(series[series.length - 1].count).toBe(10);
+    expect(series[0].count).toBe(10);
+  });
+
+  it('walks back: a join 30 days ago means the count was 1 lower before that day', () => {
+    const now = new Date(2026, 3, 15);
+    const joinedAt = new Date(2026, 2, 16);
+    const series = buildMemberGrowthSeries({
+      now,
+      currentActiveCount: 5,
+      joins: [{ at: joinedAt }],
+      cancellations: [],
+    });
+    expect(series[series.length - 1].count).toBe(5);
+    expect(series[series.length - 30].count).toBe(5);
+    expect(series[series.length - 31].count).toBe(4);
+    expect(series[0].count).toBe(4);
+  });
+
+  it('walks back: a cancellation 10 days ago means the count was 1 higher before that day', () => {
+    const now = new Date(2026, 3, 15);
+    const cancelledAt = new Date(2026, 3, 5);
+    const series = buildMemberGrowthSeries({
+      now,
+      currentActiveCount: 7,
+      joins: [],
+      cancellations: [{ at: cancelledAt }],
+    });
+    expect(series[series.length - 1].count).toBe(7);
+    expect(series[series.length - 10].count).toBe(7);
+    expect(series[series.length - 11].count).toBe(8);
+  });
+
+  it('clamps at 0 (never returns negative counts)', () => {
+    const now = new Date(2026, 3, 15);
+    const cancelledAt = new Date(2026, 3, 5);
+    const series = buildMemberGrowthSeries({
+      now,
+      currentActiveCount: 0,
+      joins: [],
+      cancellations: [{ at: cancelledAt }],
+    });
+    expect(series.every((p) => p.count >= 0)).toBe(true);
   });
 });

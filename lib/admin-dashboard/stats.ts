@@ -1,6 +1,6 @@
 import { stripe } from '@/lib/stripe';
 import type Stripe from 'stripe';
-import type { RevenuePoint } from './types';
+import type { RevenuePoint, GrowthPoint } from './types';
 
 /**
  * Calendar month range. start is inclusive (1st of month at 00:00 local),
@@ -101,4 +101,50 @@ export async function getRevenueChart6Months(
     month: formatYearMonth(start),
     revenue: revenues[i],
   }));
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+export function buildMemberGrowthSeries({
+  now,
+  currentActiveCount,
+  joins,
+  cancellations,
+}: {
+  now: Date;
+  currentActiveCount: number;
+  joins: { at: Date }[];
+  cancellations: { at: Date }[];
+}): GrowthPoint[] {
+  const today = startOfDay(now);
+  const startDay = new Date(today.getTime() - 89 * DAY_MS);
+
+  const days: GrowthPoint[] = [];
+  for (let i = 0; i < 90; i++) {
+    const d = new Date(startDay.getTime() + i * DAY_MS);
+    days.push({
+      date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+      count: currentActiveCount,
+    });
+  }
+
+  for (const j of joins) {
+    const jDay = startOfDay(j.at);
+    if (jDay.getTime() < startDay.getTime() || jDay.getTime() > today.getTime()) continue;
+    const idx = Math.round((jDay.getTime() - startDay.getTime()) / DAY_MS);
+    for (let i = 0; i <= idx; i++) days[i].count -= 1;
+  }
+  for (const c of cancellations) {
+    const cDay = startOfDay(c.at);
+    if (cDay.getTime() < startDay.getTime() || cDay.getTime() > today.getTime()) continue;
+    const idx = Math.round((cDay.getTime() - startDay.getTime()) / DAY_MS);
+    for (let i = 0; i <= idx; i++) days[i].count += 1;
+  }
+
+  for (const d of days) if (d.count < 0) d.count = 0;
+  return days;
 }
