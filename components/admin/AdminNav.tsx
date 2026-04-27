@@ -12,11 +12,12 @@ export function AdminNav({
 }) {
   const pathname = usePathname();
   const items = [
-    { href: `/${communitySlug}/admin/general`, label: 'General' },
-    { href: `/${communitySlug}/admin/members`, label: 'Members' },
-    { href: `/${communitySlug}/admin/subscriptions`, label: 'Subscriptions' },
-    { href: `/${communitySlug}/admin/thread-categories`, label: 'Thread Categories' },
-    { href: `/${communitySlug}/admin/emails`, label: 'Broadcasts' },
+    { href: `/${communitySlug}/admin`,                   label: 'Dashboard',         exact: true  },
+    { href: `/${communitySlug}/admin/general`,           label: 'General',           exact: false },
+    { href: `/${communitySlug}/admin/members`,           label: 'Members',           exact: false },
+    { href: `/${communitySlug}/admin/subscriptions`,     label: 'Subscriptions',     exact: false },
+    { href: `/${communitySlug}/admin/thread-categories`, label: 'Thread Categories', exact: false },
+    { href: `/${communitySlug}/admin/emails`,            label: 'Broadcasts',        exact: false },
   ];
 
   return (
@@ -26,7 +27,7 @@ export function AdminNav({
       </p>
       <ul className="flex md:flex-col gap-0.5 overflow-x-auto scrollbar-hide md:overflow-visible -mx-1 px-1 pb-1 md:pb-0 md:mx-0 md:px-0">
         {items.map((item) => {
-          const active = pathname.startsWith(item.href);
+          const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
           return (
             <li key={item.href} className="shrink-0 md:shrink">
               <Link
