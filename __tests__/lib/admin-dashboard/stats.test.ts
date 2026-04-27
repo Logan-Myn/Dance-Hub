@@ -1,4 +1,13 @@
-import { getCalendarMonthRange, computeMoMGrowth } from '@/lib/admin-dashboard/stats';
+import { getCalendarMonthRange, computeMoMGrowth, getMonthlyRevenue } from '@/lib/admin-dashboard/stats';
+
+const mockChargesList = jest.fn();
+const mockAccountsRetrieve = jest.fn();
+jest.mock('@/lib/stripe', () => ({
+  stripe: {
+    accounts: { retrieve: (...a: unknown[]) => mockAccountsRetrieve(...a) },
+    charges: { list: (...a: unknown[]) => mockChargesList(...a) },
+  },
+}));
 
 describe('getCalendarMonthRange', () => {
   it('returns start of current month and start of next month with offset 0', () => {
@@ -38,5 +47,46 @@ describe('computeMoMGrowth', () => {
   });
   it('rounds to integer', () => {
     expect(computeMoMGrowth(10.7, 10)).toBe(7);
+  });
+});
+
+describe('getMonthlyRevenue', () => {
+  beforeEach(() => {
+    mockChargesList.mockReset();
+    mockAccountsRetrieve.mockReset();
+  });
+
+  it('returns 0/0 when stripeAccountId is null', async () => {
+    const result = await getMonthlyRevenue(null, new Date(2026, 3, 15));
+    expect(result).toEqual({ monthlyRevenue: 0, revenueGrowth: 0 });
+    expect(mockAccountsRetrieve).not.toHaveBeenCalled();
+  });
+
+  it('returns 0/0 when account is not charges_enabled', async () => {
+    mockAccountsRetrieve.mockResolvedValueOnce({ charges_enabled: false });
+    const result = await getMonthlyRevenue('acct_x', new Date(2026, 3, 15));
+    expect(result).toEqual({ monthlyRevenue: 0, revenueGrowth: 0 });
+  });
+
+  it('sums succeeded charges and computes MoM', async () => {
+    mockAccountsRetrieve.mockResolvedValueOnce({ charges_enabled: true });
+    mockChargesList
+      .mockResolvedValueOnce({ data: [
+        { status: 'succeeded', amount: 5000 },
+        { status: 'succeeded', amount: 3000 },
+        { status: 'failed',    amount: 1000 },
+      ] })
+      .mockResolvedValueOnce({ data: [
+        { status: 'succeeded', amount: 4000 },
+      ] });
+    const result = await getMonthlyRevenue('acct_x', new Date(2026, 3, 15));
+    expect(result.monthlyRevenue).toBe(80);
+    expect(result.revenueGrowth).toBe(100);
+  });
+
+  it('falls back to 0/0 when accounts.retrieve throws', async () => {
+    mockAccountsRetrieve.mockRejectedValueOnce(new Error('stripe down'));
+    const result = await getMonthlyRevenue('acct_x', new Date(2026, 3, 15));
+    expect(result).toEqual({ monthlyRevenue: 0, revenueGrowth: 0 });
   });
 });
