@@ -1,7 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Card } from "@/components/ui/card";
@@ -410,25 +415,27 @@ export function OnboardingWizard({ isOpen, onClose, communityId, communitySlug, 
 
   return (
     <ErrorBoundary>
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl h-[90vh] w-[95vw] sm:w-full flex flex-col overflow-hidden">
-          <DialogHeader className="space-y-4 flex-shrink-0">
-            <DialogTitle className="text-xl sm:text-2xl font-bold">
-              Stripe Payment Setup
-            </DialogTitle>
+      <ResponsiveDialog open={isOpen} onOpenChange={onClose}>
+        <ResponsiveDialogContent className="max-w-4xl lg:h-[90vh] lg:w-[95vw] flex flex-col">
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>
+              <span className="text-xl sm:text-2xl font-bold">Stripe Payment Setup</span>
+            </ResponsiveDialogTitle>
 
-            <div className="space-y-2">
+            <div className="space-y-2 mt-4">
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>Step {currentStep} of {STEPS.length}</span>
                 <span>{Math.round(progressPercentage)}% Complete</span>
               </div>
               <Progress value={progressPercentage} className="w-full" />
             </div>
-          </DialogHeader>
+          </ResponsiveDialogHeader>
 
-          <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0 overflow-hidden">
-            {/* Progress Sidebar */}
-            <div className="w-full lg:w-64 flex-shrink-0 lg:overflow-y-auto">
+          <div className="flex flex-col lg:flex-row gap-6 lg:flex-1 lg:min-h-0 lg:overflow-hidden">
+            {/* Progress Sidebar — desktop only. On mobile the top progress bar
+                + step counter already convey state, and the vertical step list
+                eats half the viewport making the form unreachable. */}
+            <div className="hidden lg:block lg:w-64 lg:flex-shrink-0 lg:overflow-y-auto">
               <ProgressIndicator
                 steps={STEPS}
                 currentStep={currentStep}
@@ -442,14 +449,14 @@ export function OnboardingWizard({ isOpen, onClose, communityId, communitySlug, 
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 min-w-0 overflow-y-auto">
+            <div className="flex-1 min-w-0 lg:overflow-y-auto">
               <Card className="p-4 sm:p-6">
                 {renderCurrentStep()}
               </Card>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
     </ErrorBoundary>
   );
 } 
