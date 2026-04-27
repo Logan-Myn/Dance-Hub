@@ -1,4 +1,4 @@
-import { Users, TrendingUp, TrendingDown, DollarSign, MessageSquare, UserMinus } from 'lucide-react';
+import { Users, TrendingUp, TrendingDown, Minus, DollarSign, MessageSquare, UserMinus } from 'lucide-react';
 
 export interface DashboardStats {
   isPaid: boolean;
@@ -100,8 +100,9 @@ function Tile({
   icon: React.ReactNode;
   iconBg: string;
 }) {
-  const showNumber = typeof sublineNumber === 'number';
-  const isPositive = showNumber && (sublineNumber as number) >= 0;
+  const n = typeof sublineNumber === 'number' ? sublineNumber : null;
+  const trend: 'up' | 'down' | 'flat' | null =
+    n === null ? null : n > 0 ? 'up' : n < 0 ? 'down' : 'flat';
 
   return (
     <div className="bg-card rounded-2xl p-6 border-2 border-transparent hover:border-primary/20 hover:shadow-lg transition-all duration-300 ease-out space-y-3">
@@ -112,14 +113,20 @@ function Tile({
         </div>
       </div>
       <p className="font-display text-3xl font-bold text-foreground">{value}</p>
-      {showNumber ? (
-        <p className={`text-sm font-medium ${isPositive ? 'text-primary' : 'text-destructive'}`}>
-          {isPositive ? (
+      {trend ? (
+        <p
+          className={`text-sm font-medium ${
+            trend === 'up' ? 'text-primary' : trend === 'down' ? 'text-destructive' : 'text-muted-foreground'
+          }`}
+        >
+          {trend === 'up' ? (
             <TrendingUp className="h-4 w-4 inline mr-1" />
-          ) : (
+          ) : trend === 'down' ? (
             <TrendingDown className="h-4 w-4 inline mr-1" />
+          ) : (
+            <Minus className="h-4 w-4 inline mr-1" />
           )}
-          {isPositive ? '+' : ''}
+          {trend === 'up' ? '+' : ''}
           {sublineNumber}% {sublineSuffix}
         </p>
       ) : sublineText ? (
