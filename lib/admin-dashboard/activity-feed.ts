@@ -39,15 +39,19 @@ export async function getRecentFailedPayments(
   }
 
   const sinceSec = Math.floor(now.getTime() / 1000) - THIRTY_DAYS_SECONDS;
-  // Stripe has no server-side status filter; over-fetch and filter client-side
-  // so a recent burst of succeeded charges doesn't hide older failures.
-  const charges = await stripe.charges.list(
-    { created: { gte: sinceSec }, limit: 100 },
-    { stripeAccount: stripeAccountId }
-  );
+  // Stripe has no server-side status filter; auto-paginate up to 1000 charges
+  // so we don't miss older failures on busy paid communities, then keep the
+  // 10 most recent failed ones.
+  const charges = await stripe.charges
+    .list(
+      { created: { gte: sinceSec }, limit: 100 },
+      { stripeAccount: stripeAccountId }
+    )
+    .autoPagingToArray({ limit: 1000 });
 
-  return charges.data
+  return charges
     .filter((c: Stripe.Charge) => c.status === 'failed')
+    .slice(0, 10)
     .map((c: Stripe.Charge) => ({
       type: 'failed_payment' as const,
       at: new Date(c.created * 1000),

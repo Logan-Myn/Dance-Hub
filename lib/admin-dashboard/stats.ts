@@ -32,17 +32,21 @@ async function sumSucceeded(
   start: Date,
   end: Date
 ): Promise<number> {
-  const charges = await stripe.charges.list(
-    {
-      created: {
-        gte: Math.floor(start.getTime() / 1000),
-        lt: Math.floor(end.getTime() / 1000),
+  // autoPagingToArray walks all pages so a single month with >100 charges
+  // doesn't get silently truncated. limit cap at 1000 is a safety bound.
+  const charges = await stripe.charges
+    .list(
+      {
+        created: {
+          gte: Math.floor(start.getTime() / 1000),
+          lt: Math.floor(end.getTime() / 1000),
+        },
+        limit: 100,
       },
-      limit: 100,
-    },
-    { stripeAccount: stripeAccountId }
-  );
-  return charges.data.reduce(
+      { stripeAccount: stripeAccountId }
+    )
+    .autoPagingToArray({ limit: 1000 });
+  return charges.reduce(
     (total: number, c: Stripe.Charge) =>
       c.status === 'succeeded' ? total + c.amount / 100 : total,
     0

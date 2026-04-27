@@ -9,6 +9,13 @@ jest.mock('@/lib/stripe', () => ({
   },
 }));
 
+// Helper: stripe.charges.list now returns a thenable with .autoPagingToArray().
+// Each test that uses `mockChargesList.mockReturnValueOnce(pageOf([...]))` mimics
+// one paged-fetch result.
+const pageOf = (data: any[]) => ({
+  autoPagingToArray: () => Promise.resolve(data),
+});
+
 describe('getCalendarMonthRange', () => {
   it('returns start of current month and start of next month with offset 0', () => {
     const now = new Date(2026, 3, 15); // April 15, 2026
@@ -71,14 +78,14 @@ describe('getMonthlyRevenue', () => {
   it('sums succeeded charges and computes MoM', async () => {
     mockAccountsRetrieve.mockResolvedValueOnce({ charges_enabled: true });
     mockChargesList
-      .mockResolvedValueOnce({ data: [
+      .mockReturnValueOnce(pageOf([
         { status: 'succeeded', amount: 5000 },
         { status: 'succeeded', amount: 3000 },
         { status: 'failed',    amount: 1000 },
-      ] })
-      .mockResolvedValueOnce({ data: [
+      ]))
+      .mockReturnValueOnce(pageOf([
         { status: 'succeeded', amount: 4000 },
-      ] });
+      ]));
     const result = await getMonthlyRevenue('acct_x', new Date(2026, 3, 15));
     expect(result.monthlyRevenue).toBe(80);
     expect(result.revenueGrowth).toBe(100);
@@ -108,9 +115,9 @@ describe('getRevenueChart6Months', () => {
   it('queries Stripe per month and sums succeeded charges', async () => {
     mockAccountsRetrieve.mockResolvedValueOnce({ charges_enabled: true });
     for (let i = 0; i < 6; i++) {
-      mockChargesList.mockResolvedValueOnce({
-        data: [{ status: 'succeeded', amount: (i + 1) * 1000 }],
-      });
+      mockChargesList.mockReturnValueOnce(
+        pageOf([{ status: 'succeeded', amount: (i + 1) * 1000 }])
+      );
     }
     const result = await getRevenueChart6Months('acct_x', new Date(2026, 3, 15));
     expect(result.map((p) => p.revenue)).toEqual([10, 20, 30, 40, 50, 60]);

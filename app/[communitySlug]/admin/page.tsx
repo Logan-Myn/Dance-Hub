@@ -11,7 +11,7 @@ import {
   getRecentFailedPayments,
 } from '@/lib/admin-dashboard/activity-feed';
 import type { ActivityEvent } from '@/lib/admin-dashboard/types';
-import { DashboardKpis } from '@/components/admin/DashboardKpis';
+import { DashboardKpis, type DashboardStats } from '@/components/admin/DashboardKpis';
 import { DashboardChart } from '@/components/admin/DashboardChart';
 import { DashboardActivityFeed } from '@/components/admin/DashboardActivityFeed';
 
@@ -183,7 +183,7 @@ export default async function AdminDashboardPage({
   const threadsThisMonth = threadsRow?.count ?? 0;
   const commentsThisMonth = commentsRow?.count ?? 0;
 
-  const stats = {
+  const stats: DashboardStats = {
     isPaid: community.membership_enabled,
     monthlyRevenue: revenue.monthlyRevenue,
     revenueGrowth: revenue.revenueGrowth,

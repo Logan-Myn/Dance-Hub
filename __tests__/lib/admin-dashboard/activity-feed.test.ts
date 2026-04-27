@@ -10,6 +10,10 @@ jest.mock('@/lib/stripe', () => ({
   },
 }));
 
+const pageOf = (data: any[]) => ({
+  autoPagingToArray: () => Promise.resolve(data),
+});
+
 const make = (overrides: Partial<ActivityEvent>): ActivityEvent =>
   ({
     type: 'join',
@@ -68,17 +72,15 @@ describe('getRecentFailedPayments', () => {
   it('maps failed charges to ActivityEvent rows', async () => {
     mockAccountsRetrieve.mockResolvedValueOnce({ charges_enabled: true });
     const t = new Date('2026-04-12T09:00:00Z');
-    mockChargesList.mockResolvedValueOnce({
-      data: [
-        {
-          status: 'failed',
-          amount: 1500,
-          created: Math.floor(t.getTime() / 1000),
-          billing_details: { name: 'Anna Test' },
-          metadata: { user_id: 'u1' },
-        },
-      ],
-    });
+    mockChargesList.mockReturnValueOnce(pageOf([
+      {
+        status: 'failed',
+        amount: 1500,
+        created: Math.floor(t.getTime() / 1000),
+        billing_details: { name: 'Anna Test' },
+        metadata: { user_id: 'u1' },
+      },
+    ]));
     const result = await getRecentFailedPayments('acct_x');
     expect(result).toEqual([
       {
@@ -93,9 +95,9 @@ describe('getRecentFailedPayments', () => {
 
   it('falls back to "Unknown" displayName when billing_details.name is missing', async () => {
     mockAccountsRetrieve.mockResolvedValueOnce({ charges_enabled: true });
-    mockChargesList.mockResolvedValueOnce({
-      data: [{ status: 'failed', amount: 1000, created: 1700000000, billing_details: {}, metadata: {} }],
-    });
+    mockChargesList.mockReturnValueOnce(pageOf([
+      { status: 'failed', amount: 1000, created: 1700000000, billing_details: {}, metadata: {} },
+    ]));
     const result = await getRecentFailedPayments('acct_x');
     expect(result[0].displayName).toBe('Unknown');
     expect(result[0].userId).toBeNull();
