@@ -1,4 +1,4 @@
-import { getCalendarMonthRange, computeMoMGrowth, getMonthlyRevenue } from '@/lib/admin-dashboard/stats';
+import { getCalendarMonthRange, computeMoMGrowth, getMonthlyRevenue, getRevenueChart6Months } from '@/lib/admin-dashboard/stats';
 
 const mockChargesList = jest.fn();
 const mockAccountsRetrieve = jest.fn();
@@ -88,5 +88,41 @@ describe('getMonthlyRevenue', () => {
     mockAccountsRetrieve.mockRejectedValueOnce(new Error('stripe down'));
     const result = await getMonthlyRevenue('acct_x', new Date(2026, 3, 15));
     expect(result).toEqual({ monthlyRevenue: 0, revenueGrowth: 0 });
+  });
+});
+
+describe('getRevenueChart6Months', () => {
+  beforeEach(() => {
+    mockChargesList.mockReset();
+    mockAccountsRetrieve.mockReset();
+  });
+
+  it('returns 6 zero points when stripeAccountId is null', async () => {
+    const result = await getRevenueChart6Months(null, new Date(2026, 3, 15));
+    expect(result).toHaveLength(6);
+    expect(result.every((p) => p.revenue === 0)).toBe(true);
+    expect(result[result.length - 1].month).toBe('2026-04');
+    expect(result[0].month).toBe('2025-11');
+  });
+
+  it('queries Stripe per month and sums succeeded charges', async () => {
+    mockAccountsRetrieve.mockResolvedValueOnce({ charges_enabled: true });
+    for (let i = 0; i < 6; i++) {
+      mockChargesList.mockResolvedValueOnce({
+        data: [{ status: 'succeeded', amount: (i + 1) * 1000 }],
+      });
+    }
+    const result = await getRevenueChart6Months('acct_x', new Date(2026, 3, 15));
+    expect(result.map((p) => p.revenue)).toEqual([10, 20, 30, 40, 50, 60]);
+    expect(result.map((p) => p.month)).toEqual([
+      '2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04',
+    ]);
+  });
+
+  it('returns zero points when account is not charges_enabled', async () => {
+    mockAccountsRetrieve.mockResolvedValueOnce({ charges_enabled: false });
+    const result = await getRevenueChart6Months('acct_x', new Date(2026, 3, 15));
+    expect(result.every((p) => p.revenue === 0)).toBe(true);
+    expect(mockChargesList).not.toHaveBeenCalled();
   });
 });

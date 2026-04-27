@@ -1,5 +1,6 @@
 import { stripe } from '@/lib/stripe';
 import type Stripe from 'stripe';
+import type { RevenuePoint } from './types';
 
 /**
  * Calendar month range. start is inclusive (1st of month at 00:00 local),
@@ -72,4 +73,32 @@ export async function getMonthlyRevenue(
     monthlyRevenue: thisMonthRevenue,
     revenueGrowth: computeMoMGrowth(thisMonthRevenue, lastMonthRevenue),
   };
+}
+
+function formatYearMonth(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export async function getRevenueChart6Months(
+  stripeAccountId: string | null,
+  now: Date = new Date()
+): Promise<RevenuePoint[]> {
+  const months = Array.from({ length: 6 }, (_, i) => getCalendarMonthRange(now, i - 5));
+  const zeros: RevenuePoint[] = months.map((m) => ({ month: formatYearMonth(m.start), revenue: 0 }));
+
+  if (!stripeAccountId) return zeros;
+  try {
+    const account = await stripe.accounts.retrieve(stripeAccountId);
+    if (!account.charges_enabled) return zeros;
+  } catch {
+    return zeros;
+  }
+
+  const revenues = await Promise.all(
+    months.map(({ start, end }) => sumSucceeded(stripeAccountId, start, end))
+  );
+  return months.map(({ start }, i) => ({
+    month: formatYearMonth(start),
+    revenue: revenues[i],
+  }));
 }
