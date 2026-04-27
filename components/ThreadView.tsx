@@ -758,9 +758,6 @@ export default function ThreadView({
                 <MessageSquare className="h-4 w-4" />
                 <span>{thread.comments_count} comments</span>
               </div>
-              <div className="ml-auto text-xs text-muted-foreground">
-                Sorted by oldest
-              </div>
             </div>
           </div>
 
