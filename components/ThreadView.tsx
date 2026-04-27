@@ -738,8 +738,8 @@ export default function ThreadView({
                 onClick={handleLike}
                 disabled={isLiking || !user}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm",
-                  "transition-all duration-200 ease-out border-2",
+                  "flex items-center gap-2 px-3.5 py-1.5 rounded-full font-semibold text-sm",
+                  "transition-all duration-200 ease-out border",
                   isLiked
                     ? "bg-pink-50 text-pink-500 border-pink-200"
                     : "bg-card text-muted-foreground border-border/50 hover:border-pink-200 hover:text-pink-500"
@@ -754,15 +754,18 @@ export default function ThreadView({
                 />
                 <span>{localLikesCount}</span>
               </button>
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm text-muted-foreground border-2 border-border/50 bg-card">
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full font-semibold text-sm text-primary bg-primary/10 border border-primary/20">
                 <MessageSquare className="h-4 w-4" />
                 <span>{thread.comments_count} comments</span>
+              </div>
+              <div className="ml-auto text-xs text-muted-foreground">
+                Sorted by oldest
               </div>
             </div>
           </div>
 
-          {/* Comment input - between thread and comments */}
-          <div className="px-6 py-4 bg-muted/30 border-y border-border/30">
+          {/* Comment input - sticky-feeling composer with a soft pill input */}
+          <div className="order-last px-4 py-3 bg-card border-t border-border/40">
             <div className="flex items-center gap-3">
               <Avatar className="h-9 w-9 ring-2 ring-primary/20 flex-shrink-0">
                 <AvatarImage src={userAvatarUrl} alt={userDisplayName} />
@@ -770,12 +773,12 @@ export default function ThreadView({
                   {userInitial}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 relative">
                 <textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  placeholder="Write a comment..."
-                  className="w-full min-h-[44px] max-h-32 resize-none py-2.5 px-4 rounded-2xl border border-border/50 bg-card focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all duration-200 text-sm"
+                  placeholder="Write a comment…"
+                  className="w-full min-h-[40px] max-h-32 resize-none py-2.5 pl-4 pr-12 rounded-full border border-border/40 bg-muted/40 focus:bg-card focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all duration-200 text-sm placeholder:text-muted-foreground/70"
                   rows={1}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey && comment.trim()) {
@@ -784,12 +787,17 @@ export default function ThreadView({
                     }
                   }}
                 />
+                {!comment && (
+                  <span className="hidden sm:block absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-medium tracking-wider text-muted-foreground/60 pointer-events-none">
+                    ↵
+                  </span>
+                )}
               </div>
               <Button
                 onClick={handleSubmitComment}
                 disabled={isSubmitting || !comment.trim()}
                 size="icon"
-                className="h-11 w-11 rounded-xl bg-primary hover:bg-primary/90 flex-shrink-0 transition-all duration-200"
+                className="h-10 w-10 rounded-full bg-primary hover:bg-primary/90 shadow-md shadow-primary/30 flex-shrink-0 transition-all duration-200"
               >
                 <Send className={cn(
                   "h-4 w-4",
@@ -799,8 +807,8 @@ export default function ThreadView({
             </div>
           </div>
 
-          {/* Comments section - scrollable */}
-          <div className="flex-1 overflow-y-auto p-6 bg-background/50">
+          {/* Comments section - tinted scrollable panel */}
+          <div className="flex-1 overflow-y-auto px-6 py-5 bg-muted/25 border-t border-border/30">
             {organizedComments.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
@@ -810,11 +818,16 @@ export default function ThreadView({
                 <p className="text-sm text-muted-foreground/70">Be the first to share your thoughts</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {organizedComments.map((comment) => (
-                  <Comment key={comment.id} {...mapCommentToProps(comment)} />
-                ))}
-              </div>
+              <>
+                <div className="text-[10px] font-bold tracking-[0.12em] uppercase text-muted-foreground/70 mb-3">
+                  {organizedComments.length} {organizedComments.length === 1 ? "Reply" : "Replies"}
+                </div>
+                <div className="space-y-4">
+                  {organizedComments.map((comment) => (
+                    <Comment key={comment.id} {...mapCommentToProps(comment)} />
+                  ))}
+                </div>
+              </>
             )}
           </div>
       </div>
