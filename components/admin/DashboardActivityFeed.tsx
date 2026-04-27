@@ -89,7 +89,7 @@ function ActivityRow({ event, communitySlug }: { event: ActivityEvent; community
     return (
       <li>
         <Link
-          href={`/${communitySlug}/threads/${event.threadId}`}
+          href={`/${communitySlug}?thread=${event.threadId}`}
           className="flex items-start gap-3 -mx-2 px-2 py-1 rounded-lg hover:bg-muted/40 transition-colors"
         >
           {body}

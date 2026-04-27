@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { notFound, useParams, useRouter } from "next/navigation";
+import { notFound, useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Users, ExternalLink, Search, Settings } from "lucide-react";
@@ -195,6 +195,8 @@ export default function FeedClient({
   accessEndDate: initialAccessEndDate,
 }: FeedClientProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const isMobile = useIsMobile();
   const { user: currentUser, loading: isAuthLoading } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
@@ -248,6 +250,30 @@ export default function FeedClient({
   const [isWriting, setIsWriting] = useState(false);
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Open a thread automatically when the URL carries ?thread=<id> (used by the
+  // admin activity-feed link). On mobile we route to the dedicated page since
+  // that's the existing pattern for thread navigation on small screens.
+  useEffect(() => {
+    const threadId = searchParams.get('thread');
+    if (!threadId) return;
+    if (selectedThread?.id === threadId) return;
+    const thread = threads.find((t) => t.id === threadId);
+    if (!thread) return;
+    if (isMobile) {
+      router.replace(`/${communitySlug}/threads/${thread.id}`);
+    } else {
+      setSelectedThread(thread);
+    }
+  }, [searchParams, threads, selectedThread, isMobile, router, communitySlug]);
+
+  // Once the modal is closed by the user, drop ?thread=<id> from the URL so
+  // a refresh / back-button doesn't immediately reopen it.
+  useEffect(() => {
+    if (selectedThread !== null) return;
+    if (!searchParams.get('thread')) return;
+    router.replace(pathname);
+  }, [selectedThread, searchParams, router, pathname]);
   const [totalMembers, setTotalMembers] = useState(0);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [newThreadId, setNewThreadId] = useState<string | null>(null);
