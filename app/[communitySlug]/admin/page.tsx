@@ -140,21 +140,31 @@ export default async function AdminDashboardPage({
         AND cancelled_at >= ${ninetyDaysAgo.toISOString()}
     `,
     query<JoinEvent>`
-      SELECT user_id, formatted_display_name AS display_name, avatar_url, joined_at
-      FROM community_members_with_profiles
-      WHERE community_id = ${community.id}
-        AND user_id != ${community.created_by}
-      ORDER BY joined_at DESC
+      SELECT
+        cm.user_id,
+        COALESCE(p.display_name, p.full_name, 'Anonymous') AS display_name,
+        p.avatar_url,
+        cm.joined_at
+      FROM community_members cm
+      LEFT JOIN profiles p ON cm.user_id = p.id
+      WHERE cm.community_id = ${community.id}
+        AND cm.user_id != ${community.created_by}
+      ORDER BY cm.joined_at DESC
       LIMIT 10
     `,
     query<CancelEvent>`
-      SELECT user_id, formatted_display_name AS display_name, avatar_url, cancelled_at
-      FROM community_members_with_profiles
-      WHERE community_id = ${community.id}
-        AND user_id != ${community.created_by}
-        AND status IN ('inactive','cancelled')
-        AND cancelled_at IS NOT NULL
-      ORDER BY cancelled_at DESC
+      SELECT
+        cm.user_id,
+        COALESCE(p.display_name, p.full_name, 'Anonymous') AS display_name,
+        p.avatar_url,
+        cm.cancelled_at
+      FROM community_members cm
+      LEFT JOIN profiles p ON cm.user_id = p.id
+      WHERE cm.community_id = ${community.id}
+        AND cm.user_id != ${community.created_by}
+        AND cm.status IN ('inactive','cancelled')
+        AND cm.cancelled_at IS NOT NULL
+      ORDER BY cm.cancelled_at DESC
       LIMIT 10
     `,
     query<PostEvent>`
