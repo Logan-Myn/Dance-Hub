@@ -146,7 +146,7 @@ export default async function AdminDashboardPage({
         p.avatar_url,
         cm.joined_at
       FROM community_members cm
-      LEFT JOIN profiles p ON cm.user_id = p.id
+      LEFT JOIN profiles p ON cm.user_id = p.auth_user_id
       WHERE cm.community_id = ${community.id}
         AND cm.user_id != ${community.created_by}
       ORDER BY cm.joined_at DESC
@@ -159,7 +159,7 @@ export default async function AdminDashboardPage({
         p.avatar_url,
         cm.cancelled_at
       FROM community_members cm
-      LEFT JOIN profiles p ON cm.user_id = p.id
+      LEFT JOIN profiles p ON cm.user_id = p.auth_user_id
       WHERE cm.community_id = ${community.id}
         AND cm.user_id != ${community.created_by}
         AND cm.status IN ('inactive','cancelled')
