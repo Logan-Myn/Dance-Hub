@@ -106,7 +106,8 @@ export async function GET(request: NextRequest) {
               // Update member to inactive
               await sql`
                 UPDATE community_members
-                SET status = 'inactive'
+                SET status = 'inactive',
+                    cancelled_at = NOW()
                 WHERE id = ${member.id}
               `;
 
