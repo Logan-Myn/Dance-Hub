@@ -65,8 +65,8 @@ function ActivityRow({ event, communitySlug }: { event: ActivityEvent; community
     event.type === 'cancel' ? 'cancelled' :
     `posted${event.type === 'post' && event.categoryName ? ` in ${event.categoryName}` : ''}`;
 
-  return (
-    <li className="flex items-start gap-3">
+  const body = (
+    <>
       <Avatar className="h-9 w-9 flex-shrink-0">
         {event.avatarUrl ? <AvatarImage src={event.avatarUrl} alt={event.displayName} /> : null}
         <AvatarFallback className="bg-primary/10 text-primary text-xs">
@@ -82,6 +82,21 @@ function ActivityRow({ event, communitySlug }: { event: ActivityEvent; community
       <div className="hidden sm:flex h-9 w-9 rounded-full bg-muted/50 items-center justify-center flex-shrink-0">
         {icon}
       </div>
-    </li>
+    </>
   );
+
+  if (event.type === 'post') {
+    return (
+      <li>
+        <Link
+          href={`/${communitySlug}/threads/${event.threadId}`}
+          className="flex items-start gap-3 -mx-2 px-2 py-1 rounded-lg hover:bg-muted/40 transition-colors"
+        >
+          {body}
+        </Link>
+      </li>
+    );
+  }
+
+  return <li className="flex items-start gap-3">{body}</li>;
 }
