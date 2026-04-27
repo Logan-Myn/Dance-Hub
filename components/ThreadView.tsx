@@ -778,7 +778,7 @@ export default function ThreadView({
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   placeholder="Write a comment…"
-                  className="w-full min-h-[40px] max-h-32 resize-none py-2.5 pl-4 pr-12 rounded-full border border-border/40 bg-muted/40 focus:bg-card focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all duration-200 text-sm placeholder:text-muted-foreground/70"
+                  className="w-full min-h-[40px] max-h-32 resize-none py-2.5 pl-4 pr-12 rounded-full border border-border/40 bg-muted/40 focus:bg-card focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-transparent transition-colors duration-200 text-sm placeholder:text-muted-foreground/70"
                   rows={1}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey && comment.trim()) {
