@@ -873,8 +873,10 @@ export default function FeedClient({
     );
   }
 
-  // Only show main content for active members
-  if (!isMember) {
+  // Only show main content for active members. Creators and site admins
+  // also have access (server-side gate already let them through; mirror that
+  // here so they don't see a blank page).
+  if (!isMember && !isCreator && !initialIsAdmin) {
     return null;
   }
 

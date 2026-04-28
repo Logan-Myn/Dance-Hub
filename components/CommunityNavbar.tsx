@@ -8,12 +8,18 @@ interface CommunityNavbarProps {
   communitySlug: string;
   isMember: boolean;
   isOwner?: boolean;
+  isAdmin?: boolean;
   // Legacy: pages that still render their own chrome pass this. Active tab is
   // now derived from usePathname; remove once all pages are migrated.
   activePage?: string;
 }
 
-export default function CommunityNavbar({ communitySlug, isMember, isOwner = false }: CommunityNavbarProps) {
+export default function CommunityNavbar({
+  communitySlug,
+  isMember,
+  isOwner = false,
+  isAdmin = false,
+}: CommunityNavbarProps) {
   const pathname = usePathname();
 
   const navItems: Array<{ label: string; href: string; memberOnly?: boolean; ownerOnly?: boolean }> = [
@@ -27,9 +33,11 @@ export default function CommunityNavbar({ communitySlug, isMember, isOwner = fal
 
   const broadcastsEnabled = process.env.NEXT_PUBLIC_BROADCASTS_ENABLED === "true";
 
+  // Site admins (profiles.is_admin) get the same nav surface as owners and
+  // members for any community they visit, so they can actually moderate.
   const visibleItems = navItems.filter(item => {
-    if (item.memberOnly && !isMember) return false;
-    if (item.ownerOnly && !isOwner) return false;
+    if (item.memberOnly && !isMember && !isOwner && !isAdmin) return false;
+    if (item.ownerOnly && !isOwner && !isAdmin) return false;
     if (item.label === "Admin" && !broadcastsEnabled) return false;
     return true;
   });
