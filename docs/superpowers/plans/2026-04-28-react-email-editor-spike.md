@@ -33,10 +33,17 @@ build-after.txt                              # Captured `bun run build` output a
 
 ## Important environment notes
 
-- **PM2 ports already in use on this box:** 3001 and 3100. The spike's dev server therefore runs on **port 3200** (`PORT=3200 bun dev`).
-- **Auth on the image-upload endpoint:** `/api/upload/broadcast-image` calls `authorizeBroadcastAccess(communitySlug)`, which requires a logged-in user with admin access to a real community. The spike must therefore be tested while logged into a community you own. Use your own community's slug for `communitySlug`.
+- **PM2 ports already in use on this box:** 3001 (`dance-hub` prod) and 3100 (`dance-hub-preprod`). The spike's dev server therefore runs on **port 3200** (`PORT=3200 bun dev`).
+- **Run against PREPROD env, not prod.** Copy `/home/debian/apps/dance-hub/.env.preprod` into the worktree as `.env.local` at Task 1. Consequences:
+  - The spike talks to the **preprod Neon database** (no risk to prod data).
+  - Image uploads land in the preprod B2 bucket.
+  - Resend sends use the preprod `RESEND_API_KEY`.
+  - You log in with your **preprod** account (cookies are scoped per port, independent of prod sessions).
+  - `NEXT_PUBLIC_APP_URL` points to `https://preprod.dance-hub.io`. That's harmless for the spike — we don't generate absolute app URLs.
+- **Auth on the image-upload endpoint:** `/api/upload/broadcast-image` calls `authorizeBroadcastAccess(communitySlug)`, which requires a logged-in user with admin access to a real community. Use a **preprod** community slug you own for `COMMUNITY_SLUG` in `SpikeEditorClient.tsx`.
 - **Resend `from` address:** the verified domain is `dance-hub.io`. Use `notifications@dance-hub.io` (matches the default in `lib/resend/email-service.ts`).
-- **Env file:** copy `.env.local` from the main repo into the worktree at task 1. The worktree is throwaway, so any local edits are isolated.
+- **Test 2 (real broadcast clone, Task 10):** pulls a recent broadcast from preprod's `email_broadcasts`. If preprod is empty, send one quick broadcast through preprod's normal admin flow first so there's something to clone.
+- **Existing `dance-hub-preprod` worktree is off-limits.** It's served live by pm2 on port 3100. The spike worktree is brand-new and unrelated.
 
 ---
 
@@ -52,13 +59,13 @@ git -C /home/debian/apps/dance-hub worktree add -b spike/react-email-editor /hom
 
 Expected: `Preparing worktree (new branch 'spike/react-email-editor') ... HEAD is now at <sha>`.
 
-- [ ] **Step 2: Copy env file from main repo into the worktree**
+- [ ] **Step 2: Copy the PREPROD env file from main repo into the worktree as `.env.local`**
 
 ```bash
-cp /home/debian/apps/dance-hub/.env.local /home/debian/apps/dance-hub-spike-react-email-editor/.env.local
+cp /home/debian/apps/dance-hub/.env.preprod /home/debian/apps/dance-hub-spike-react-email-editor/.env.local
 ```
 
-Expected: no output. This is one-way (main → worktree). Do not copy anything back.
+Expected: no output. This is one-way (main → worktree). The spike now uses preprod credentials (preprod Neon, preprod Resend, preprod URLs). Do not copy anything back, and do not use `.env.local` from the main repo for this spike.
 
 - [ ] **Step 3: Install dependencies inside the worktree**
 
