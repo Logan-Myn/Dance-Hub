@@ -39,11 +39,6 @@ interface LessonCountRow {
   count: number;
 }
 
-/**
- * All courses with their parent community, plus aggregate chapter and
- * lesson counts. Three queries (courses + chapters + lessons) instead of
- * N to avoid the original page's per-course follow-up calls.
- */
 export async function getAllAdminCourses(): Promise<AdminCourseRow[]> {
   const courses = await query<CourseRow>`
     SELECT c.id, c.title, c.slug, c.description, c.image_url, c.is_public,

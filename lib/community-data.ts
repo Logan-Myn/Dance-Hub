@@ -33,23 +33,15 @@ export const getCommunityBySlug = cache(async (slug: string) => {
 
 // Mirrors the logic in /api/community/[slug]/check-subscription: active OR
 // in grace period after cancel. Returns false when user has no row.
-export const getCommunityMembership = cache(async (communityId: string, userId: string) => {
-  const member = await queryOne<{
-    status: string;
-    subscription_status: string | null;
-    current_period_end: string | null;
-  }>`
-    SELECT status, subscription_status, current_period_end
-    FROM community_members
-    WHERE community_id = ${communityId}
-      AND user_id = ${userId}
-  `;
-  if (!member) return false;
-  const periodEnd = member.current_period_end ? new Date(member.current_period_end) : null;
-  const inGracePeriod =
-    member.subscription_status === 'canceling' && periodEnd && periodEnd > new Date();
-  return member.status === 'active' || !!inGracePeriod;
-});
+// Thin wrapper over getMembershipStatus so the layout + page that hit this
+// pair share a single cached SQL query per request instead of two.
+export const getCommunityMembership = async (
+  communityId: string,
+  userId: string
+): Promise<boolean> => {
+  const status = await getMembershipStatus(communityId, userId);
+  return status.isMember;
+};
 
 // Shape matches the /api/community/[slug]/live-classes GET response.
 export type LiveClassStatus = 'scheduled' | 'live' | 'ended' | 'cancelled';

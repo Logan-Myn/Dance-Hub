@@ -39,11 +39,8 @@ interface CountRow {
   count: number;
 }
 
-/**
- * Slim snapshot for the inline detail panel on /admin/communities. Reuses
- * the per-community helpers from lib/admin-dashboard/* so the numbers shown
- * here match exactly what the community owner sees on their own admin page.
- */
+// Reuses lib/admin-dashboard/* helpers so the numbers shown here match
+// what the community owner sees on their own admin page.
 export async function getCommunitySnapshot(
   communityId: string,
   now: Date = new Date()

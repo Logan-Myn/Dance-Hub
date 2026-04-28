@@ -2,7 +2,7 @@ import { query } from '@/lib/db';
 import { stripe } from '@/lib/stripe';
 import type Stripe from 'stripe';
 import type { PlatformActivityEvent } from './types';
-import { getAllConnectedAccountIds } from './revenue';
+import { isAccountChargesEnabled } from './revenue';
 
 type SignupRow = {
   auth_user_id: string;
@@ -38,11 +38,7 @@ type StripeAccountRow = {
 const FEED_LOOKBACK_DAYS = 30;
 const PER_SOURCE_LIMIT = 20;
 
-/**
- * Concatenate event lists, sort newest-first by `at`, slice to `limit`.
- * Identical contract to mergeActivityEvents in lib/admin-dashboard, but
- * typed for PlatformActivityEvent so the two feeds stay independent.
- */
+// See also: lib/admin-dashboard/activity-feed.ts:mergeActivityEvents.
 export function mergePlatformEvents(
   lists: PlatformActivityEvent[][],
   limit: number
@@ -123,10 +119,6 @@ export async function getRecentAdminActions(): Promise<PlatformActivityEvent[]> 
   }));
 }
 
-/**
- * Failed charges across every connected account in the last 30 days.
- * autoPagingToArray walks pages so a busy account isn't truncated.
- */
 export async function getRecentFailedPaymentsAcrossPlatform(
   now: Date = new Date()
 ): Promise<PlatformActivityEvent[]> {
@@ -141,10 +133,7 @@ export async function getRecentFailedPaymentsAcrossPlatform(
 
   const perAccount = await Promise.all(
     accountRows.map(async (a) => {
-      try {
-        const account = await stripe.accounts.retrieve(a.stripe_account_id);
-        if (!account.charges_enabled) return [] as PlatformActivityEvent[];
-      } catch {
+      if (!(await isAccountChargesEnabled(a.stripe_account_id))) {
         return [] as PlatformActivityEvent[];
       }
 
@@ -167,10 +156,6 @@ export async function getRecentFailedPaymentsAcrossPlatform(
         }));
     })
   );
-
-  // Mark intentional unused — getAllConnectedAccountIds isn't reused here
-  // because we need slugs alongside ids; kept as exported helper for revenue.ts.
-  void getAllConnectedAccountIds;
 
   return perAccount.flat();
 }

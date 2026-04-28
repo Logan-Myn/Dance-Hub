@@ -14,25 +14,20 @@ export function PlatformDashboardActivityFeed({
 }: {
   events: PlatformActivityEvent[];
 }) {
-  if (events.length === 0) {
-    return (
-      <div className="bg-card rounded-2xl border border-border/50 p-6">
-        <h2 className="font-display text-lg font-semibold mb-4">Recent activity</h2>
-        <p className="text-sm text-muted-foreground text-center py-8">
-          No recent activity yet
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-card rounded-2xl border border-border/50 p-6">
       <h2 className="font-display text-lg font-semibold mb-4">Recent activity</h2>
-      <ul className="space-y-3">
-        {events.map((e, i) => (
-          <ActivityRow key={`${e.type}-${e.at.getTime()}-${i}`} event={e} />
-        ))}
-      </ul>
+      {events.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-8">
+          No recent activity yet
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {events.map((e, i) => (
+            <ActivityRow key={`${e.type}-${e.at.getTime()}-${i}`} event={e} />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

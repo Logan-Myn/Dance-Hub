@@ -4,7 +4,6 @@ import { Fragment, type ReactNode, useState } from 'react';
 import {
   type ColumnDef,
   type ExpandedState,
-  type Row,
   type SortingState,
   flexRender,
   getCoreRowModel,
@@ -40,7 +39,7 @@ interface AdminDataTableProps<T> {
   // When provided, rows become expandable: clicking a row toggles an inline
   // panel below it that renders this function's output. Adds a chevron
   // affordance on the leading cell. Pass undefined to keep rows static.
-  renderSubComponent?: (row: Row<T>) => ReactNode;
+  renderSubComponent?: (rowData: T) => ReactNode;
 }
 
 export function AdminDataTable<T>({
@@ -184,7 +183,7 @@ export function AdminDataTable<T>({
                           colSpan={row.getVisibleCells().length + 1}
                           className="p-0"
                         >
-                          {renderSubComponent!(row)}
+                          {renderSubComponent!(row.original)}
                         </TableCell>
                       </TableRow>
                     ) : null}

@@ -9,14 +9,8 @@ import { EditCommunityButton } from '@/components/admin/edit-community-button';
 import { DeleteCommunityButton } from '@/components/admin/delete-community-button';
 import { AdminDataTable } from './AdminDataTable';
 import { CommunityDetailPanel } from './CommunityDetailPanel';
+import { formatEur } from '@/lib/admin-platform/format';
 import type { AdminCommunityRow } from '@/lib/admin-platform/communities';
-
-const formatEur = (amount: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'EUR',
-    maximumFractionDigits: amount >= 1000 ? 0 : 2,
-  }).format(amount);
 
 export function CommunitiesTable({ communities }: { communities: AdminCommunityRow[] }) {
   const columns = useMemo<ColumnDef<AdminCommunityRow>[]>(
@@ -173,10 +167,10 @@ export function CommunitiesTable({ communities }: { communities: AdminCommunityR
       searchPlaceholder="Search communities by name…"
       pageSize={25}
       emptyMessage="No communities yet."
-      renderSubComponent={(row) => (
+      renderSubComponent={(community) => (
         <CommunityDetailPanel
-          communityId={row.original.id}
-          slug={row.original.slug}
+          communityId={community.id}
+          slug={community.slug}
         />
       )}
     />

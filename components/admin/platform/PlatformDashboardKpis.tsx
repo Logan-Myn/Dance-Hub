@@ -8,6 +8,7 @@ import {
   TrendingDown,
   Minus,
 } from 'lucide-react';
+import { formatEur } from '@/lib/admin-platform/format';
 import type { PlatformStats } from '@/lib/admin-platform/types';
 
 export function PlatformDashboardKpis({ stats }: { stats: PlatformStats }) {
@@ -39,7 +40,7 @@ export function PlatformDashboardKpis({ stats }: { stats: PlatformStats }) {
       />
       <Tile
         label="Communities revenue"
-        value={formatCurrency(stats.communitiesRevenueThisMonth)}
+        value={formatEur(stats.communitiesRevenueThisMonth)}
         sublineNumber={stats.communitiesRevenueGrowth}
         sublineSuffix="vs last month"
         icon={<DollarSign className="h-5 w-5 text-secondary" />}
@@ -47,7 +48,7 @@ export function PlatformDashboardKpis({ stats }: { stats: PlatformStats }) {
       />
       <Tile
         label="Platform revenue"
-        value={formatCurrency(stats.platformRevenueThisMonth)}
+        value={formatEur(stats.platformRevenueThisMonth)}
         sublineNumber={stats.platformRevenueGrowth}
         sublineSuffix="vs last month"
         icon={<Percent className="h-5 w-5 text-accent" />}
@@ -55,14 +56,6 @@ export function PlatformDashboardKpis({ stats }: { stats: PlatformStats }) {
       />
     </div>
   );
-}
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'EUR',
-    maximumFractionDigits: amount >= 1000 ? 0 : 2,
-  }).format(amount);
 }
 
 function Tile({
