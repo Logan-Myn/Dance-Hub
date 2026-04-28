@@ -40,7 +40,7 @@ export default function CommunityHeader({
   const remainingCount = Math.max(0, membersCount - 5);
 
   return (
-    <div className="relative mb-8">
+    <div id="community-header" className="relative mb-8">
       {/* Background with gradient overlay */}
       <div className="relative h-56 sm:h-64 md:h-72 overflow-hidden rounded-3xl">
         <Image
@@ -102,7 +102,7 @@ export default function CommunityHeader({
               </div>
 
               {/* Members count */}
-              <div className="flex items-center gap-1.5 text-white/90">
+              <div id="member-count" className="flex items-center gap-1.5 text-white/90">
                 <Users className="h-4 w-4" />
                 <span className="text-sm font-medium">{membersCount} members</span>
               </div>
@@ -111,6 +111,7 @@ export default function CommunityHeader({
             {/* Manage button */}
             {isCreator && (
               <Button
+                id="manage-community-button"
                 onClick={onManageClick}
                 variant="secondary"
                 className="bg-white/20 hover:bg-white/30 text-white border-white/30 backdrop-blur-sm"
