@@ -184,8 +184,8 @@ export default function FeedClient({
   communitySlug,
   initialCommunity,
   initialThreads,
-  isCreator: initialIsCreator,
-  isAdmin: initialIsAdmin,
+  isCreator,
+  isAdmin,
   isMember: initialIsMember,
   isPreRegistered: initialIsPreRegistered,
   memberStatus: initialMemberStatus,
@@ -235,7 +235,6 @@ export default function FeedClient({
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
   const [isMember, setIsMember] = useState(initialIsMember);
   const [isPreRegistered, setIsPreRegistered] = useState(initialIsPreRegistered);
-  const [isCreator, setIsCreator] = useState(initialIsCreator);
   const [error, setError] = useState<Error | null>(null);
   const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(
     null
@@ -876,7 +875,7 @@ export default function FeedClient({
   // Only show main content for active members. Creators and site admins
   // also have access (server-side gate already let them through; mirror that
   // here so they don't see a blank page).
-  if (!isMember && !isCreator && !initialIsAdmin) {
+  if (!isMember && !isCreator && !isAdmin) {
     return null;
   }
 

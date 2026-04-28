@@ -22,6 +22,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatEur } from '@/lib/admin-platform/format';
 import type { CommunitySnapshot } from '@/lib/admin-platform/community-snapshot';
 
 const fetcher = (url: string) =>
@@ -32,13 +33,6 @@ const fetcher = (url: string) =>
     }
     return res.json();
   });
-
-const formatEur = (amount: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'EUR',
-    maximumFractionDigits: amount >= 1000 ? 0 : 2,
-  }).format(amount);
 
 export function CommunityDetailPanel({
   communityId,

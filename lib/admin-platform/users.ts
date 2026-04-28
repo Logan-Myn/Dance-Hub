@@ -41,15 +41,8 @@ interface CommunityJoinedRow {
   slug: string;
 }
 
-/**
- * All users with their created and joined communities.
- *
- * Joins on `auth_user_id` (text), NOT `profiles.id` (uuid). The previous
- * implementation joined on profiles.id and silently returned empty arrays
- * for everyone — communities.created_by and community_members.user_id
- * both reference the better-auth user.id, which is exposed on profiles
- * as `auth_user_id`.
- */
+// communities.created_by and community_members.user_id are FKs to user.id
+// (text), not profiles.id (uuid). Join on auth_user_id, not the profile PK.
 export async function getAllAdminUsers(): Promise<AdminUserRow[]> {
   const profiles = await query<ProfileRow>`
     SELECT id, auth_user_id, email, full_name, display_name, avatar_url, is_admin, created_at

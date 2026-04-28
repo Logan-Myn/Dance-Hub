@@ -47,10 +47,6 @@ interface ReportCountRow {
   count: number;
 }
 
-/**
- * All threads across the platform with community, author, and report-count
- * info attached for the moderation table on /admin/threads.
- */
 export async function getAllAdminThreads(): Promise<AdminThreadRow[]> {
   const threads = await query<ThreadRow>`
     SELECT id, title, content, created_at, community_id, created_by,
@@ -111,10 +107,7 @@ export async function getAllAdminThreads(): Promise<AdminThreadRow[]> {
   });
 }
 
-/**
- * Threads are stored as TipTap-rendered HTML. The admin table needs a
- * plain-text preview, so strip tags and collapse whitespace.
- */
+// Threads are stored as TipTap-rendered HTML; the table needs plain text.
 function stripHtml(html: string): string {
   return html
     .replace(/<[^>]+>/g, ' ')

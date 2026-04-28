@@ -7,9 +7,6 @@ import type { PlatformGrowthPoint } from './types';
 
 type CountRow = { count: number };
 
-/**
- * Total profiles count + new this month + MoM growth.
- */
 export async function getUserStats(now: Date = new Date()) {
   const thisMonth = getCalendarMonthRange(now, 0);
   const lastMonth = getCalendarMonthRange(now, -1);
@@ -39,9 +36,6 @@ export async function getUserStats(now: Date = new Date()) {
   };
 }
 
-/**
- * Total communities count + new this month + MoM growth.
- */
 export async function getCommunityStats(now: Date = new Date()) {
   const thisMonth = getCalendarMonthRange(now, 0);
   const lastMonth = getCalendarMonthRange(now, -1);
@@ -71,10 +65,6 @@ export async function getCommunityStats(now: Date = new Date()) {
   };
 }
 
-/**
- * Cumulative users + communities, day-by-day, for the last 90 days.
- * Both series live on the same chart — see PlatformDashboardChart.
- */
 export async function getGrowthSeries90Days(
   now: Date = new Date()
 ): Promise<PlatformGrowthPoint[]> {

@@ -45,16 +45,6 @@ interface MemberCountRow {
   count: number;
 }
 
-/**
- * All communities with creator info, active member counts, and lifetime
- * Stripe revenue + platform fees per community.
- *
- * Fixes vs. the previous inline implementation:
- * - members_count filtered to status='active' (was including cancelled).
- * - Stripe data uses autoPagingToArray, no longer truncated at 100 entries.
- * - Platform fees come from applicationFees (the actual platform slice),
- *   not balance_transaction.fee (which is the Stripe processing fee).
- */
 export async function getAllAdminCommunities(): Promise<AdminCommunityRow[]> {
   const communities = await query<CommunityRow>`
     SELECT id, name, slug, description, image_url, created_at, created_by,
@@ -85,12 +75,8 @@ export async function getAllAdminCommunities(): Promise<AdminCommunityRow[]> {
   const creatorMap = new Map(creators.map((c) => [c.auth_user_id, c]));
   const memberCountMap = new Map(memberCounts.map((m) => [m.community_id, m.count]));
 
-  // Pull every application fee (with pagination) once and group them by
-  // the connected account they came from. One Stripe call instead of N.
   const platformFeesByAccount = await getPlatformFeesByAccount();
 
-  // Per-account succeeded charges. These DO need one call per account
-  // because charges live on the connected accounts, not the platform.
   const revenueByAccount = await getRevenueByAccount(
     communities
       .map((c) => c.stripe_account_id)
