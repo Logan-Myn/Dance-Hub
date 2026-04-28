@@ -1,11 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, type ReactNode, useState } from 'react';
 import {
   type ColumnDef,
+  type ExpandedState,
+  type Row,
   type SortingState,
   flexRender,
   getCoreRowModel,
+  getExpandedRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
@@ -21,7 +24,7 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Search, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AdminDataTableProps<T> {
@@ -34,6 +37,10 @@ interface AdminDataTableProps<T> {
   pageSize?: number;
   // Empty-state message when no rows match the current filter.
   emptyMessage?: string;
+  // When provided, rows become expandable: clicking a row toggles an inline
+  // panel below it that renders this function's output. Adds a chevron
+  // affordance on the leading cell. Pass undefined to keep rows static.
+  renderSubComponent?: (row: Row<T>) => ReactNode;
 }
 
 export function AdminDataTable<T>({
@@ -42,21 +49,31 @@ export function AdminDataTable<T>({
   searchPlaceholder,
   pageSize,
   emptyMessage = 'No results.',
+  renderSubComponent,
 }: AdminDataTableProps<T>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
+  const [expanded, setExpanded] = useState<ExpandedState>({});
 
   const usePagination = typeof pageSize === 'number' && pageSize > 0;
+  const expandable = Boolean(renderSubComponent);
 
   const table = useReactTable({
     data,
     columns,
-    state: { sorting, globalFilter },
+    state: { sorting, globalFilter, expanded },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    onExpandedChange: setExpanded,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    ...(expandable
+      ? {
+          getExpandedRowModel: getExpandedRowModel(),
+          getRowCanExpand: () => true,
+        }
+      : {}),
     ...(usePagination
       ? {
           getPaginationRowModel: getPaginationRowModel(),
@@ -84,6 +101,7 @@ export function AdminDataTable<T>({
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id} className="border-border/50 hover:bg-transparent">
+                {expandable ? <TableHead className="w-8" /> : null}
                 {hg.headers.map((header) => {
                   const canSort = header.column.getCanSort();
                   const sortState = header.column.getIsSorted();
@@ -118,21 +136,67 @@ export function AdminDataTable<T>({
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  className="border-border/50 hover:bg-muted/40 transition-colors"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              table.getRowModel().rows.map((row) => {
+                const isExpanded = row.getIsExpanded();
+                return (
+                  <Fragment key={row.id}>
+                    <TableRow
+                      className={cn(
+                        'border-border/50 transition-colors',
+                        expandable && 'cursor-pointer hover:bg-muted/40',
+                        !expandable && 'hover:bg-muted/40',
+                        isExpanded && 'bg-muted/30'
+                      )}
+                      onClick={
+                        expandable
+                          ? (e) => {
+                              // Don't toggle when clicking inside an interactive
+                              // element (link, button, dropdown, etc.) inside
+                              // the row.
+                              const target = e.target as HTMLElement;
+                              if (target.closest('a, button, [role="menuitem"], [role="dialog"]')) {
+                                return;
+                              }
+                              row.toggleExpanded();
+                            }
+                          : undefined
+                      }
+                    >
+                      {expandable ? (
+                        <TableCell className="w-8 p-0 pl-3">
+                          <ChevronDown
+                            className={cn(
+                              'h-4 w-4 text-muted-foreground transition-transform',
+                              isExpanded && 'rotate-180'
+                            )}
+                          />
+                        </TableCell>
+                      ) : null}
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                    {expandable && isExpanded ? (
+                      <TableRow className="border-border/50 bg-muted/10 hover:bg-muted/10">
+                        <TableCell
+                          colSpan={row.getVisibleCells().length + 1}
+                          className="p-0"
+                        >
+                          {renderSubComponent!(row)}
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </Fragment>
+                );
+              })
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
+                <TableCell
+                  colSpan={columns.length + (expandable ? 1 : 0)}
+                  className="h-24 text-center text-muted-foreground"
+                >
                   {emptyMessage}
                 </TableCell>
               </TableRow>

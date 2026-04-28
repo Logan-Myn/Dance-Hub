@@ -8,6 +8,7 @@ import { Users, AlertTriangle } from 'lucide-react';
 import { EditCommunityButton } from '@/components/admin/edit-community-button';
 import { DeleteCommunityButton } from '@/components/admin/delete-community-button';
 import { AdminDataTable } from './AdminDataTable';
+import { CommunityDetailPanel } from './CommunityDetailPanel';
 import type { AdminCommunityRow } from '@/lib/admin-platform/communities';
 
 const formatEur = (amount: number) =>
@@ -172,6 +173,12 @@ export function CommunitiesTable({ communities }: { communities: AdminCommunityR
       searchPlaceholder="Search communities by name…"
       pageSize={25}
       emptyMessage="No communities yet."
+      renderSubComponent={(row) => (
+        <CommunityDetailPanel
+          communityId={row.original.id}
+          slug={row.original.slug}
+        />
+      )}
     />
   );
 }
