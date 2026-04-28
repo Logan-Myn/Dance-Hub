@@ -37,8 +37,6 @@ import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { Input } from "@/components/ui/input";
 import { useNextStep } from "nextstepjs";
-import { setStepChangeCallback, clearStepChangeCallback } from "@/components/NextStepWrapper";
-import { tourSteps } from "@/lib/tourSteps";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 
 interface CustomLink {
@@ -287,17 +285,20 @@ export default function FeedClient({
   // state. Existing fetchData flow stays for now to refresh the data.
   const [membershipChecked, setMembershipChecked] = useState(true);
 
-  const { startNextStep, currentTour, isNextStepVisible } = useNextStep();
+  const { startNextStep, currentTour } = useNextStep();
 
-  // Initialize the onboarding tour for creators.
-  // Guard with a ref so we only schedule the timer once per mount —
-  // useNextStep()'s startNextStep isn't a stable reference, so without the
-  // ref the effect re-runs on every render and its cleanup cancels the
-  // setTimeout before the 1500ms delay elapses.
+  // Initialize the onboarding tour for creators. Step routing and completion
+  // tracking live in NextStepWrapper so they survive cross-page navigation
+  // (FeedClient unmounts as soon as the tour pushes the user to /admin/*).
+  // Guard with a ref so we only schedule the timer once per mount, and
+  // bail if the tour is already running — otherwise FeedClient remounting
+  // (e.g. when a tour step routes back to /) would restart the tour from
+  // step 0 mid-flight.
   const tourScheduledRef = useRef(false);
   useEffect(() => {
     if (!isCreator) return;
     if (tourScheduledRef.current) return;
+    if (currentTour === 'onboarding') return;
 
     const tourKey = `onboarding-tour-completed-${communitySlug}`;
     if (localStorage.getItem(tourKey)) return;
@@ -306,82 +307,7 @@ export default function FeedClient({
     setTimeout(() => {
       startNextStep('onboarding');
     }, 1500);
-  }, [isCreator, communitySlug, startNextStep]);
-
-  // Track when tour is completed or skipped.
-  // tourWasActive guards against a mount-time race: without it, this effect
-  // runs on initial render (when currentTour is already null and
-  // isNextStepVisible is already false), marks the tour completed, and writes
-  // to localStorage BEFORE the tour-init effect's setTimeout can fire —
-  // preventing the tour from ever starting.
-  const tourWasActive = useRef(false);
-  useEffect(() => {
-    if (currentTour === 'onboarding') {
-      tourWasActive.current = true;
-    }
-    if (isCreator && !isNextStepVisible && currentTour === null && tourWasActive.current) {
-      // Tour was active during this session and has now ended.
-      const tourKey = `onboarding-tour-completed-${communitySlug}`;
-      if (!localStorage.getItem(tourKey)) {
-        localStorage.setItem(tourKey, 'true');
-        toast.success('Welcome to your community! 🎉');
-      }
-    }
-  }, [isNextStepVisible, currentTour, isCreator, communitySlug]);
-
-  // Modal automation for tour steps using step change callback
-  useEffect(() => {
-    if (isCreator) {
-      const handleStepChange = (stepIndex: number, tourName: string) => {
-        if (tourName === 'onboarding') {
-          // Get the step object from the tour configuration
-          const onboardingTour = tourSteps.find(tour => tour.tour === 'onboarding');
-          if (onboardingTour && onboardingTour.steps[stepIndex]) {
-            const currentStep = onboardingTour.steps[stepIndex];
-            const selector = currentStep.selector;
-            
-            console.log('Tour step changed:', stepIndex, 'Selector:', selector);
-            
-            if (selector) {
-              const selectorToRoute: Record<string, string> = {
-                '#settings-general': `/${communitySlug}/admin/general`,
-                '#settings-subscriptions': `/${communitySlug}/admin/subscriptions`,
-                '#settings-thread_categories': `/${communitySlug}/admin/thread-categories`,
-              };
-
-              if (selector in selectorToRoute) {
-                router.push(selectorToRoute[selector]);
-
-                // Wait for the new page to render before letting the tour highlight the target.
-                const waitAndReposition = () => {
-                  setTimeout(() => {
-                    const target = document.querySelector(selector);
-                    if (target && (target as HTMLElement).offsetParent !== null) {
-                      window.dispatchEvent(new Event('resize'));
-                      requestAnimationFrame(() => window.dispatchEvent(new Event('scroll')));
-                    } else {
-                      setTimeout(waitAndReposition, 100);
-                    }
-                  }, 150);
-                };
-                waitAndReposition();
-              } else if (selector === '#member-count') {
-                router.push(`/${communitySlug}`);
-              } else if (selector === '#manage-community-button') {
-                router.push(`/${communitySlug}`);
-              }
-            }
-          }
-        }
-      };
-
-      setStepChangeCallback(handleStepChange);
-      
-      return () => {
-        clearStepChangeCallback();
-      };
-    }
-  }, [isCreator]);
+  }, [isCreator, communitySlug, startNextStep, currentTour]);
 
   // Update community state when SWR data changes
   useEffect(() => {

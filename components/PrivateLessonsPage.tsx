@@ -122,6 +122,7 @@ export default function PrivateLessonsPage({
         {isCreator && (
           <div className="flex gap-2 flex-shrink-0">
             <Button
+              id="manage-private-lessons"
               variant="outline"
               onClick={() => setIsManagementModalOpen(true)}
               className="rounded-xl border-border/50 hover:bg-muted hover:border-primary/30 transition-all duration-200"
