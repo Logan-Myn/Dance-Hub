@@ -25,6 +25,7 @@ type MobileNavProps = {
   communityImageUrl: string | null;
   isMember: boolean;
   isOwner: boolean;
+  isAdmin?: boolean;
   user: { id: string; email?: string | null } | null;
   profile: { full_name?: string | null; avatar_url?: string | null } | null;
 };
@@ -43,6 +44,7 @@ export default function MobileNav({
   communityImageUrl,
   isMember,
   isOwner,
+  isAdmin = false,
   user,
   profile,
 }: MobileNavProps) {
@@ -52,7 +54,10 @@ export default function MobileNav({
   const [moreOpen, setMoreOpen] = useState(false);
 
   const broadcastsEnabled = process.env.NEXT_PUBLIC_BROADCASTS_ENABLED === 'true';
-  const showAdmin = isOwner && broadcastsEnabled;
+  // Site admins (profiles.is_admin) get full chrome on every community —
+  // same tabs as a member/owner — so they can actually moderate.
+  const hasFullAccess = isMember || isOwner || isAdmin;
+  const showAdmin = (isOwner || isAdmin) && broadcastsEnabled;
 
   const rootHref = `/${communitySlug}`;
   const allTabs: Tab[] = [
@@ -61,7 +66,7 @@ export default function MobileNav({
     { key: 'lessons', label: 'Lessons', href: `/${communitySlug}/private-lessons`, icon: GraduationCap },
     { key: 'calendar', label: 'Calendar', href: `/${communitySlug}/calendar`, icon: Calendar, memberOnly: true },
   ];
-  const tabs = allTabs.filter((t) => !t.memberOnly || isMember);
+  const tabs = allTabs.filter((t) => !t.memberOnly || hasFullAccess);
 
   const isActive = (href: string) =>
     href === rootHref ? pathname === rootHref : pathname?.startsWith(href) ?? false;

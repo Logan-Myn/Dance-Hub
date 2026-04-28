@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth-session';
 import {
   getCommunityBySlug,
   getLiveClassesForWeek,
+  getUserIsAdmin,
 } from '@/lib/community-data';
 import WeekCalendar from '@/components/WeekCalendar';
 
@@ -20,6 +21,7 @@ export default async function CommunityCalendarPage({
 
   const session = await getSession();
   const isCreator = !!session && community.created_by === session.user.id;
+  const isAdmin = !!session && (await getUserIsAdmin(session.user.id));
 
   const now = new Date();
   const weekStart = startOfWeek(now, { weekStartsOn: 0 });
@@ -44,7 +46,7 @@ export default async function CommunityCalendarPage({
       <WeekCalendar
         communityId={community.id}
         communitySlug={params.communitySlug}
-        isTeacher={isCreator}
+        isTeacher={isCreator || isAdmin}
         initialClasses={initialClasses}
       />
     </div>

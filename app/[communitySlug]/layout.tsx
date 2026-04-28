@@ -4,6 +4,7 @@ import {
   getCommunityBySlug,
   getCommunityMembership,
   getProfileForUser,
+  getUserIsAdmin,
 } from '@/lib/community-data';
 import Navbar from '@/app/components/Navbar';
 import CommunityNavbar from '@/components/CommunityNavbar';
@@ -24,9 +25,10 @@ export default async function CommunityLayout({
 
   const session = await getSession();
   const isOwner = !!session && community.created_by === session.user.id;
-  const [isMember, navProfile] = await Promise.all([
+  const [isMember, navProfile, isAdmin] = await Promise.all([
     session ? getCommunityMembership(community.id, session.user.id) : Promise.resolve(false),
     session ? getProfileForUser(session.user.id) : Promise.resolve(null),
+    session ? getUserIsAdmin(session.user.id) : Promise.resolve(false),
   ]);
 
   return (
@@ -41,6 +43,7 @@ export default async function CommunityLayout({
           communitySlug={params.communitySlug}
           isMember={isMember}
           isOwner={isOwner}
+          isAdmin={isAdmin}
         />
       </div>
 
@@ -51,6 +54,7 @@ export default async function CommunityLayout({
         communityImageUrl={community.image_url}
         isMember={isMember}
         isOwner={isOwner}
+        isAdmin={isAdmin}
         user={session?.user ?? null}
         profile={navProfile}
       />

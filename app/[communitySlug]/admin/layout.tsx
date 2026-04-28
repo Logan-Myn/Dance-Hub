@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth-session';
 import { queryOne } from '@/lib/db';
+import { getUserIsAdmin } from '@/lib/community-data';
 import { AdminNav } from '@/components/admin/AdminNav';
 
 export default async function AdminLayout({
@@ -17,7 +18,12 @@ export default async function AdminLayout({
     SELECT id, created_by, name FROM communities WHERE slug = ${params.communitySlug}
   `;
   if (!community) redirect(`/${params.communitySlug}`);
-  if (community.created_by !== session.user.id) redirect(`/${params.communitySlug}`);
+
+  // The community owner OR a site-wide admin (profiles.is_admin) can manage.
+  // Anything else bounces to the community feed.
+  const isOwner = community.created_by === session.user.id;
+  const canManage = isOwner || (await getUserIsAdmin(session.user.id));
+  if (!canManage) redirect(`/${params.communitySlug}`);
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10 lg:py-14 font-sans pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-14">
