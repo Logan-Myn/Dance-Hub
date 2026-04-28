@@ -29,7 +29,7 @@ export const tourSteps: Tour[] = [
       {
         icon: '🏷️',
         title: 'Organize with Categories',
-        content: 'Use thread categories to help organize different types of discussions — from technique tips to event announcements. We will show you how to create categories in a moment.',
+        content: 'Use thread categories to help organize different types of discussions, like technique tips or event announcements. We\'ll show you how to create them in a moment.',
         selector: '#thread-categories',
         side: 'bottom',
         showControls: true,
@@ -139,7 +139,7 @@ export const tourSteps: Tour[] = [
       {
         icon: '🏷️',
         title: 'Thread Categories',
-        content: 'Organize your community discussions with custom thread categories. You can create categories for different dance styles, events, or topics — they will then appear as filter pills above your feed.',
+        content: 'Organize your community discussions with custom thread categories. Create as many as you need (techniques, events, music, anything that fits your community). They appear as filter pills above your feed.',
         selector: '#settings-thread_categories',
         side: 'left',
         showControls: true,

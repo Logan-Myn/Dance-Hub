@@ -285,19 +285,20 @@ export default function FeedClient({
   // state. Existing fetchData flow stays for now to refresh the data.
   const [membershipChecked, setMembershipChecked] = useState(true);
 
-  const { startNextStep } = useNextStep();
+  const { startNextStep, currentTour } = useNextStep();
 
   // Initialize the onboarding tour for creators. Step routing and completion
   // tracking live in NextStepWrapper so they survive cross-page navigation
   // (FeedClient unmounts as soon as the tour pushes the user to /admin/*).
-  // Guard with a ref so we only schedule the timer once per mount —
-  // useNextStep()'s startNextStep isn't a stable reference, so without the
-  // ref the effect re-runs on every render and its cleanup cancels the
-  // setTimeout before the 1500ms delay elapses.
+  // Guard with a ref so we only schedule the timer once per mount, and
+  // bail if the tour is already running — otherwise FeedClient remounting
+  // (e.g. when a tour step routes back to /) would restart the tour from
+  // step 0 mid-flight.
   const tourScheduledRef = useRef(false);
   useEffect(() => {
     if (!isCreator) return;
     if (tourScheduledRef.current) return;
+    if (currentTour === 'onboarding') return;
 
     const tourKey = `onboarding-tour-completed-${communitySlug}`;
     if (localStorage.getItem(tourKey)) return;
@@ -306,7 +307,7 @@ export default function FeedClient({
     setTimeout(() => {
       startNextStep('onboarding');
     }, 1500);
-  }, [isCreator, communitySlug, startNextStep]);
+  }, [isCreator, communitySlug, startNextStep, currentTour]);
 
   // Update community state when SWR data changes
   useEffect(() => {
