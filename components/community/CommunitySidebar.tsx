@@ -183,61 +183,73 @@ export default function CommunitySidebar({
           <div className="space-y-3">
             {upcomingClasses.map((cls) => {
               const isLive = cls.status === "live" || cls.is_currently_active;
-              const isStartingSoon = cls.is_starting_soon;
+              const isStartingSoon = cls.is_starting_soon && !isLive;
+              const href =
+                isLive || isStartingSoon
+                  ? `/live-class/${cls.id}`
+                  : `/${communitySlug}/calendar`;
 
               return (
-                <div
+                <Link
                   key={cls.id}
+                  href={href}
                   className={cn(
-                    "rounded-xl p-3 border transition-colors",
+                    "block rounded-xl p-3 border transition-colors",
                     isLive
-                      ? "border-red-500/30 bg-red-500/5"
-                      : "border-border/50 bg-muted/30"
+                      ? "border-red-600 bg-red-500 text-white hover:bg-red-600"
+                      : isStartingSoon
+                      ? "border-amber-600 bg-amber-500 text-white hover:bg-amber-600"
+                      : "border-border/50 bg-muted/30 hover:bg-muted/50"
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground truncate">
+                      <p
+                        className={cn(
+                          "text-sm font-medium truncate",
+                          isLive || isStartingSoon
+                            ? "text-white"
+                            : "text-foreground"
+                        )}
+                      >
                         {cls.title}
                       </p>
                     </div>
                     {isLive && (
-                      <span className="flex items-center gap-1 text-xs font-medium text-red-500 flex-shrink-0">
+                      <span className="flex items-center gap-1 text-xs font-semibold text-white flex-shrink-0">
                         <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
                         </span>
                         LIVE
                       </span>
                     )}
+                    {isStartingSoon && (
+                      <span className="text-xs font-semibold text-white flex-shrink-0">
+                        SOON
+                      </span>
+                    )}
                   </div>
 
-                  <p className="text-xs text-muted-foreground mt-1.5">
+                  <p
+                    className={cn(
+                      "text-xs mt-1.5",
+                      isLive || isStartingSoon
+                        ? "text-white/90"
+                        : "text-muted-foreground"
+                    )}
+                  >
                     {isLive
                       ? "Happening now"
                       : formatClassTime(cls.scheduled_start_time)}
                   </p>
 
-                  {isLive || isStartingSoon ? (
-                    <Link href={`/${communitySlug}/calendar`}>
-                      <Button
-                        size="sm"
-                        className={cn(
-                          "w-full mt-2 h-7 text-xs",
-                          isLive
-                            ? "bg-purple-600 hover:bg-purple-700 text-white"
-                            : "bg-primary hover:bg-primary/90"
-                        )}
-                      >
-                        {isLive ? "Join Now" : "Join"}
-                      </Button>
-                    </Link>
-                  ) : (
+                  {!isLive && !isStartingSoon && (
                     <p className="text-xs text-muted-foreground/70 mt-2">
                       {getTimeUntil(cls.scheduled_start_time)}
                     </p>
                   )}
-                </div>
+                </Link>
               );
             })}
           </div>
