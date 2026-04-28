@@ -40,11 +40,11 @@ export async function GET(
       WHERE community_id = ${community.id}
         AND (status = 'scheduled' OR status = 'live')
         AND scheduled_start_time >= NOW() - INTERVAL '2 hours'
-        AND scheduled_start_time <= NOW() + INTERVAL '24 hours'
+        AND scheduled_start_time <= NOW() + INTERVAL '14 days'
       ORDER BY
         CASE WHEN status = 'live' THEN 0 ELSE 1 END,
         scheduled_start_time ASC
-      LIMIT 3
+      LIMIT 5
     `;
 
     return NextResponse.json(classes);
