@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Footer } from "@/components/landing/footer";
@@ -8,9 +7,6 @@ import {
   Users,
   BookOpenText,
   CircleDollarSign,
-  LayoutList,
-  PlayCircle,
-  Wallet,
   Check,
   ArrowRight,
   Sparkles,
@@ -65,13 +61,6 @@ const benefits = [
 export default function HomePageClient() {
   const { user } = useAuth();
   const { showAuthModal } = useAuthModal();
-  const [scrollY, setScrollY] = useState(0);
-
-  useEffect(() => {
-    const handleScroll = () => setScrollY(window.scrollY);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
 
   const handleTeachingClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (!user) {
