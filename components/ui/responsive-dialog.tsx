@@ -28,9 +28,16 @@ type CommonProps = {
   defaultOpen?: boolean;
 };
 
+const ResponsiveDialogContext = React.createContext(false);
+
 export function ResponsiveDialog(props: CommonProps) {
   const isMobile = useIsMobile();
-  return isMobile ? <Sheet {...props} /> : <Dialog {...props} />;
+  const Wrapper = isMobile ? Sheet : Dialog;
+  return (
+    <ResponsiveDialogContext.Provider value={isMobile}>
+      <Wrapper {...props} />
+    </ResponsiveDialogContext.Provider>
+  );
 }
 
 export function ResponsiveDialogTrigger({
@@ -40,7 +47,7 @@ export function ResponsiveDialogTrigger({
   children: React.ReactNode;
   asChild?: boolean;
 }) {
-  const isMobile = useIsMobile();
+  const isMobile = React.useContext(ResponsiveDialogContext);
   return isMobile ? (
     <SheetTrigger asChild={asChild}>{children}</SheetTrigger>
   ) : (
@@ -55,7 +62,7 @@ export function ResponsiveDialogContent({
   children: React.ReactNode;
   className?: string;
 }) {
-  const isMobile = useIsMobile();
+  const isMobile = React.useContext(ResponsiveDialogContext);
   if (isMobile) {
     return (
       <SheetContent
@@ -70,22 +77,22 @@ export function ResponsiveDialogContent({
 }
 
 export function ResponsiveDialogHeader({ children }: { children: React.ReactNode }) {
-  const isMobile = useIsMobile();
+  const isMobile = React.useContext(ResponsiveDialogContext);
   return isMobile ? <SheetHeader>{children}</SheetHeader> : <DialogHeader>{children}</DialogHeader>;
 }
 
 export function ResponsiveDialogFooter({ children }: { children: React.ReactNode }) {
-  const isMobile = useIsMobile();
+  const isMobile = React.useContext(ResponsiveDialogContext);
   return isMobile ? <SheetFooter>{children}</SheetFooter> : <DialogFooter>{children}</DialogFooter>;
 }
 
 export function ResponsiveDialogTitle({ children }: { children: React.ReactNode }) {
-  const isMobile = useIsMobile();
+  const isMobile = React.useContext(ResponsiveDialogContext);
   return isMobile ? <SheetTitle>{children}</SheetTitle> : <DialogTitle>{children}</DialogTitle>;
 }
 
 export function ResponsiveDialogDescription({ children }: { children: React.ReactNode }) {
-  const isMobile = useIsMobile();
+  const isMobile = React.useContext(ResponsiveDialogContext);
   return isMobile ? (
     <SheetDescription>{children}</SheetDescription>
   ) : (
