@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { loadStripe, StripeElementsOptions } from "@stripe/stripe-js";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "react-hot-toast";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -134,18 +134,22 @@ export default function PaymentModal({
   price,
   onSuccess 
 }: PaymentModalProps) {
-  if (!clientSecret || !stripeAccountId) return null;
-
-  const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!, {
-    stripeAccount: stripeAccountId,
-  });
+  const stripePromise = useMemo(
+    () =>
+      stripeAccountId
+        ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!, {
+            stripeAccount: stripeAccountId,
+          })
+        : null,
+    [stripeAccountId],
+  );
 
   const options: StripeElementsOptions = {
-    clientSecret,
-    appearance: {
-      theme: 'stripe' as const,
-    },
+    clientSecret: clientSecret ?? '',
+    appearance: { theme: 'stripe' as const },
   };
+
+  if (!clientSecret || !stripeAccountId || !stripePromise) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
