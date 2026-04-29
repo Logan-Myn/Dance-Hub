@@ -3,7 +3,7 @@
 import { Section } from "@/types/page-builder";
 import { Button } from "@/components/ui/button";
 import { GripVertical, Trash, Settings } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
@@ -20,50 +20,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAuth } from "@/contexts/AuthContext";
-import { useAuthModal } from "@/contexts/AuthModalContext";
-import PaymentModal from "@/components/PaymentModal";
-import { PreRegistrationPaymentModal } from "@/components/PreRegistrationPaymentModal";
-import toast from "react-hot-toast";
-import { useRouter } from "next/navigation";
+import { useJoinCommunity, type JoinCommunityData } from "@/hooks/useJoinCommunity";
+import {
+  SECTION_COLOR_PALETTE,
+  getJoinButtonLabel,
+  normalizeExternalUrl,
+} from "@/lib/page-builder";
 
 interface CTASectionProps {
   section: Section;
   onUpdate: (content: Section['content']) => void;
   onDelete: () => void;
   isEditing?: boolean;
-  communityData?: {
-    id: string;
-    slug: string;
-    name: string;
-    membershipEnabled?: boolean;
-    membershipPrice?: number;
-    stripeAccountId?: string | null;
-    isMember?: boolean;
-    status?: 'active' | 'pre_registration' | 'inactive';
-    opening_date?: string | null;
-  };
+  communityData?: JoinCommunityData;
 }
 
-export default function CTASection({ 
-  section, 
-  onUpdate, 
+export default function CTASection({
+  section,
+  onUpdate,
   onDelete,
   isEditing = false,
   communityData
 }: CTASectionProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
-  const [isPreRegModalOpen, setIsPreRegModalOpen] = useState(false);
-  const [preRegClientSecret, setPreRegClientSecret] = useState<string | null>(null);
-  const [preRegStripeAccountId, setPreRegStripeAccountId] = useState<string | null>(null);
-  const [preRegOpeningDate, setPreRegOpeningDate] = useState<string | null>(null);
-  const [isJoining, setIsJoining] = useState(false);
-  const { user: currentUser } = useAuth();
-  const { showAuthModal } = useAuthModal();
-  const router = useRouter();
+  const { join, isJoining, modals } = useJoinCommunity(communityData);
 
   const {
     attributes,
@@ -80,7 +61,7 @@ export default function CTASection({
   };
 
   const handleContentEdit = (
-    e: React.FormEvent<HTMLDivElement>, 
+    e: React.FormEvent<HTMLDivElement>,
     field: 'title' | 'subtitle'
   ) => {
     const content = e.currentTarget.textContent || '';
@@ -90,118 +71,14 @@ export default function CTASection({
     });
   };
 
-  const handleJoinCommunity = async () => {
-    if (!currentUser) {
-      showAuthModal("signup");
-      return;
-    }
-
-    if (!communityData) {
-      toast.error("Community data not available");
-      return;
-    }
-
-    setIsJoining(true);
-
-    try {
-      // Check if community is in pre-registration mode
-      if (communityData.status === 'pre_registration') {
-        const response = await fetch(
-          `/api/community/${communityData.slug}/join-pre-registration`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              userId: currentUser.id,
-              email: currentUser.email,
-            }),
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error("Failed to initiate pre-registration");
-        }
-
-        const { clientSecret, stripeAccountId, openingDate } = await response.json();
-        setPreRegClientSecret(clientSecret);
-        setPreRegStripeAccountId(stripeAccountId);
-        setPreRegOpeningDate(openingDate);
-        setIsPreRegModalOpen(true);
-      } else if (
-        communityData.membershipEnabled &&
-        communityData.membershipPrice &&
-        communityData.membershipPrice > 0
-      ) {
-        // Handle paid membership
-        const response = await fetch(
-          `/api/community/${communityData.slug}/join-paid`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              userId: currentUser.id,
-              email: currentUser.email,
-            }),
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error("Failed to create payment");
-        }
-
-        const { clientSecret, stripeAccountId } = await response.json();
-        setPaymentClientSecret(clientSecret);
-        setShowPaymentModal(true);
-      } else {
-        // Handle free membership
-        const response = await fetch(`/api/community/${communityData.slug}/join`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ userId: currentUser.id }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to join community");
-        }
-
-        // Refresh the page to update all UI states
-        window.location.reload();
-        toast.success("Successfully joined the community!");
-      }
-    } catch (error) {
-      console.error("Error joining community:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to join community"
-      );
-    } finally {
-      setIsJoining(false);
-    }
-  };
-
   const handleButtonClick = () => {
     if (section.content.buttonType === 'join') {
-      handleJoinCommunity();
+      join();
     }
   };
 
-  // Initialize buttonType and default values if not set
-  useEffect(() => {
-    if (!section.content.buttonType) {
-      onUpdate({
-        ...section.content,
-        buttonType: 'link',
-        ctaText: 'Click here',
-        ctaLink: ''
-      });
-    }
-  }, []);
+  const showColoredBg = section.content.backgroundMode !== 'none';
+  const buttonType = section.content.buttonType || 'link';
 
   return (
     <div
@@ -212,17 +89,12 @@ export default function CTASection({
         isDragging ? "opacity-50" : "opacity-100"
       )}
       onMouseEnter={() => {
-        if (!isSettingsOpen) {
-          setIsHovered(true);
-        }
+        if (!isSettingsOpen) setIsHovered(true);
       }}
       onMouseLeave={() => {
-        if (!isSettingsOpen) {
-          setIsHovered(false);
-        }
+        if (!isSettingsOpen) setIsHovered(false);
       }}
     >
-      {/* Editor Toolbar - Fluid Movement */}
       {isEditing && (isHovered || isSettingsOpen) && (
         <div className="absolute top-6 right-6 p-2 flex items-center gap-1 bg-white/95 backdrop-blur-sm rounded-xl border border-border/50 shadow-lg z-20">
           <Button
@@ -264,10 +136,7 @@ export default function CTASection({
                   <Select
                     value={section.content.backgroundMode || 'background'}
                     onValueChange={(value: 'background' | 'overlay' | 'none') => {
-                      onUpdate({
-                        ...section.content,
-                        backgroundMode: value,
-                      });
+                      onUpdate({ ...section.content, backgroundMode: value });
                     }}
                   >
                     <SelectTrigger className="rounded-xl border-border/50">
@@ -281,20 +150,11 @@ export default function CTASection({
                   </Select>
                 </div>
 
-                {section.content.backgroundMode !== 'none' && (
+                {showColoredBg && (
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Color</label>
                     <div className="flex flex-wrap gap-2">
-                      {[
-                        { color: '#000000', label: 'Black', bg: 'bg-black' },
-                        { color: '#7c3aed', label: 'Purple', bg: 'bg-violet-600' },
-                        { color: '#2563eb', label: 'Blue', bg: 'bg-blue-600' },
-                        { color: '#059669', label: 'Green', bg: 'bg-emerald-600' },
-                        { color: '#dc2626', label: 'Red', bg: 'bg-red-600' },
-                        { color: '#d97706', label: 'Orange', bg: 'bg-amber-600' },
-                        { color: '#0891b2', label: 'Cyan', bg: 'bg-cyan-600' },
-                        { color: '#ec4899', label: 'Pink', bg: 'bg-pink-500' },
-                      ].map((option) => (
+                      {SECTION_COLOR_PALETTE.map((option) => (
                         <button
                           key={option.color}
                           onClick={() => onUpdate({
@@ -327,7 +187,7 @@ export default function CTASection({
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Button Type</label>
                   <Select
-                    value={section.content.buttonType || 'link'}
+                    value={buttonType}
                     onValueChange={(value: 'link' | 'join') => {
                       onUpdate({
                         ...section.content,
@@ -347,7 +207,7 @@ export default function CTASection({
                   </Select>
                 </div>
 
-                {section.content.buttonType === 'link' && (
+                {buttonType === 'link' && (
                   <>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-foreground">Button Text</label>
@@ -383,20 +243,18 @@ export default function CTASection({
         </div>
       )}
 
-      {/* Section Content - Fluid Movement CTA */}
       <div
         className={cn(
           "relative py-20 md:py-28 px-6 overflow-hidden rounded-3xl mx-4 my-4",
-          section.content.backgroundMode === 'none' && "bg-muted"
+          !showColoredBg && "bg-muted"
         )}
-        style={section.content.backgroundMode !== 'none' ? {
+        style={showColoredBg ? {
           background: section.content.backgroundMode === 'overlay'
             ? `linear-gradient(135deg, ${section.content.overlayColor || '#7c3aed'}, ${section.content.overlayColor || '#7c3aed'}dd)`
             : section.content.overlayColor || '#7c3aed'
         } : undefined}
       >
-        {/* Decorative circles - only for colored backgrounds */}
-        {section.content.backgroundMode !== 'none' && (
+        {showColoredBg && (
           <>
             <div className="absolute top-10 left-10 w-32 h-32 rounded-full bg-white/10 blur-2xl" />
             <div className="absolute bottom-10 right-10 w-48 h-48 rounded-full bg-white/10 blur-3xl" />
@@ -405,12 +263,12 @@ export default function CTASection({
 
         <div className={cn(
           "relative z-10 max-w-3xl mx-auto text-center",
-          section.content.backgroundMode === 'none' ? "text-foreground" : "text-white"
+          showColoredBg ? "text-white" : "text-foreground"
         )}>
           <h2
             className={cn(
               "font-display text-3xl md:text-4xl lg:text-5xl font-semibold mb-4 outline-none",
-              section.content.backgroundMode !== 'none' && "drop-shadow-lg"
+              showColoredBg && "drop-shadow-lg"
             )}
             contentEditable={isEditing}
             onBlur={(e) => handleContentEdit(e, 'title')}
@@ -421,7 +279,7 @@ export default function CTASection({
           <p
             className={cn(
               "text-lg md:text-xl mb-10 outline-none max-w-xl mx-auto",
-              section.content.backgroundMode !== 'none' ? "opacity-90 drop-shadow-md" : "text-muted-foreground"
+              showColoredBg ? "opacity-90 drop-shadow-md" : "text-muted-foreground"
             )}
             contentEditable={isEditing}
             onBlur={(e) => handleContentEdit(e, 'subtitle')}
@@ -429,84 +287,40 @@ export default function CTASection({
           >
             {section.content.subtitle || 'Add subtitle'}
           </p>
-          {(section.content.buttonType === 'join' || section.content.buttonType === 'link') && (
+          {(buttonType === 'join' || buttonType === 'link') && (
             <Button
               size="lg"
               className={cn(
                 "font-semibold rounded-xl h-14 px-8 text-lg",
                 "transition-all duration-300 ease-out",
                 "hover:scale-105 hover:shadow-xl shadow-lg",
-                section.content.backgroundMode === 'none'
-                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                  : "bg-white text-primary hover:bg-white/90"
+                showColoredBg
+                  ? "bg-white text-primary hover:bg-white/90"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
               )}
-              onClick={section.content.buttonType === 'join' ? handleButtonClick : undefined}
-              asChild={section.content.buttonType === 'link'}
-              disabled={section.content.buttonType === 'join' && communityData?.isMember}
+              onClick={buttonType === 'join' ? handleButtonClick : undefined}
+              asChild={buttonType === 'link'}
+              disabled={
+                buttonType === 'join' && (communityData?.isMember || isJoining)
+              }
             >
-              {section.content.buttonType === 'link' ? (
+              {buttonType === 'link' ? (
                 <a
-                  href={section.content.ctaLink?.startsWith('http') ? section.content.ctaLink : `https://${section.content.ctaLink || '#'}`}
+                  href={normalizeExternalUrl(section.content.ctaLink)}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   {section.content.ctaText || 'Click here'}
                 </a>
               ) : (
-                <span>
-                  {communityData?.isMember && !isEditing
-                    ? "You're already a member"
-                    : communityData?.status === 'pre_registration'
-                      ? communityData?.membershipPrice && communityData?.membershipPrice > 0
-                        ? `Pre-Register for €${communityData.membershipPrice}/month`
-                        : 'Pre-Register for free'
-                      : communityData?.status === 'inactive'
-                        ? 'Community Inactive'
-                        : communityData?.membershipEnabled && communityData?.membershipPrice && communityData?.membershipPrice > 0
-                          ? `Join for €${communityData.membershipPrice}/month`
-                          : 'Join for free'
-                  }
-                </span>
+                <span>{getJoinButtonLabel(communityData, { isEditing })}</span>
               )}
             </Button>
           )}
         </div>
       </div>
 
-      {showPaymentModal && paymentClientSecret && communityData && (
-        <PaymentModal
-          isOpen={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
-          clientSecret={paymentClientSecret}
-          stripeAccountId={communityData.stripeAccountId || null}
-          price={communityData.membershipPrice || 0}
-          onSuccess={() => {
-            setShowPaymentModal(false);
-            // Refresh the page to update all UI states
-            window.location.reload();
-            toast.success("Successfully joined the community!");
-          }}
-          communitySlug={communityData.slug}
-        />
-      )}
-
-      {isPreRegModalOpen && preRegClientSecret && preRegStripeAccountId && communityData && preRegOpeningDate && (
-        <PreRegistrationPaymentModal
-          isOpen={isPreRegModalOpen}
-          onClose={() => setIsPreRegModalOpen(false)}
-          clientSecret={preRegClientSecret}
-          stripeAccountId={preRegStripeAccountId}
-          communitySlug={communityData.slug}
-          communityName={communityData.name}
-          price={communityData.membershipPrice || 0}
-          openingDate={preRegOpeningDate}
-          onSuccess={() => {
-            setIsPreRegModalOpen(false);
-            toast.success('Pre-registration confirmed!');
-            router.push(`/${communityData.slug}`);
-          }}
-        />
-      )}
+      {modals}
     </div>
   );
-} 
+}

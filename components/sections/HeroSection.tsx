@@ -4,7 +4,7 @@ import { Section } from "@/types/page-builder";
 import { Button } from "../ui/button";
 import Image from "next/image";
 import { UploadCloud, GripVertical, Trash, Settings, X } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { uploadFileToStorage, STORAGE_FOLDERS } from "@/lib/storage-client";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -14,7 +14,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Input } from "../ui/input";
-import { Textarea } from "../ui/textarea";
 import { cn } from "@/lib/utils";
 import toast from "react-hot-toast";
 import {
@@ -24,33 +23,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAuth } from "@/contexts/AuthContext";
-import { useAuthModal } from "@/contexts/AuthModalContext";
-import PaymentModal from "@/components/PaymentModal";
-import { PreRegistrationPaymentModal } from "@/components/PreRegistrationPaymentModal";
-import { useRouter } from "next/navigation";
+import { useJoinCommunity, type JoinCommunityData } from "@/hooks/useJoinCommunity";
+import {
+  SECTION_COLOR_PALETTE,
+  getJoinButtonLabel,
+  normalizeExternalUrl,
+} from "@/lib/page-builder";
 
 interface HeroSectionProps {
   section: Section;
   onUpdate: (content: Section['content']) => void;
   onDelete: () => void;
   isEditing?: boolean;
-  communityData?: {
-    id: string;
-    slug: string;
-    name: string;
-    membershipEnabled?: boolean;
-    membershipPrice?: number;
-    stripeAccountId?: string | null;
-    isMember?: boolean;
-    status?: 'active' | 'pre_registration' | 'inactive';
-    opening_date?: string | null;
-  };
+  communityData?: JoinCommunityData;
 }
 
-export default function HeroSection({ 
-  section, 
-  onUpdate, 
+export default function HeroSection({
+  section,
+  onUpdate,
   onDelete,
   isEditing = false,
   communityData
@@ -58,16 +48,8 @@ export default function HeroSection({
   const [isHovered, setIsHovered] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
-  const [isPreRegModalOpen, setIsPreRegModalOpen] = useState(false);
-  const [preRegClientSecret, setPreRegClientSecret] = useState('');
-  const [preRegStripeAccountId, setPreRegStripeAccountId] = useState('');
-  const [preRegOpeningDate, setPreRegOpeningDate] = useState('');
-  const [isJoining, setIsJoining] = useState(false);
-  const { user: currentUser } = useAuth();
-  const { showAuthModal } = useAuthModal();
-  const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { join, isJoining, modals } = useJoinCommunity(communityData);
 
   const {
     attributes,
@@ -83,59 +65,26 @@ export default function HeroSection({
     transition,
   };
 
-  // Log when component mounts
-  useEffect(() => {
-    console.log('HeroSection mounted, isEditing:', isEditing);
-  }, [isEditing]);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleLabelClick = () => {
-    console.log('Label clicked');
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    console.log('handleImageUpload triggered');
     const file = e.target.files?.[0];
-    if (!file) {
-      console.log('No file selected');
-      return;
-    }
-
-    console.log('File selected:', {
-      name: file.name,
-      type: file.type,
-      size: file.size
-    });
+    if (!file) return;
 
     try {
       setIsUploading(true);
-      console.log('Starting upload process...');
-
-      // Upload to B2 Storage via API
       const publicUrl = await uploadFileToStorage(file, STORAGE_FOLDERS.COMMUNITY_PAGES);
-
-      console.log('Public URL:', publicUrl);
-
-      onUpdate({
-        ...section.content,
-        imageUrl: publicUrl,
-      });
-
+      onUpdate({ ...section.content, imageUrl: publicUrl });
       toast.success('Image uploaded successfully');
     } catch (error) {
       console.error('Error uploading image:', error);
       toast.error('Failed to upload image');
     } finally {
       setIsUploading(false);
+      if (e.target) e.target.value = '';
     }
   };
 
   const handleContentEdit = (
-    e: React.FormEvent<HTMLDivElement>, 
+    e: React.FormEvent<HTMLDivElement>,
     field: 'title' | 'subtitle'
   ) => {
     const content = e.currentTarget.textContent || '';
@@ -145,119 +94,18 @@ export default function HeroSection({
     });
   };
 
-  const handleJoinCommunity = async () => {
-    if (!currentUser) {
-      showAuthModal("signup");
-      return;
-    }
-
-    if (!communityData) {
-      toast.error("Community data not available");
-      return;
-    }
-
-    // Check if community is in pre-registration mode
-    if (communityData.status === 'pre_registration') {
-      if (!communityData.membershipEnabled || !communityData.membershipPrice) {
-        toast.error('This community requires paid membership for pre-registration');
-        return;
-      }
-
-      try {
-        setIsJoining(true);
-
-        // Call pre-registration API
-        const response = await fetch(`/api/community/${communityData.slug}/join-pre-registration`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: currentUser.id,
-            email: currentUser.email,
-          }),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to start pre-registration');
-        }
-
-        const { clientSecret, stripeAccountId, openingDate } = await response.json();
-
-        // Open pre-registration payment modal
-        setPreRegClientSecret(clientSecret);
-        setPreRegStripeAccountId(stripeAccountId);
-        setPreRegOpeningDate(openingDate);
-        setIsPreRegModalOpen(true);
-
-      } catch (error: any) {
-        console.error('Pre-registration error:', error);
-        toast.error(error.message || 'Failed to start pre-registration');
-      } finally {
-        setIsJoining(false);
-      }
-      return;
-    }
-
-    try {
-      if (
-        communityData.membershipEnabled &&
-        communityData.membershipPrice &&
-        communityData.membershipPrice > 0
-      ) {
-        // Handle paid membership
-        const response = await fetch(
-          `/api/community/${communityData.slug}/join-paid`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              userId: currentUser.id,
-              email: currentUser.email,
-            }),
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error("Failed to create payment");
-        }
-
-        const { clientSecret, stripeAccountId } = await response.json();
-        setPaymentClientSecret(clientSecret);
-        setShowPaymentModal(true);
-      } else {
-        // Handle free membership
-        const response = await fetch(`/api/community/${communityData.slug}/join`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ userId: currentUser.id }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to join community");
-        }
-
-        toast.success("Successfully joined the community!");
-        // Redirect to the main community page
-        window.location.href = `/${communityData.slug}`;
-      }
-    } catch (error) {
-      console.error("Error joining community:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to join community"
-      );
-    }
-  };
-
   const handleButtonClick = () => {
     if (section.content.buttonType === 'join') {
-      handleJoinCommunity();
+      join();
     }
   };
+
+  const showColoredOverlay = section.content.backgroundMode !== 'none';
+  const showImage =
+    section.content.imageUrl && section.content.backgroundMode !== 'background';
+  const showOverlayGradient =
+    section.content.backgroundMode === 'overlay' ||
+    section.content.backgroundMode === undefined;
 
   return (
     <div
@@ -268,17 +116,12 @@ export default function HeroSection({
         isDragging ? "opacity-50" : "opacity-100"
       )}
       onMouseEnter={() => {
-        if (!isSettingsOpen) {
-          setIsHovered(true);
-        }
+        if (!isSettingsOpen) setIsHovered(true);
       }}
       onMouseLeave={() => {
-        if (!isSettingsOpen) {
-          setIsHovered(false);
-        }
+        if (!isSettingsOpen) setIsHovered(false);
       }}
     >
-      {/* Section Content - Fluid Movement Hero */}
       <div
         className={cn(
           "relative h-[500px] md:h-[600px] flex items-center justify-center overflow-hidden rounded-3xl mx-4 my-4",
@@ -288,10 +131,9 @@ export default function HeroSection({
           backgroundColor: section.content.overlayColor || '#7c3aed'
         } : undefined}
       >
-        {/* Background Image - show when overlay mode or no mode set */}
-        {section.content.imageUrl && section.content.backgroundMode !== 'background' && (
+        {showImage && (
           <Image
-            src={section.content.imageUrl}
+            src={section.content.imageUrl!}
             alt={section.content.title || ''}
             fill
             className="object-cover"
@@ -299,8 +141,7 @@ export default function HeroSection({
           />
         )}
 
-        {/* Overlay gradient - only for overlay mode */}
-        {(section.content.backgroundMode === 'overlay' || (!section.content.backgroundMode && section.content.backgroundMode !== 'none')) && (
+        {showOverlayGradient && (
           <div
             className="absolute inset-0"
             style={{
@@ -309,7 +150,6 @@ export default function HeroSection({
           />
         )}
 
-        {/* Content */}
         <div className={cn(
           "relative z-10 text-center max-w-3xl mx-auto px-6",
           section.content.backgroundMode === 'none' && "text-foreground"
@@ -317,7 +157,7 @@ export default function HeroSection({
           <h1
             className={cn(
               "font-display text-4xl md:text-5xl lg:text-6xl font-semibold mb-6 outline-none",
-              section.content.backgroundMode !== 'none' && "drop-shadow-lg"
+              showColoredOverlay && "drop-shadow-lg"
             )}
             contentEditable={isEditing}
             onBlur={(e) => handleContentEdit(e, 'title')}
@@ -328,7 +168,7 @@ export default function HeroSection({
           <p
             className={cn(
               "text-lg md:text-xl lg:text-2xl mb-10 outline-none max-w-2xl mx-auto",
-              section.content.backgroundMode !== 'none' ? "opacity-90 drop-shadow-md" : "text-muted-foreground"
+              showColoredOverlay ? "opacity-90 drop-shadow-md" : "text-muted-foreground"
             )}
             contentEditable={isEditing}
             onBlur={(e) => handleContentEdit(e, 'subtitle')}
@@ -349,38 +189,27 @@ export default function HeroSection({
               )}
               onClick={section.content.buttonType === 'join' ? handleButtonClick : undefined}
               asChild={section.content.buttonType === 'link'}
-              disabled={section.content.buttonType === 'join' && communityData?.isMember}
+              disabled={
+                section.content.buttonType === 'join' &&
+                (communityData?.isMember || isJoining)
+              }
             >
               {section.content.buttonType === 'link' ? (
                 <a
-                  href={section.content.ctaLink?.startsWith('http') ? section.content.ctaLink : `https://${section.content.ctaLink || '#'}`}
+                  href={normalizeExternalUrl(section.content.ctaLink)}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   {section.content.ctaText || 'Click here'}
                 </a>
               ) : (
-                <span>
-                  {communityData?.isMember && !isEditing
-                    ? "You're already a member"
-                    : communityData?.status === 'pre_registration'
-                      ? communityData?.membershipPrice && communityData?.membershipPrice > 0
-                        ? `Pre-Register for €${communityData.membershipPrice}/month`
-                        : 'Pre-Register for free'
-                      : communityData?.status === 'inactive'
-                        ? 'Community Inactive'
-                        : communityData?.membershipEnabled && communityData?.membershipPrice && communityData?.membershipPrice > 0
-                          ? `Join for €${communityData.membershipPrice}/month`
-                          : 'Join for free'
-                  }
-                </span>
+                <span>{getJoinButtonLabel(communityData, { isEditing })}</span>
               )}
             </Button>
           )}
         </div>
 
-        {/* Curved bottom edge - only show with colored backgrounds */}
-        {section.content.backgroundMode !== 'none' && (
+        {showColoredOverlay && (
           <svg
             viewBox="0 0 1200 60"
             className="absolute bottom-0 left-0 w-full h-8 md:h-12"
@@ -392,7 +221,6 @@ export default function HeroSection({
         )}
       </div>
 
-      {/* Editor Toolbar - Fluid Movement */}
       {isEditing && (isHovered || isSettingsOpen) && (
         <div className="absolute top-6 right-6 p-2 flex items-center gap-1 bg-card/95 backdrop-blur-sm rounded-xl border border-border/50 shadow-lg z-20">
           <Button
@@ -408,9 +236,7 @@ export default function HeroSection({
             open={isSettingsOpen}
             onOpenChange={(open) => {
               setIsSettingsOpen(open);
-              if (open) {
-                setIsHovered(false);
-              }
+              if (open) setIsHovered(false);
             }}
           >
             <PopoverTrigger asChild>
@@ -455,39 +281,26 @@ export default function HeroSection({
                       </div>
                     )}
                     <div>
-                      <div className="h-[100px] border-2 border-dashed border-border/50 rounded-xl flex items-center justify-center hover:border-primary/50 transition-colors">
-                        <div
-                          className="cursor-pointer w-full h-full flex items-center justify-center"
-                          onClick={() => {
-                            const input = document.createElement('input');
-                            input.type = 'file';
-                            input.accept = 'image/*';
-                            input.onchange = async (e) => {
-                              const file = (e.target as HTMLInputElement).files?.[0];
-                              if (!file) return;
-                              try {
-                                setIsUploading(true);
-                                const publicUrl = await uploadFileToStorage(file, STORAGE_FOLDERS.COMMUNITY_PAGES);
-                                onUpdate({ ...section.content, imageUrl: publicUrl });
-                                toast.success('Image uploaded successfully');
-                              } catch (error) {
-                                console.error('Error uploading image:', error);
-                                toast.error('Failed to upload image');
-                              } finally {
-                                setIsUploading(false);
-                              }
-                            };
-                            input.click();
-                          }}
-                        >
-                          <div className="flex flex-col items-center gap-2">
-                            <UploadCloud className="h-8 w-8 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">
-                              {isUploading ? 'Uploading...' : 'Upload Image'}
-                            </span>
-                          </div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageUpload}
+                        disabled={isUploading}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="h-[100px] w-full border-2 border-dashed border-border/50 rounded-xl flex items-center justify-center hover:border-primary/50 transition-colors"
+                      >
+                        <div className="flex flex-col items-center gap-2">
+                          <UploadCloud className="h-8 w-8 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">
+                            {isUploading ? 'Uploading...' : 'Upload Image'}
+                          </span>
                         </div>
-                      </div>
+                      </button>
                       <p className="text-xs text-muted-foreground mt-2">
                         Max size: 5MB. Supported: JPG, PNG, GIF
                       </p>
@@ -515,19 +328,11 @@ export default function HeroSection({
                     </Select>
                   </div>
 
-                  {section.content.backgroundMode !== 'none' && (
+                  {showColoredOverlay && (
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-foreground">Color</label>
                       <div className="flex flex-wrap gap-2">
-                        {[
-                          { color: '#000000', label: 'Black', bg: 'bg-black' },
-                          { color: '#7c3aed', label: 'Purple', bg: 'bg-violet-600' },
-                          { color: '#2563eb', label: 'Blue', bg: 'bg-blue-600' },
-                          { color: '#059669', label: 'Green', bg: 'bg-emerald-600' },
-                          { color: '#dc2626', label: 'Red', bg: 'bg-red-600' },
-                          { color: '#d97706', label: 'Orange', bg: 'bg-amber-600' },
-                          { color: '#0891b2', label: 'Cyan', bg: 'bg-cyan-600' },
-                        ].map((option) => (
+                        {SECTION_COLOR_PALETTE.map((option) => (
                           <button
                             key={option.color}
                             onClick={() => onUpdate({ ...section.content, overlayColor: option.color })}
@@ -610,39 +415,7 @@ export default function HeroSection({
         </div>
       )}
 
-      {showPaymentModal && paymentClientSecret && communityData && (
-        <PaymentModal
-          isOpen={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
-          clientSecret={paymentClientSecret}
-          stripeAccountId={communityData.stripeAccountId || null}
-          price={communityData.membershipPrice || 0}
-          onSuccess={() => {
-            setShowPaymentModal(false);
-            // Redirect to the main community page instead of reloading
-            window.location.href = `/${communityData.slug}`;
-          }}
-          communitySlug={communityData.slug}
-        />
-      )}
-
-      {isPreRegModalOpen && preRegClientSecret && preRegStripeAccountId && communityData && preRegOpeningDate && (
-        <PreRegistrationPaymentModal
-          isOpen={isPreRegModalOpen}
-          onClose={() => setIsPreRegModalOpen(false)}
-          clientSecret={preRegClientSecret}
-          stripeAccountId={preRegStripeAccountId}
-          communitySlug={communityData.slug}
-          communityName={communityData.name}
-          price={communityData.membershipPrice || 0}
-          openingDate={preRegOpeningDate}
-          onSuccess={() => {
-            setIsPreRegModalOpen(false);
-            toast.success('Pre-registration confirmed!');
-            router.push(`/${communityData.slug}`);
-          }}
-        />
-      )}
+      {modals}
     </div>
   );
 }

@@ -22,7 +22,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "../ui/textarea";
 import toast from "react-hot-toast";
 
 interface ImageSectionProps {
@@ -40,7 +39,6 @@ export default function ImageSection({
 }: ImageSectionProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isLayoutOpen, setIsLayoutOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
   const {
@@ -243,12 +241,9 @@ export default function ImageSection({
                   src={section.content.imageUrl}
                   alt={section.content.altText || ''}
                   fill
-                  priority
-                  loading="eager"
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   onError={(e) => {
-                    console.error('Image failed to load:', section.content.imageUrl);
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
                   }}
