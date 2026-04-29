@@ -19,6 +19,43 @@ interface Member {
   current_period_end: string | null;
 }
 
+async function reconcileIfTerminal(
+  stripeSubscriptionId: string,
+  stripeAccountId: string,
+  communityId: string,
+  userId: string,
+): Promise<boolean> {
+  let stripeStatus: string | null = null;
+  try {
+    const sub = await stripe.subscriptions.retrieve(
+      stripeSubscriptionId,
+      { stripeAccount: stripeAccountId },
+    );
+    stripeStatus = sub.status;
+  } catch {
+    return false;
+  }
+
+  if (stripeStatus !== 'canceled' && stripeStatus !== 'incomplete_expired') {
+    return false;
+  }
+
+  await sql`
+    UPDATE community_members
+    SET status = 'inactive',
+        subscription_status = ${stripeStatus},
+        cancelled_at = NOW()
+    WHERE community_id = ${communityId}
+      AND user_id = ${userId}
+  `;
+  try {
+    await sql`SELECT decrement_members_count(${communityId})`;
+  } catch (countError) {
+    console.error('Error updating members count on reconcile:', countError);
+  }
+  return true;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: { communitySlug: string } }
@@ -70,15 +107,10 @@ export async function POST(
           }
         );
 
-        // In Clover API, current_period_end is now on subscription items, not the subscription itself
-        // Use type assertion since SDK types may not reflect latest API version
         const subscriptionItem = subscription.items.data[0] as any;
         const currentPeriodEnd = subscriptionItem?.current_period_end;
         accessEndDate = currentPeriodEnd ? new Date(currentPeriodEnd * 1000) : new Date();
 
-        // Update member status to indicate pending cancellation
-        // Keep status as 'active' so user maintains access until period end
-        // Set subscription_status to 'canceling' to indicate pending cancellation
         await sql`
           UPDATE community_members
           SET subscription_status = 'canceling', current_period_end = ${accessEndDate.toISOString()}
@@ -92,6 +124,25 @@ export async function POST(
           gracePeriod: true
         });
       } catch (error) {
+        // If Stripe rejects the update because the subscription is already in a
+        // terminal state, our DB has drifted from Stripe — usually because the
+        // customer.subscription.deleted webhook never reached this app (e.g. live
+        // Stripe webhooks point at prod, not preprod). Reconcile our DB to match
+        // Stripe and treat the leave as a successful, already-effective cancellation.
+        const reconciled = await reconcileIfTerminal(
+          member.stripe_subscription_id,
+          community.stripe_account_id,
+          community.id,
+          userId,
+        );
+        if (reconciled) {
+          return NextResponse.json({
+            success: true,
+            gracePeriod: false,
+            reconciled: true,
+          });
+        }
+
         console.error('Error canceling subscription:', error);
         return NextResponse.json(
           { error: 'Failed to cancel subscription. Please try again.' },
