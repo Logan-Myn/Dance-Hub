@@ -1,3 +1,4 @@
+import Script from 'next/script';
 import { notFound } from 'next/navigation';
 import { getSession } from '@/lib/auth-session';
 import {
@@ -33,6 +34,7 @@ export default async function CommunityLayout({
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
+      <Script src="https://js.stripe.com/v3/" strategy="afterInteractive" />
       {/* Desktop nav — hidden below md */}
       <div className="hidden md:block">
         <Navbar

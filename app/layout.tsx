@@ -53,6 +53,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="overscroll-none">
+      <head>
+        <link rel="preconnect" href="https://js.stripe.com" />
+        <link rel="dns-prefetch" href="https://js.stripe.com" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} ${figtree.variable} antialiased`}
       >

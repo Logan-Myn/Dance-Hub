@@ -606,6 +606,9 @@ export default function FeedClient({
           prev.filter((member) => member.user_id !== currentUser.id)
         );
         toast.success("Successfully left the community");
+        setShowLeaveDialog(false);
+        router.push(`/${communitySlug}/about`);
+        return;
       }
 
       setShowLeaveDialog(false);
