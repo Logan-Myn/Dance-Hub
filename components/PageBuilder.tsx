@@ -4,8 +4,9 @@ import { useState } from "react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Section, SectionType } from "@/types/page-builder";
+import { useUndoableState } from "@/hooks/useUndoableState";
 import { Button } from "./ui/button";
-import { Plus, Sparkles, Layout, Video, Type, Image, Megaphone, Save, RotateCcw } from "lucide-react";
+import { Plus, Sparkles, Layout, Video, Type, Image, Megaphone, Save, RotateCcw, Undo2, Redo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -75,7 +76,14 @@ export default function PageBuilder({
   isSaving = false,
   communityData
 }: PageBuilderProps) {
-  const [sections, setSections] = useState<Section[]>(initialSections);
+  const {
+    value: sections,
+    setValue: setSections,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+  } = useUndoableState<Section[]>(initialSections, { onCommit: onChange });
   const [selectedSectionType, setSelectedSectionType] = useState<SectionType | ''>('');
   const [showClearDialog, setShowClearDialog] = useState(false);
 
@@ -172,7 +180,6 @@ export default function PageBuilder({
       order: idx,
     }));
     setSections(newSections);
-    onChange(newSections);
   };
 
   const sensors = useSensors(
@@ -198,44 +205,34 @@ export default function PageBuilder({
 
     const updatedSections = [...sections, newSection];
     setSections(updatedSections);
-    onChange(updatedSections);
     setSelectedSectionType('');
   };
 
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
-
-    if (active.id !== over.id) {
-      setSections((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over.id);
-
-        const newOrder = arrayMove(items, oldIndex, newIndex).map(
-          (item, index) => ({ ...item, order: index })
-        );
-
-        onChange(newOrder);
-        return newOrder;
-      });
-    }
+    if (!over || active.id === over.id) return;
+    const oldIndex = sections.findIndex((item) => item.id === active.id);
+    const newIndex = sections.findIndex((item) => item.id === over.id);
+    const newOrder = arrayMove(sections, oldIndex, newIndex).map(
+      (item, index) => ({ ...item, order: index }),
+    );
+    setSections(newOrder);
   };
 
   const handleUpdateSection = (sectionId: string, content: Section['content']) => {
     const updatedSections = sections.map((section) =>
       section.id === sectionId ? { ...section, content } : section
     );
-    
     setSections(updatedSections);
-    onChange(updatedSections);
   };
 
   const handleDeleteSection = (sectionId: string) => {
     const updatedSections = sections
       .filter((section) => section.id !== sectionId)
       .map((section, index) => ({ ...section, order: index }));
-    
+
+
     setSections(updatedSections);
-    onChange(updatedSections);
   };
 
   return (
@@ -349,6 +346,28 @@ export default function PageBuilder({
             </div>
             {sections.length > 0 && (
               <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={undo}
+                  disabled={!canUndo}
+                  className="rounded-xl h-11 w-11 border-border/50 disabled:opacity-40"
+                  title="Undo (last change)"
+                  aria-label="Undo"
+                >
+                  <Undo2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={redo}
+                  disabled={!canRedo}
+                  className="rounded-xl h-11 w-11 border-border/50 disabled:opacity-40"
+                  title="Redo"
+                  aria-label="Redo"
+                >
+                  <Redo2 className="h-4 w-4" />
+                </Button>
                 <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
                   <AlertDialogTrigger asChild>
                     <Button
@@ -373,7 +392,6 @@ export default function PageBuilder({
                         className="rounded-xl bg-destructive hover:bg-destructive/90"
                         onClick={() => {
                           setSections([]);
-                          onChange([]);
                           setShowClearDialog(false);
                         }}
                       >
