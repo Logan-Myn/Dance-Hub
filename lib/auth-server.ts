@@ -4,6 +4,19 @@ import React from "react";
 import { getEmailService } from "@/lib/resend/email-service";
 import { SignupVerificationEmail } from "@/lib/resend/templates/auth/signup-verification";
 import { PasswordResetEmail } from "@/lib/resend/templates/auth/password-reset";
+import { EmailChangeVerification } from "@/lib/resend/templates/auth/email-change";
+
+// Better Auth signs verification tokens as JWTs and verifies them server-side
+// when the link is hit. We only inspect the payload to pick the right template.
+function decodeTokenPayload(token: string): { requestType?: string; email?: string; updateTo?: string } | null {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return null;
+    return JSON.parse(Buffer.from(payload, "base64url").toString());
+  } catch {
+    return null;
+  }
+}
 
 function getBaseURL(): string {
   if (process.env.BETTER_AUTH_URL) {
@@ -67,7 +80,26 @@ export const auth = betterAuth({
   },
 
   emailVerification: {
-    sendVerificationEmail: async ({ user, url }) => {
+    sendVerificationEmail: async ({ user, url, token }) => {
+      const payload = decodeTokenPayload(token);
+      if (
+        payload?.requestType === "change-email-verification" &&
+        payload.email &&
+        payload.updateTo
+      ) {
+        sendAuthEmail(
+          payload.updateTo,
+          "Confirm your email address change",
+          React.createElement(EmailChangeVerification, {
+            name: user.name || "there",
+            currentEmail: payload.email,
+            newEmail: payload.updateTo,
+            verificationUrl: url,
+          })
+        );
+        return;
+      }
+
       sendAuthEmail(
         user.email,
         "Verify your email address",
@@ -124,18 +156,12 @@ export const auth = betterAuth({
       },
     },
     changeEmail: {
+      // Without sendChangeEmailVerification configured, Better Auth uses its
+      // single-step change-email flow: one verification email goes to the new
+      // address, and clicking the link both updates the email and refreshes
+      // the session. The change-email branch in sendVerificationEmail above
+      // handles the template.
       enabled: true,
-      sendChangeEmailVerification: async ({ user, newEmail, url }: { user: { name?: string }; newEmail: string; url: string }) => {
-        sendAuthEmail(
-          newEmail,
-          "Verify your new email address",
-          React.createElement(SignupVerificationEmail, {
-            name: user.name || "there",
-            email: newEmail,
-            verificationUrl: url,
-          })
-        );
-      },
     },
   },
 
