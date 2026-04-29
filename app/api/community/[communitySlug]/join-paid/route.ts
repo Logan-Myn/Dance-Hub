@@ -79,7 +79,6 @@ export async function POST(
     `;
 
     if (existingMember) {
-      // If member exists with active status, reject
       if (existingMember.status === 'active') {
         return NextResponse.json(
           { error: "User is already a member" },
@@ -87,27 +86,26 @@ export async function POST(
         );
       }
 
-      // If member exists with incomplete subscription, clean up and allow retry
-      if (existingMember.subscription_status === 'incomplete' || existingMember.status === 'pending') {
-        // Cancel old subscription in Stripe if exists
-        if (existingMember.stripe_subscription_id) {
-          try {
-            await stripe.subscriptions.cancel(
-              existingMember.stripe_subscription_id,
-              { stripeAccount: community.stripe_account_id! }
-            );
-          } catch (cancelError) {
-            console.error("Error canceling old subscription:", cancelError);
-            // Continue anyway - subscription might already be canceled
-          }
+      // For any non-active prior membership (incomplete signup, left/auto-cancelled,
+      // grace-period 'canceling'), cancel any leftover Stripe sub and clear the row
+      // so the new INSERT below doesn't hit the (user_id, community_id) unique
+      // constraint. The Stripe cancel call is best-effort: the sub may already be
+      // canceled, in which case Stripe returns an error we swallow and continue.
+      if (existingMember.stripe_subscription_id) {
+        try {
+          await stripe.subscriptions.cancel(
+            existingMember.stripe_subscription_id,
+            { stripeAccount: community.stripe_account_id! }
+          );
+        } catch (cancelError) {
+          console.error("Error canceling old subscription:", cancelError);
         }
-
-        // Delete the old incomplete member record
-        await sql`
-          DELETE FROM community_members
-          WHERE id = ${existingMember.id}
-        `;
       }
+
+      await sql`
+        DELETE FROM community_members
+        WHERE id = ${existingMember.id}
+      `;
     }
 
     // Create a customer in Stripe
