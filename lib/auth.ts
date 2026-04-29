@@ -2,9 +2,6 @@
 
 import { authClient } from "./auth-client";
 
-/**
- * Sign in with email and password
- */
 export async function signIn(email: string, password: string) {
   const { data, error } = await authClient.signIn.email({
     email,
@@ -18,9 +15,6 @@ export async function signIn(email: string, password: string) {
   return data;
 }
 
-/**
- * Sign in with Google OAuth
- */
 export async function signInWithGoogle(redirectUrl?: string) {
   const { data, error } = await authClient.signIn.social({
     provider: "google",
@@ -34,16 +28,12 @@ export async function signInWithGoogle(redirectUrl?: string) {
   return data;
 }
 
-/**
- * Sign up with email and password
- */
 export async function signUp(
   email: string,
   password: string,
   full_name: string,
   redirectUrl?: string
 ) {
-  // Use provided redirectUrl, or fall back to current path
   const currentPath = window.location.pathname;
   const redirectPath = redirectUrl || (currentPath.startsWith("/auth/") ? "/dashboard" : currentPath);
 
@@ -64,9 +54,6 @@ export async function signUp(
   };
 }
 
-/**
- * Sign out the current user
- */
 export async function signOut() {
   const { error } = await authClient.signOut();
 
@@ -75,9 +62,6 @@ export async function signOut() {
   }
 }
 
-/**
- * Request password reset email
- */
 export async function resetPassword(email: string) {
   const { error } = await authClient.requestPasswordReset({
     email,
@@ -91,9 +75,6 @@ export async function resetPassword(email: string) {
   return { success: true };
 }
 
-/**
- * Reset password with token
- */
 export async function resetPasswordWithToken(
   token: string,
   newPassword: string
@@ -110,9 +91,6 @@ export async function resetPasswordWithToken(
   return { success: true };
 }
 
-/**
- * Change email address (requires authentication)
- */
 export async function changeEmail(newEmail: string) {
   const { error } = await authClient.changeEmail({
     newEmail,
@@ -126,9 +104,6 @@ export async function changeEmail(newEmail: string) {
   return { success: true };
 }
 
-/**
- * Verify email with token
- */
 export async function verifyEmail(token: string) {
   const { error } = await authClient.verifyEmail({
     query: {
