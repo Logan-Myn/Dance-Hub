@@ -316,7 +316,11 @@ export default function PageBuilder({
                   {AVAILABLE_SECTIONS.map((section) => {
                     const Icon = section.icon;
                     return (
-                      <SelectItem key={section.type} value={section.type} className="rounded-lg">
+                      <SelectItem
+                        key={section.type}
+                        value={section.type}
+                        className="rounded-lg focus:bg-muted focus:text-foreground"
+                      >
                         <div className="flex items-center gap-3">
                           <Icon className="h-4 w-4 text-primary" />
                           <div>

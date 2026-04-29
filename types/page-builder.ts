@@ -29,6 +29,7 @@ export interface Section {
     overlayStyle?: 'gradient' | 'dark' | 'none';
     overlayColor?: string;
     backgroundMode?: 'background' | 'overlay' | 'none';
+    disableHoverZoom?: boolean;
   };
 }
 
