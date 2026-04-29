@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import toast from "react-hot-toast";
 
 interface ImageSectionProps {
@@ -203,6 +204,16 @@ export default function ImageSection({
                     className="rounded-xl border-border/50"
                   />
                 </div>
+
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-foreground">Zoom on hover</label>
+                  <Switch
+                    checked={!section.content.disableHoverZoom}
+                    onCheckedChange={(checked) =>
+                      onUpdate({ ...section.content, disableHoverZoom: !checked })
+                    }
+                  />
+                </div>
               </div>
             </PopoverContent>
           </Popover>
@@ -241,7 +252,10 @@ export default function ImageSection({
                   src={section.content.imageUrl}
                   alt={section.content.altText || ''}
                   fill
-                  className="object-cover transition-transform duration-500 group-hover:scale-105"
+                  className={cn(
+                    "object-cover transition-transform duration-500",
+                    !section.content.disableHoverZoom && "group-hover:scale-105"
+                  )}
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;

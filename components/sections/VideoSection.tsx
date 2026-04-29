@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
-import MuxPlayerComponent from '@mux/mux-player-react';
+import { MuxPlayer } from "@/components/MuxPlayer";
 
 interface VideoSectionProps {
   section: Section;
@@ -301,30 +301,13 @@ export default function VideoSection({
       <div className="py-12 md:py-16">
         <div className="max-w-4xl mx-auto px-4">
           {section.content.videoId ? (
-            <div className="aspect-video w-full relative rounded-2xl overflow-hidden shadow-lg group">
-              <MuxPlayerComponent
-                streamType="on-demand"
+            <div className="rounded-2xl overflow-hidden shadow-lg">
+              <MuxPlayer
                 playbackId={section.content.videoId}
+                maxResolution="1080p"
                 metadata={{
                   video_title: section.content.title || "Video",
                   video_description: section.content.description || "",
-                }}
-                style={{
-                  height: '100%',
-                  width: '100%',
-                  aspectRatio: '16/9',
-                }}
-                theme="dark"
-                primaryColor="hsl(265 65% 60%)"
-                autoPlay={false}
-                preload="metadata"
-                maxResolution="1080p"
-                onError={(error) => {
-                  console.error('Mux Player Error:', error);
-                  toast.error('Error playing video');
-                }}
-                onStalled={() => {
-                  console.log('Video playback stalled, attempting to recover...');
                 }}
               />
             </div>
