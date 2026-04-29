@@ -89,9 +89,13 @@ export async function POST(
       // For any non-active prior membership (incomplete signup, left/auto-cancelled,
       // grace-period 'canceling'), cancel any leftover Stripe sub and clear the row
       // so the new INSERT below doesn't hit the (user_id, community_id) unique
-      // constraint. The Stripe cancel call is best-effort: the sub may already be
-      // canceled, in which case Stripe returns an error we swallow and continue.
-      if (existingMember.stripe_subscription_id) {
+      // constraint. Skip the Stripe call when we already know the sub is terminal
+      // — it'd just round-trip ~500ms to receive an "already canceled" error.
+      const subAlreadyTerminal =
+        existingMember.subscription_status === 'canceled' ||
+        existingMember.subscription_status === 'incomplete_expired' ||
+        existingMember.subscription_status === 'unpaid';
+      if (existingMember.stripe_subscription_id && !subAlreadyTerminal) {
         try {
           await stripe.subscriptions.cancel(
             existingMember.stripe_subscription_id,
