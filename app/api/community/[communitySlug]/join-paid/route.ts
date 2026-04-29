@@ -78,53 +78,58 @@ export async function POST(
         AND user_id = ${userId}
     `;
 
-    if (existingMember) {
-      if (existingMember.status === 'active') {
-        return NextResponse.json(
-          { error: "User is already a member" },
-          { status: 400 }
+    if (existingMember && existingMember.status === 'active') {
+      return NextResponse.json(
+        { error: "User is already a member" },
+        { status: 400 }
+      );
+    }
+
+    // Cleanup of any prior non-active membership (incomplete signup,
+    // left/auto-cancelled, grace-period 'canceling') runs in parallel with the
+    // new Stripe customer creation — they're independent, and the next call
+    // (subscription.create) is the only one that depends on the new customer.
+    // Skip the leftover-sub cancel when we already know it's terminal (would
+    // just round-trip to an "already canceled" error).
+    const subAlreadyTerminal =
+      existingMember?.subscription_status === 'canceled' ||
+      existingMember?.subscription_status === 'incomplete_expired' ||
+      existingMember?.subscription_status === 'unpaid';
+
+    const cleanupOldSubscription = async () => {
+      if (!existingMember?.stripe_subscription_id || subAlreadyTerminal) return;
+      try {
+        await stripe.subscriptions.cancel(
+          existingMember.stripe_subscription_id,
+          { stripeAccount: community.stripe_account_id! }
         );
+      } catch (cancelError) {
+        console.error("Error canceling old subscription:", cancelError);
       }
+    };
 
-      // For any non-active prior membership (incomplete signup, left/auto-cancelled,
-      // grace-period 'canceling'), cancel any leftover Stripe sub and clear the row
-      // so the new INSERT below doesn't hit the (user_id, community_id) unique
-      // constraint. Skip the Stripe call when we already know the sub is terminal
-      // — it'd just round-trip ~500ms to receive an "already canceled" error.
-      const subAlreadyTerminal =
-        existingMember.subscription_status === 'canceled' ||
-        existingMember.subscription_status === 'incomplete_expired' ||
-        existingMember.subscription_status === 'unpaid';
-      if (existingMember.stripe_subscription_id && !subAlreadyTerminal) {
-        try {
-          await stripe.subscriptions.cancel(
-            existingMember.stripe_subscription_id,
-            { stripeAccount: community.stripe_account_id! }
-          );
-        } catch (cancelError) {
-          console.error("Error canceling old subscription:", cancelError);
-        }
-      }
-
+    const cleanupOldRow = async () => {
+      if (!existingMember) return;
       await sql`
         DELETE FROM community_members
         WHERE id = ${existingMember.id}
       `;
-    }
+    };
 
-    // Create a customer in Stripe
-    const customer = await stripe.customers.create(
-      {
-        email,
-        metadata: {
-          user_id: userId,
-          community_id: community.id,
+    const [, , customer] = await Promise.all([
+      cleanupOldSubscription(),
+      cleanupOldRow(),
+      stripe.customers.create(
+        {
+          email,
+          metadata: {
+            user_id: userId,
+            community_id: community.id,
+          },
         },
-      },
-      {
-        stripeAccount: community.stripe_account_id!,
-      }
-    );
+        { stripeAccount: community.stripe_account_id! }
+      ),
+    ]);
 
     // Create a subscription with the calculated platform fee
     // Note: In Clover API version, use 'latest_invoice.confirmation_secret' instead of 'latest_invoice.payment_intent'
