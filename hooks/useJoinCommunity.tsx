@@ -110,7 +110,10 @@ export function useJoinCommunity(
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: user.id, email: user.email }),
         });
-        if (!response.ok) throw new Error('Failed to create payment');
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to create payment');
+        }
         const { clientSecret } = await response.json();
         setPaymentClientSecret(clientSecret);
         return;
