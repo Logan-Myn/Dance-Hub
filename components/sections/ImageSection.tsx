@@ -242,8 +242,7 @@ export default function ImageSection({
             <figure className="group relative w-full min-h-[300px]">
               <div className={cn(
                 "relative w-full h-full min-h-[300px] overflow-hidden rounded-2xl",
-                "transition-all duration-300 ease-out",
-                "group-hover:shadow-xl",
+                !section.content.disableHoverZoom && "transition-all duration-300 ease-out group-hover:shadow-xl",
                 section.content.layout === 'full' && "h-[calc(100vw*9/21)]",
                 section.content.layout === 'contained' && "h-[calc(100vw*9/16)] max-h-[500px]",
                 (section.content.layout === 'float-left' || section.content.layout === 'float-right') && "h-[300px]"
@@ -253,8 +252,8 @@ export default function ImageSection({
                   alt={section.content.altText || ''}
                   fill
                   className={cn(
-                    "object-cover transition-transform duration-500",
-                    !section.content.disableHoverZoom && "group-hover:scale-105"
+                    "object-cover",
+                    !section.content.disableHoverZoom && "transition-transform duration-500 group-hover:scale-105"
                   )}
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   onError={(e) => {
