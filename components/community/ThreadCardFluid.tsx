@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Heart, MessageSquare, Pin } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -42,7 +42,7 @@ export default function ThreadCardFluid({
   comments_count,
   category,
   category_type,
-  likes = [],
+  likes,
   pinned = false,
   onClick,
   onLikeUpdate,
@@ -50,9 +50,17 @@ export default function ThreadCardFluid({
   const { user, session } = useAuth();
   const [isLiking, setIsLiking] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [localLikes, setLocalLikes] = useState<string[]>(likes || []);
+  const [localLikes, setLocalLikes] = useState<string[]>(likes ?? []);
   const [localLikesCount, setLocalLikesCount] = useState(likes_count || 0);
   const isLiked = user ? localLikes.includes(user.id) : false;
+
+  // Sync local like state when parent updates the thread (e.g. user liked
+  // inside the modal — the parent's threads array updates and we need to
+  // reflect that here, otherwise the card stays stale until refresh).
+  useEffect(() => {
+    setLocalLikes(likes ?? []);
+    setLocalLikesCount(likes_count || 0);
+  }, [likes, likes_count]);
 
   const iconConfig = CATEGORY_ICONS.find((i) => i.label === category_type);
   const IconComponent = iconConfig?.icon || null;
