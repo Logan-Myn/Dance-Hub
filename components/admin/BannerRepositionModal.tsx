@@ -108,12 +108,12 @@ export function BannerRepositionModal({
         if (!open && !isSaving) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-2xl p-0 overflow-hidden">
+      <DialogContent className="p-0 overflow-hidden w-[95vw] sm:max-w-[min(95vw,1280px)]">
         <DialogHeader className="p-6 pb-3">
           <DialogTitle>Reposition banner</DialogTitle>
           <DialogDescription>
-            Drag the image to choose what shows in the banner. Use the slider
-            to zoom in.
+            Drag the image to choose what shows in the banner — this preview
+            matches the actual banner size on the community page.
           </DialogDescription>
         </DialogHeader>
 
@@ -129,8 +129,11 @@ export function BannerRepositionModal({
             minZoom={1}
             maxZoom={5}
             zoomSpeed={0.5}
-            // No grid / round crop — banner is a rectangle.
-            objectFit="contain"
+            // auto-cover so the image always fills the crop frame (the
+            // banner shape) and the user can pan to reframe — matches what
+            // they'll get on the live page rather than letterboxing the
+            // image inside the modal.
+            objectFit="auto-cover"
           />
         </div>
 
