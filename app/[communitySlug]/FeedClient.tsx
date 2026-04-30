@@ -96,6 +96,9 @@ interface Community {
   membersCount: number;
   createdBy: string;
   imageUrl: string;
+  imageFocalX?: number;
+  imageFocalY?: number;
+  imageZoom?: number;
   customLinks?: CustomLink[];
   membershipEnabled?: boolean;
   membershipPrice?: number;
@@ -449,6 +452,9 @@ export default function FeedClient({
           membersCount: formattedMembers.length,
           createdBy: communityData.created_by || communityData.createdBy,
           imageUrl: communityData.image_url || communityData.imageUrl,
+          imageFocalX: communityData.image_focal_x ?? communityData.imageFocalX ?? 50,
+          imageFocalY: communityData.image_focal_y ?? communityData.imageFocalY ?? 50,
+          imageZoom: Number(communityData.image_zoom ?? communityData.imageZoom ?? 1),
           threadCategories: communityData.thread_categories || communityData.threadCategories || [],
           customLinks: communityData.custom_links || communityData.customLinks || [],
           membershipEnabled: communityData.membership_enabled || communityData.membershipEnabled || false,
@@ -903,6 +909,9 @@ export default function FeedClient({
             name={community.name}
             description={community.description}
             imageUrl={community.imageUrl}
+            imageFocalX={community.imageFocalX}
+            imageFocalY={community.imageFocalY}
+            imageZoom={community.imageZoom}
             membersCount={totalMembers}
             members={members}
             isCreator={isCreator}

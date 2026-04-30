@@ -11,6 +11,9 @@ interface CommunityRow {
   name: string;
   description: string | null;
   image_url: string | null;
+  image_focal_x: number | null;
+  image_focal_y: number | null;
+  image_zoom: string | number | null;
   custom_links: unknown;
   slug: string;
   status: string | null;
@@ -24,7 +27,8 @@ export default async function GeneralSettingsPage({
   params: { communitySlug: string };
 }) {
   const community = await queryOne<CommunityRow>`
-    SELECT id, name, description, image_url, custom_links, slug, status, opening_date, can_change_opening_date
+    SELECT id, name, description, image_url, image_focal_x, image_focal_y, image_zoom,
+           custom_links, slug, status, opening_date, can_change_opening_date
     FROM communities
     WHERE slug = ${params.communitySlug}
   `;
@@ -52,6 +56,9 @@ export default async function GeneralSettingsPage({
         initialName={community.name}
         initialDescription={community.description ?? ''}
         initialImageUrl={community.image_url ?? ''}
+        initialFocalX={community.image_focal_x ?? 50}
+        initialFocalY={community.image_focal_y ?? 50}
+        initialZoom={Number(community.image_zoom ?? 1)}
         initialCustomLinks={initialCustomLinks}
         currentSlug={community.slug}
         initialStatus={community.status ?? 'active'}

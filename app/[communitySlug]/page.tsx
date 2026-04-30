@@ -61,6 +61,9 @@ export default async function CommunityFeedPage({
   const initialCommunity = {
     ...community,
     imageUrl: community.image_url ?? null,
+    imageFocalX: community.image_focal_x ?? 50,
+    imageFocalY: community.image_focal_y ?? 50,
+    imageZoom: Number(community.image_zoom ?? 1),
     threadCategories: community.thread_categories ?? [],
     customLinks: community.custom_links ?? [],
     membershipEnabled: community.membership_enabled ?? false,

@@ -12,6 +12,9 @@ interface CommunityWithMembersCount {
   slug: string;
   description: string | null;
   image_url: string | null;
+  image_focal_x: number | null;
+  image_focal_y: number | null;
+  image_zoom: string | number | null;
   created_by: string;
   price: number | null;
   currency: string | null;
@@ -44,6 +47,9 @@ export async function GET(
         c.slug,
         c.description,
         c.image_url,
+        c.image_focal_x,
+        c.image_focal_y,
+        c.image_zoom,
         c.created_by,
         c.price,
         c.currency,
@@ -72,6 +78,10 @@ export async function GET(
     const communityData = {
       ...community,
       membersCount: community.members_count,
+      imageUrl: community.image_url,
+      imageFocalX: community.image_focal_x ?? 50,
+      imageFocalY: community.image_focal_y ?? 50,
+      imageZoom: Number(community.image_zoom ?? 1),
       community_members: [{ count: community.members_count }],
     };
 

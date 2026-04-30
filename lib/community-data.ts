@@ -8,6 +8,9 @@ export interface CommunityRow {
   name: string;
   description: string | null;
   image_url: string | null;
+  image_focal_x?: number | null;
+  image_focal_y?: number | null;
+  image_zoom?: number | string | null;
   slug: string;
   membership_enabled?: boolean | null;
   membership_price?: number | string | null;
