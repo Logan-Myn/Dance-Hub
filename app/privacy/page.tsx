@@ -57,7 +57,7 @@ export default function PrivacyPolicyPage() {
       <p>We do not sell your personal information. We may share your information only in the following circumstances:</p>
       <ul>
         <li><strong>With Your Consent:</strong> When you explicitly agree to sharing</li>
-        <li><strong>Service Providers:</strong> With trusted third parties who assist in operating our platform (e.g., Stripe for payments, LiveKit for video)</li>
+        <li><strong>Service Providers:</strong> With trusted third parties who assist in operating our platform (e.g., Stripe for payments)</li>
         <li><strong>Legal Requirements:</strong> When required by law or to protect our rights</li>
         <li><strong>Community Interactions:</strong> Your public profile information may be visible to other community members</li>
       </ul>
@@ -101,24 +101,16 @@ export default function PrivacyPolicyPage() {
       <p>Our platform integrates with third-party services that have their own privacy policies:</p>
       <ul>
         <li><strong>Stripe:</strong> For payment processing</li>
-        <li><strong>LiveKit:</strong> For video conferencing</li>
         <li><strong>Google:</strong> For authentication (optional)</li>
       </ul>
 
-      <h2>9. Children&apos;s Privacy</h2>
-      <p>
-        DanceHub is not intended for children under 13. We do not knowingly collect personal
-        information from children under 13. If we learn we have collected such information,
-        we will delete it promptly.
-      </p>
-
-      <h2>10. Changes to This Policy</h2>
+      <h2>9. Changes to This Policy</h2>
       <p>
         We may update this Privacy Policy from time to time. We will notify you of any changes
         by posting the new Privacy Policy on this page and updating the &ldquo;Last updated&rdquo; date.
       </p>
 
-      <h2>11. Contact Us</h2>
+      <h2>10. Contact Us</h2>
       <p>
         If you have any questions about this Privacy Policy or our data practices, please contact us:
       </p>
