@@ -129,11 +129,10 @@ export function BannerRepositionModal({
             minZoom={1}
             maxZoom={5}
             zoomSpeed={0.5}
-            // auto-cover so the image always fills the crop frame (the
-            // banner shape) and the user can pan to reframe — matches what
-            // they'll get on the live page rather than letterboxing the
-            // image inside the modal.
-            objectFit="auto-cover"
+            // cover so the image always fills the crop frame (the banner
+            // shape) and the user can pan to reframe — matches what they'll
+            // get on the live page rather than letterboxing inside the modal.
+            objectFit="cover"
           />
         </div>
 
