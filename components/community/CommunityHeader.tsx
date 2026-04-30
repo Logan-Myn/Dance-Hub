@@ -42,14 +42,26 @@ export default function CommunityHeader({
   return (
     <div id="community-header" className="relative mb-8">
       {/* Background with gradient overlay */}
-      <div className="relative h-56 sm:h-64 md:h-72 overflow-hidden rounded-3xl">
+      <div className="relative h-56 sm:h-64 md:h-72 overflow-hidden rounded-3xl bg-muted">
+        {/* Blurred backdrop fills the banner with the image's own colors so
+            portrait/square uploads don't get awkwardly cropped. */}
+        <Image
+          src={imageUrl || "/placeholder.svg"}
+          alt=""
+          aria-hidden
+          fill
+          sizes="100vw"
+          className="object-cover scale-110 blur-2xl opacity-80"
+        />
+        <div className="absolute inset-0 bg-black/25" />
+        {/* The actual image, shown intact (no crop) over the blurred bg. */}
         <Image
           src={imageUrl || "/placeholder.svg"}
           alt={name}
           fill
           priority
           sizes="100vw"
-          className="object-cover object-center"
+          className="object-contain"
         />
         {/* Subtle dark gradient at bottom for text readability */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
