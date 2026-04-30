@@ -387,7 +387,7 @@ export function GeneralSettingsForm({
           </h3>
           <p className="text-sm text-muted-foreground mt-1">
             For a perfect fit, upload a wide image at <strong>1600×400 pixels</strong>{" "}
-            (4:1 ratio). Other shapes work too — use{" "}
+            (4:1 ratio). Other shapes work too. Use{" "}
             <strong>Adjust position</strong> to choose what shows.
           </p>
         </div>
