@@ -250,7 +250,7 @@ export default function SettingsPage() {
             <div className="flex items-center space-x-4">
               <div className="relative">
                 <img
-                  src={profile?.avatar_url || '/placeholder-avatar.png'}
+                  src={profile?.avatar_url || user?.image || '/placeholder-avatar.png'}
                   alt="Profile"
                   className="h-20 w-20 rounded-full object-cover"
                 />
