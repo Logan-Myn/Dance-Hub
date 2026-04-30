@@ -381,9 +381,16 @@ export function GeneralSettingsForm({
 
       {/* Cover Image */}
       <div className="bg-card rounded-2xl p-6 border border-border/50 space-y-4">
-        <h3 className="font-display text-lg font-semibold text-foreground">
-          Cover Image
-        </h3>
+        <div>
+          <h3 className="font-display text-lg font-semibold text-foreground">
+            Cover Image
+          </h3>
+          <p className="text-sm text-muted-foreground mt-1">
+            For a perfect fit, upload a wide image at <strong>1600×400 pixels</strong>{" "}
+            (4:1 ratio). Other shapes work too — use{" "}
+            <strong>Adjust position</strong> to choose what shows.
+          </p>
+        </div>
         <div className="w-full max-w-2xl mx-auto space-y-3">
           {/* Preview the banner at its actual aspect (~4:1) so creators see
               what the page banner will look like, not a generic 16:9 thumbnail. */}
