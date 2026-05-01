@@ -86,8 +86,7 @@ async function sendBatchWithRetry(
   subject: string,
   templatedHtml: string,
   fromName: string,
-  replyTo: string,
-  previewText?: string
+  replyTo: string
 ): Promise<{ batchId: string | null; error?: Error }> {
   let lastError: Error | undefined;
   for (let attempt = 0; attempt < MAX_BATCH_RETRIES; attempt++) {
@@ -98,7 +97,6 @@ async function sendBatchWithRetry(
         replyTo,
         subject,
         html: personalize(templatedHtml, r),
-        headers: previewText ? { 'X-Preview': previewText } : undefined,
         tags: [{ name: 'category', value: 'teacher_broadcast' }],
       }));
       const result = await resend.batch.send(emails);
@@ -133,8 +131,7 @@ export async function runBroadcast(input: RunBroadcastInput): Promise<RunBroadca
       subject,
       templatedHtml,
       fromName,
-      replyTo,
-      previewText
+      replyTo
     );
     if (batchId) {
       batchIds.push(batchId);

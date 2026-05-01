@@ -19,6 +19,32 @@ interface EmailEditorProps {
   onChange: (html: string, json: unknown) => void;
 }
 
+function ToolbarButton({
+  onClick,
+  active,
+  children,
+  label,
+}: {
+  onClick: () => void;
+  active?: boolean;
+  children: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className={cn(
+        'h-8 w-8 flex items-center justify-center rounded-lg transition-colors',
+        active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-primary/10'
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function EmailEditor({ communitySlug, initialHtml = '', onChange }: EmailEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -79,35 +105,21 @@ export function EmailEditor({ communitySlug, initialHtml = '', onChange }: Email
     }
   };
 
-  const Btn = ({ onClick, active, children, label }: { onClick: () => void; active?: boolean; children: React.ReactNode; label: string }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className={cn(
-        'h-8 w-8 flex items-center justify-center rounded-lg transition-colors',
-        active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-primary/10'
-      )}
-    >
-      {children}
-    </button>
-  );
-
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 border rounded-lg p-2 bg-muted/30">
-        <Btn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')} label="Bold"><Bold className="h-4 w-4" /></Btn>
-        <Btn onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')} label="Italic"><Italic className="h-4 w-4" /></Btn>
-        <Btn onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive('heading', { level: 1 })} label="Heading 1"><Heading1 className="h-4 w-4" /></Btn>
-        <Btn onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive('heading', { level: 2 })} label="Heading 2"><Heading2 className="h-4 w-4" /></Btn>
-        <Btn onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')} label="Bullet list"><List className="h-4 w-4" /></Btn>
-        <Btn onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')} label="Numbered list"><ListOrdered className="h-4 w-4" /></Btn>
-        <Btn onClick={setLink} active={editor.isActive('link')} label="Link"><LinkIcon className="h-4 w-4" /></Btn>
-        <Btn onClick={() => fileInputRef.current?.click()} label="Image"><ImageIcon className="h-4 w-4" /></Btn>
-        <Btn onClick={() => editor.chain().focus().setTextAlign('left').run()} active={editor.isActive({ textAlign: 'left' })} label="Align left"><AlignLeft className="h-4 w-4" /></Btn>
-        <Btn onClick={() => editor.chain().focus().setTextAlign('center').run()} active={editor.isActive({ textAlign: 'center' })} label="Align center"><AlignCenter className="h-4 w-4" /></Btn>
-        <Btn onClick={() => editor.chain().focus().setTextAlign('right').run()} active={editor.isActive({ textAlign: 'right' })} label="Align right"><AlignRight className="h-4 w-4" /></Btn>
-        <Btn onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()} label="Clear formatting"><Eraser className="h-4 w-4" /></Btn>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')} label="Bold"><Bold className="h-4 w-4" /></ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')} label="Italic"><Italic className="h-4 w-4" /></ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive('heading', { level: 1 })} label="Heading 1"><Heading1 className="h-4 w-4" /></ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive('heading', { level: 2 })} label="Heading 2"><Heading2 className="h-4 w-4" /></ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')} label="Bullet list"><List className="h-4 w-4" /></ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')} label="Numbered list"><ListOrdered className="h-4 w-4" /></ToolbarButton>
+        <ToolbarButton onClick={setLink} active={editor.isActive('link')} label="Link"><LinkIcon className="h-4 w-4" /></ToolbarButton>
+        <ToolbarButton onClick={() => fileInputRef.current?.click()} label="Image"><ImageIcon className="h-4 w-4" /></ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('left').run()} active={editor.isActive({ textAlign: 'left' })} label="Align left"><AlignLeft className="h-4 w-4" /></ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('center').run()} active={editor.isActive({ textAlign: 'center' })} label="Align center"><AlignCenter className="h-4 w-4" /></ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('right').run()} active={editor.isActive({ textAlign: 'right' })} label="Align right"><AlignRight className="h-4 w-4" /></ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()} label="Clear formatting"><Eraser className="h-4 w-4" /></ToolbarButton>
         {uploading && <span className="text-xs text-muted-foreground">Uploading…</span>}
       </div>
 
