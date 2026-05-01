@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/AuthContext";
 import { OnboardingWizard } from "@/components/stripe-onboarding/OnboardingWizard";
+import { PayoutScheduleForm } from "@/components/admin/PayoutScheduleForm";
 
 // Ported from CommunitySettingsModal.tsx lines 92-120.
 interface StripeRequirement {
@@ -748,6 +749,28 @@ export function SubscriptionsEditor({
             </p>
           )}
         </div>
+
+        {/* Payout Schedule — creator picks ASAP / weekly / monthly. We seed
+            the picker with whatever Stripe currently has so it reflects the
+            true schedule even if it was changed in the Stripe dashboard. */}
+        <PayoutScheduleForm
+          communitySlug={communitySlug}
+          initialInterval={
+            ((stripeAccountStatus.details?.payoutSchedule as
+              | { interval?: string }
+              | undefined)?.interval) ?? "daily"
+          }
+          initialWeeklyAnchor={
+            ((stripeAccountStatus.details?.payoutSchedule as
+              | { weekly_anchor?: string | null }
+              | undefined)?.weekly_anchor) ?? null
+          }
+          initialMonthlyAnchor={
+            ((stripeAccountStatus.details?.payoutSchedule as
+              | { monthly_anchor?: number | null }
+              | undefined)?.monthly_anchor) ?? null
+          }
+        />
 
         {/* Bank Account Details Section - Fluid Movement style */}
         <div className="bg-card rounded-2xl p-6 border border-border/50 space-y-4">
