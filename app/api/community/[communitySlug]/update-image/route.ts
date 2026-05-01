@@ -48,10 +48,16 @@ export async function PUT(
       );
     }
 
-    // Update the community image
+    // Update the community image and reset focal/zoom — the old positioning
+    // is meaningless once the image itself changes.
     await sql`
       UPDATE communities
-      SET image_url = ${imageUrl}, updated_at = NOW()
+      SET
+        image_url = ${imageUrl},
+        image_focal_x = 50,
+        image_focal_y = 50,
+        image_zoom = 1.00,
+        updated_at = NOW()
       WHERE id = ${community.id}
     `;
 

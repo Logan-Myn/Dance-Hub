@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
-import { Loader2, Plus, X } from "lucide-react";
+import { Crop, Loader2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { uploadFileToStorage, STORAGE_FOLDERS } from "@/lib/storage-client";
+import { BannerRepositionModal } from "@/components/admin/BannerRepositionModal";
 
 interface CustomLink {
   title: string;
@@ -28,6 +29,9 @@ interface GeneralSettingsFormProps {
   initialName: string;
   initialDescription: string;
   initialImageUrl: string;
+  initialFocalX: number;
+  initialFocalY: number;
+  initialZoom: number;
   initialCustomLinks: CustomLink[];
   // Passed through to the update route so we don't clobber columns this page
   // doesn't edit (the route PUTs all of them unconditionally).
@@ -56,6 +60,9 @@ export function GeneralSettingsForm({
   initialName,
   initialDescription,
   initialImageUrl,
+  initialFocalX,
+  initialFocalY,
+  initialZoom,
   initialCustomLinks,
   currentSlug,
   initialStatus,
@@ -66,6 +73,10 @@ export function GeneralSettingsForm({
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
   const [imageUrl, setImageUrl] = useState(initialImageUrl);
+  const [focalX, setFocalX] = useState(initialFocalX);
+  const [focalY, setFocalY] = useState(initialFocalY);
+  const [zoom, setZoom] = useState(initialZoom);
+  const [isRepositionOpen, setIsRepositionOpen] = useState(false);
   const [links, setLinks] = useState<CustomLink[]>(initialCustomLinks);
   const [communityStatus, setCommunityStatus] = useState<CommunityStatus>(
     normalizeStatus(initialStatus)
@@ -227,6 +238,11 @@ export function GeneralSettingsForm({
       }
 
       setImageUrl(publicUrl);
+      // Server resets focal/zoom on new upload — mirror that locally so the
+      // preview/repositioner doesn't carry stale values from the old image.
+      setFocalX(50);
+      setFocalY(50);
+      setZoom(1);
       toast.success("Community image updated successfully");
       router.refresh();
     } catch (error) {
@@ -365,16 +381,30 @@ export function GeneralSettingsForm({
 
       {/* Cover Image */}
       <div className="bg-card rounded-2xl p-6 border border-border/50 space-y-4">
-        <h3 className="font-display text-lg font-semibold text-foreground">
-          Cover Image
-        </h3>
-        <div className="w-full max-w-md mx-auto">
-          <div className="relative aspect-video overflow-hidden rounded-2xl group">
+        <div>
+          <h3 className="font-display text-lg font-semibold text-foreground">
+            Cover Image
+          </h3>
+          <p className="text-sm text-muted-foreground mt-1">
+            For a perfect fit, upload a wide image at <strong>1600×400 pixels</strong>{" "}
+            (4:1 ratio). Other shapes work too. Use{" "}
+            <strong>Adjust position</strong> to choose what shows.
+          </p>
+        </div>
+        <div className="w-full max-w-2xl mx-auto space-y-3">
+          {/* Preview the banner at its actual aspect (~4:1) so creators see
+              what the page banner will look like, not a generic 16:9 thumbnail. */}
+          <div className="relative w-full overflow-hidden rounded-2xl group bg-muted" style={{ aspectRatio: "4 / 1" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={imageUrl || "/placeholder.svg"}
-              alt="Community preview"
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              alt="Community banner preview"
+              className="w-full h-full object-cover"
+              style={{
+                objectPosition: `${focalX}% ${focalY}%`,
+                transform: `scale(${zoom})`,
+                transformOrigin: `${focalX}% ${focalY}%`,
+              }}
             />
             <label
               htmlFor="community-image"
@@ -396,8 +426,39 @@ export function GeneralSettingsForm({
               className="hidden"
             />
           </div>
+          {imageUrl && (
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsRepositionOpen(true)}
+                className="rounded-xl"
+              >
+                <Crop className="h-4 w-4 mr-2" />
+                Adjust position
+              </Button>
+            </div>
+          )}
         </div>
       </div>
+
+      {imageUrl && (
+        <BannerRepositionModal
+          isOpen={isRepositionOpen}
+          onClose={() => setIsRepositionOpen(false)}
+          imageUrl={imageUrl}
+          communitySlug={communitySlug}
+          initialFocalX={focalX}
+          initialFocalY={focalY}
+          initialZoom={zoom}
+          onSaved={(fx, fy, z) => {
+            setFocalX(fx);
+            setFocalY(fy);
+            setZoom(z);
+            router.refresh();
+          }}
+        />
+      )}
 
       {/* Custom Links */}
       <div className="bg-card rounded-2xl p-6 border border-border/50 space-y-4">

@@ -234,7 +234,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-8">
       <div>
         <h1 className="text-3xl font-bold mb-4">Settings</h1>
         <p className="text-gray-600">Manage your account settings and profile</p>
@@ -250,7 +250,7 @@ export default function SettingsPage() {
             <div className="flex items-center space-x-4">
               <div className="relative">
                 <img
-                  src={profile?.avatar_url || '/placeholder-avatar.png'}
+                  src={profile?.avatar_url || user?.image || '/placeholder-avatar.png'}
                   alt="Profile"
                   className="h-20 w-20 rounded-full object-cover"
                 />

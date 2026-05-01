@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Users, Settings } from "lucide-react";
@@ -21,6 +20,9 @@ interface CommunityHeaderProps {
   name: string;
   description: string;
   imageUrl: string;
+  imageFocalX?: number;
+  imageFocalY?: number;
+  imageZoom?: number;
   membersCount: number;
   members: Member[];
   isCreator: boolean;
@@ -31,6 +33,9 @@ export default function CommunityHeader({
   name,
   description,
   imageUrl,
+  imageFocalX = 50,
+  imageFocalY = 50,
+  imageZoom = 1,
   membersCount,
   members,
   isCreator,
@@ -42,14 +47,21 @@ export default function CommunityHeader({
   return (
     <div id="community-header" className="relative mb-8">
       {/* Background with gradient overlay */}
-      <div className="relative h-56 sm:h-64 md:h-72 overflow-hidden rounded-3xl">
-        <Image
+      <div className="relative h-56 sm:h-64 md:h-72 overflow-hidden rounded-3xl bg-muted">
+        {/* Banner image — creators control framing via image_focal_{x,y}
+            (object-position) and image_zoom (transform: scale around the
+            focal point). Defaults are 50/50/1 → behaves like the original
+            object-cover center crop. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={imageUrl || "/placeholder.svg"}
           alt={name}
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover object-center"
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{
+            objectPosition: `${imageFocalX}% ${imageFocalY}%`,
+            transform: `scale(${imageZoom})`,
+            transformOrigin: `${imageFocalX}% ${imageFocalY}%`,
+          }}
         />
         {/* Subtle dark gradient at bottom for text readability */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
