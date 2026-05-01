@@ -45,7 +45,10 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function buildUnsubscribeUrl(token: string | null): string {
   const base = process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io';
-  if (!token) return `${base}/settings/email-preferences`;
+  // Recipients arriving here without a token are pathological — getActiveRecipientsForCommunity
+  // backfills email_preferences rows so every member has one. Point the fallback at the real
+  // settings page (the old /settings/email-preferences route does not exist).
+  if (!token) return `${base}/dashboard/settings`;
   return `${base}/api/email/unsubscribe?token=${encodeURIComponent(token)}&type=teacher_broadcast`;
 }
 
