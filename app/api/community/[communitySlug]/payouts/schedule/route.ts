@@ -58,6 +58,7 @@ export async function GET(
   try {
     const session = await getSession();
     if (!session) {
+      console.warn("[payouts/schedule] No session — returning 401");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const result = await loadCommunityForOwner(params.communitySlug, session.user.id);
@@ -87,6 +88,7 @@ export async function PUT(
   try {
     const session = await getSession();
     if (!session) {
+      console.warn("[payouts/schedule] No session — returning 401");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const result = await loadCommunityForOwner(params.communitySlug, session.user.id);
@@ -132,6 +134,12 @@ export async function PUT(
     } else {
       return NextResponse.json({ error: "Unknown choice.kind" }, { status: 400 });
     }
+
+    console.log("[payouts/schedule] Updating", {
+      slug: params.communitySlug,
+      account: result.row.stripe_account_id,
+      schedule: scheduleUpdate,
+    });
 
     const updated = await stripe.accounts.update(result.row.stripe_account_id!, {
       settings: { payouts: { schedule: scheduleUpdate } },
