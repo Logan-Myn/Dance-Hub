@@ -119,7 +119,7 @@ export function PayoutScheduleForm({
           Payout schedule
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Choose how often Stripe sends your earnings to your bank account.
+          Choose how often your earnings are sent to your bank account.
         </p>
       </div>
 
