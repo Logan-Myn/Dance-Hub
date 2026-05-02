@@ -42,6 +42,8 @@ export async function getActiveRecipientsForCommunity(
     FROM community_members m
     JOIN profiles p ON p.auth_user_id = m.user_id
     LEFT JOIN email_preferences ep ON ep.email = p.email
+    LEFT JOIN community_email_preferences cep
+      ON cep.user_id = p.id AND cep.community_id = ${communityId}
     WHERE m.community_id = ${communityId}
       AND m.status = 'active'
       AND (
@@ -50,6 +52,7 @@ export async function getActiveRecipientsForCommunity(
       )
       AND (ep.teacher_broadcast IS DISTINCT FROM false)
       AND (ep.unsubscribed_all IS DISTINCT FROM true)
+      AND (cep.broadcasts_enabled IS DISTINCT FROM false)
       AND p.email IS NOT NULL
   `;
 
