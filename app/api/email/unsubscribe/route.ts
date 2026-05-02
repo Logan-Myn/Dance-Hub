@@ -9,8 +9,6 @@ interface EmailPreferences {
   unsubscribe_token: string;
   marketing_emails: boolean;
   course_announcements: boolean;
-  community_updates: boolean;
-  weekly_digest: boolean;
   teacher_broadcast: boolean;
   unsubscribed_all: boolean;
 }
@@ -22,12 +20,6 @@ async function unsubscribeOneCategory(token: string, type: string): Promise<bool
       return true;
     case 'course_announcements':
       await sql`UPDATE email_preferences SET course_announcements = false, updated_at = NOW() WHERE unsubscribe_token = ${token}`;
-      return true;
-    case 'community_updates':
-      await sql`UPDATE email_preferences SET community_updates = false, updated_at = NOW() WHERE unsubscribe_token = ${token}`;
-      return true;
-    case 'weekly_digest':
-      await sql`UPDATE email_preferences SET weekly_digest = false, updated_at = NOW() WHERE unsubscribe_token = ${token}`;
       return true;
     case 'teacher_broadcast':
       await sql`UPDATE email_preferences SET teacher_broadcast = false, updated_at = NOW() WHERE unsubscribe_token = ${token}`;
@@ -43,8 +35,6 @@ async function unsubscribeAllNonTransactional(token: string) {
     SET
       marketing_emails = false,
       course_announcements = false,
-      community_updates = false,
-      weekly_digest = false,
       teacher_broadcast = false,
       unsubscribed_all = true,
       unsubscribed_at = NOW(),
@@ -105,7 +95,9 @@ export async function GET(request: NextRequest) {
         successUrl.searchParams.set('community', community.name);
         return NextResponse.redirect(successUrl);
       }
-      // If community_id was bogus, fall through to the default category path.
+      // If community_id is bogus, fall through to the default category path.
+      // We still honor the unsubscribe click — better to global-opt-out the user
+      // than to fail their click because the URL was tampered with.
     }
 
     const handled = type ? await unsubscribeOneCategory(token, type) : false;
@@ -140,7 +132,7 @@ export async function POST(request: NextRequest) {
     }
 
     const existing = await queryOne<EmailPreferences>`
-      SELECT user_id, email, marketing_emails, course_announcements, community_updates, weekly_digest, teacher_broadcast
+      SELECT user_id, email, marketing_emails, course_announcements, teacher_broadcast
       FROM email_preferences
       WHERE unsubscribe_token = ${token}
     `;
@@ -154,8 +146,6 @@ export async function POST(request: NextRequest) {
       SET
         marketing_emails = ${newPreferences.marketing_emails ?? existing.marketing_emails},
         course_announcements = ${newPreferences.course_announcements ?? existing.course_announcements},
-        community_updates = ${newPreferences.community_updates ?? existing.community_updates},
-        weekly_digest = ${newPreferences.weekly_digest ?? existing.weekly_digest},
         teacher_broadcast = ${newPreferences.teacher_broadcast ?? existing.teacher_broadcast},
         unsubscribed_all = false,
         updated_at = NOW()

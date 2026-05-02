@@ -9,8 +9,6 @@ interface EmailPreferences {
   unsubscribe_token: string;
   marketing_emails: boolean;
   course_announcements: boolean;
-  community_updates: boolean;
-  weekly_digest: boolean;
   unsubscribed_all: boolean;
   unsubscribed_at: string | null;
   created_at: string;
@@ -93,8 +91,7 @@ export async function PUT(request: NextRequest) {
       SET
         marketing_emails = COALESCE(${updates.marketing_emails ?? null}, marketing_emails),
         course_announcements = COALESCE(${updates.course_announcements ?? null}, course_announcements),
-        community_updates = COALESCE(${updates.community_updates ?? null}, community_updates),
-        weekly_digest = COALESCE(${updates.weekly_digest ?? null}, weekly_digest),
+        teacher_broadcast = COALESCE(${updates.teacher_broadcast ?? null}, teacher_broadcast),
         unsubscribed_all = COALESCE(${updates.unsubscribed_all ?? null}, unsubscribed_all),
         updated_at = NOW()
       WHERE user_id = ${user.id}
