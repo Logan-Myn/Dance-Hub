@@ -72,6 +72,42 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/unsubscribe/invalid', SITE_URL));
     }
 
+    const communityId = request.nextUrl.searchParams.get('community_id');
+
+    if (communityId && type === 'teacher_broadcast') {
+      // Per-community opt-out: flip just this one (user, community) row.
+      // Fetch the community name now so the success page can render
+      // "Unsubscribed from {Community}".
+      const community = await queryOne<{ id: string; name: string }>`
+        SELECT id, name FROM communities WHERE id = ${communityId}
+      `;
+      if (community) {
+        await sql`
+          INSERT INTO community_email_preferences
+            (user_id, community_id, broadcasts_enabled, unsubscribed_at)
+          VALUES (${preferences.user_id}, ${community.id}, false, NOW())
+          ON CONFLICT (user_id, community_id) DO UPDATE
+            SET broadcasts_enabled = false,
+                unsubscribed_at = NOW(),
+                updated_at = NOW()
+        `;
+        await sql`
+          INSERT INTO email_events (user_id, email, event_type, email_type, metadata)
+          VALUES (
+            ${preferences.user_id},
+            ${preferences.email},
+            'unsubscribed',
+            'teacher_broadcast',
+            ${JSON.stringify({ token, type, community_id: community.id })}::jsonb
+          )
+        `;
+        const successUrl = new URL('/unsubscribe/success', SITE_URL);
+        successUrl.searchParams.set('community', community.name);
+        return NextResponse.redirect(successUrl);
+      }
+      // If community_id was bogus, fall through to the default category path.
+    }
+
     const handled = type ? await unsubscribeOneCategory(token, type) : false;
     if (!handled) {
       await unsubscribeAllNonTransactional(token);
