@@ -41,9 +41,23 @@ export default function NotificationsButton() {
         return;
       }
 
-      const data = await response.json();
-      setNotifications(data || []);
-      setUnreadCount(data?.filter((n: Notification) => !n.read).length || 0);
+      const data: Notification[] = (await response.json()) || [];
+
+      // Skip the state update when nothing changed — otherwise the poll
+      // re-renders the popover subtree every 30s for no reason.
+      setNotifications((prev) => {
+        if (prev.length !== data.length) return data;
+        for (let i = 0; i < data.length; i++) {
+          if (prev[i].id !== data[i].id || prev[i].read !== data[i].read) {
+            return data;
+          }
+        }
+        return prev;
+      });
+      setUnreadCount((prev) => {
+        const next = data.filter((n) => !n.read).length;
+        return prev === next ? prev : next;
+      });
     } catch (error) {
       console.error('Error fetching notifications:', error);
     }
@@ -61,6 +75,11 @@ export default function NotificationsButton() {
   }, [fetchNotifications]);
 
   const handleMarkAsRead = async (notificationId: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
+    );
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+
     try {
       const response = await fetch('/api/notifications', {
         method: 'PATCH',
@@ -70,16 +89,18 @@ export default function NotificationsButton() {
 
       if (!response.ok) {
         console.error('Error marking notification as read:', response.status);
-        return;
+        await fetchNotifications();
       }
-
-      await fetchNotifications();
     } catch (error) {
       console.error('Error marking notification as read:', error);
+      await fetchNotifications();
     }
   };
 
   const handleMarkAllAsRead = async () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setUnreadCount(0);
+
     try {
       const response = await fetch('/api/notifications', {
         method: 'PATCH',
@@ -89,12 +110,11 @@ export default function NotificationsButton() {
 
       if (!response.ok) {
         console.error('Error marking all notifications as read:', response.status);
-        return;
+        await fetchNotifications();
       }
-
-      await fetchNotifications();
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
+      await fetchNotifications();
     }
   };
 

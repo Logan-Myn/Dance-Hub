@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, sql } from '@/lib/db';
+import { getSession } from '@/lib/auth-session';
 
 interface Profile {
   id: string;
@@ -28,13 +29,12 @@ interface CommentRow {
 }
 
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: { threadId: string } }
 ) {
   try {
     const { threadId } = params;
 
-    // Get all comments for this thread
     const comments = await query<CommentRow>`
       SELECT
         c.id,
@@ -51,7 +51,6 @@ export async function GET(
       ORDER BY c.created_at ASC
     `;
 
-    // Ensure likes is always an array
     const formattedComments = comments.map(comment => ({
       ...comment,
       likes: comment.likes || [],
@@ -73,10 +72,19 @@ export async function POST(
   { params }: { params: { threadId: string } }
 ) {
   try {
-    const { content, userId, author } = await request.json();
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+    const { content } = await request.json();
     const { threadId } = params;
 
-    // Verify thread exists
+    if (!content || typeof content !== 'string' || !content.trim()) {
+      return NextResponse.json({ error: 'Content is required' }, { status: 400 });
+    }
+
     const thread = await queryOne<Thread>`
       SELECT id
       FROM threads
@@ -87,7 +95,6 @@ export async function POST(
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
 
-    // Get user profile data
     const userData = await queryOne<Profile>`
       SELECT id, full_name, display_name, avatar_url
       FROM profiles
@@ -95,13 +102,12 @@ export async function POST(
     `;
 
     const authorData = {
-      name: author?.name || userData?.display_name || userData?.full_name || 'Anonymous',
-      image: author?.avatar_url || userData?.avatar_url || '',
+      name: userData?.display_name || userData?.full_name || 'Anonymous',
+      image: userData?.avatar_url || '',
     };
 
     const commentId = crypto.randomUUID();
 
-    // Insert into comments table
     await sql`
       INSERT INTO comments (id, thread_id, user_id, content, author, likes, likes_count)
       VALUES (
@@ -115,7 +121,6 @@ export async function POST(
       )
     `;
 
-    // Return the created comment
     const comment = {
       id: commentId,
       thread_id: threadId,

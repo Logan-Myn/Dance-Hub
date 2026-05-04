@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { stripe } from "@/lib/stripe";
 import { getSession } from "@/lib/auth-session";
 import { queryOne } from "@/lib/db";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-12-15.clover" as Stripe.LatestApiVersion,
-});
 
 interface CommunityRow {
   id: string;

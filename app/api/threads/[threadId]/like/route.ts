@@ -1,48 +1,45 @@
 import { NextResponse } from 'next/server';
-import { sql, queryOne } from '@/lib/db';
+import { queryOne } from '@/lib/db';
+import { getSession } from '@/lib/auth-session';
 
-interface ThreadLikes {
-  likes: string[] | null;
+interface LikeResult {
+  likes: string[];
+  liked: boolean;
 }
 
 export async function POST(
-  request: Request,
+  _request: Request,
   { params }: { params: { threadId: string } }
 ) {
   try {
-    const { userId } = await request.json();
-    const { threadId } = params;
-
-    // Get current thread likes
-    const thread = await queryOne<ThreadLikes>`
-      SELECT likes
-      FROM threads
-      WHERE id = ${threadId}
-    `;
-
-    if (!thread) {
-      return NextResponse.json(
-        { error: 'Thread not found' },
-        { status: 404 }
-      );
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const likes = thread.likes || [];
-    const isLiked = likes.includes(userId);
-    const updatedLikes = isLiked
-      ? likes.filter((id: string) => id !== userId)
-      : [...likes, userId];
+    const userId = session.user.id;
+    const { threadId } = params;
 
-    // Update thread likes
-    await sql`
+    const result = await queryOne<LikeResult>`
       UPDATE threads
-      SET likes = ${updatedLikes}::text[]
+      SET likes = CASE
+        WHEN ${userId} = ANY(COALESCE(likes, ARRAY[]::TEXT[]))
+          THEN array_remove(likes, ${userId})
+        ELSE array_append(COALESCE(likes, ARRAY[]::TEXT[]), ${userId})
+      END
       WHERE id = ${threadId}
+      RETURNING
+        likes,
+        ${userId} = ANY(COALESCE(likes, ARRAY[]::TEXT[])) as liked
     `;
 
+    if (!result) {
+      return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
+    }
+
     return NextResponse.json({
-      liked: !isLiked,
-      likesCount: updatedLikes.length,
+      liked: result.liked,
+      likesCount: result.likes.length,
     });
   } catch (error) {
     console.error('Error toggling like:', error);

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
+import { getSession } from '@/lib/auth-session';
 
 interface Community {
   created_by: string;
@@ -7,6 +8,8 @@ interface Community {
 }
 
 interface Profile {
+  full_name: string | null;
+  display_name: string | null;
   avatar_url: string | null;
 }
 
@@ -28,9 +31,21 @@ interface Thread {
 
 export async function POST(request: Request) {
   try {
-    const { title, content, communityId, userId, categoryId, categoryName, author, pinned } = await request.json();
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    // Get the community and check if user is creator
+    const userId = session.user.id;
+    const { title, content, communityId, categoryId, categoryName, pinned } = await request.json();
+
+    if (!title || !content || !communityId || !categoryId) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
     const community = await queryOne<Community>`
       SELECT created_by, thread_categories
       FROM communities
@@ -44,7 +59,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if the selected category exists and if user has permission
     const category = community.thread_categories?.find((cat: any) => cat.id === categoryId);
     if (!category) {
       return NextResponse.json(
@@ -53,7 +67,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if category is creator-only and user is not the creator
     if (category.creatorOnly && userId !== community.created_by) {
       return NextResponse.json(
         { error: 'Only the community creator can post in this category' },
@@ -61,14 +74,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get user's profile to ensure we have the correct avatar URL (userId is Better Auth user ID)
     const profile = await queryOne<Profile>`
-      SELECT avatar_url
+      SELECT full_name, display_name, avatar_url
       FROM profiles
       WHERE auth_user_id = ${userId}
     `;
 
-    // Create the thread with author info included
+    const authorName = profile?.display_name || profile?.full_name || 'Anonymous';
+    const authorImage = profile?.avatar_url || null;
+
     const thread = await queryOne<Thread>`
       INSERT INTO threads (
         title,
@@ -91,8 +105,8 @@ export async function POST(request: Request) {
         ${userId},
         NOW(),
         NOW(),
-        ${author.name},
-        ${profile?.avatar_url || author.avatar_url || null},
+        ${authorName},
+        ${authorImage},
         ${categoryId},
         ${categoryName},
         ${pinned && userId === community.created_by ? pinned : false}
