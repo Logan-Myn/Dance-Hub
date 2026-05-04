@@ -19,6 +19,7 @@ const DISPLAY_NAME_PLACEHOLDER = '__DH_BROADCAST_DISPLAY_NAME__';
 
 export interface RunBroadcastInput {
   broadcastId: string;
+  communityId: string;
   subject: string;
   htmlContent: string;
   previewText?: string;
@@ -43,16 +44,24 @@ function chunk<T>(arr: T[], size: number): T[][] {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function buildUnsubscribeUrl(token: string | null): string {
+function buildUnsubscribeUrl(token: string | null, communityId: string): string {
   const base = process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io';
-  if (!token) return `${base}/settings/email-preferences`;
-  return `${base}/api/email/unsubscribe?token=${encodeURIComponent(token)}&type=teacher_broadcast`;
+  // Recipients arriving here without a token are pathological — getActiveRecipientsForCommunity
+  // backfills email_preferences rows so every member has one. Point the fallback at the real
+  // settings page (the old /settings/email-preferences route does not exist).
+  if (!token) return `${base}/dashboard/settings`;
+  const params = new URLSearchParams({
+    token,
+    type: 'teacher_broadcast',
+    community_id: communityId,
+  });
+  return `${base}/api/email/unsubscribe?${params.toString()}`;
 }
 
-function personalize(html: string, recipient: BroadcastRecipient): string {
+function personalize(html: string, recipient: BroadcastRecipient, communityId: string): string {
   return html
     .split(UNSUBSCRIBE_PLACEHOLDER)
-    .join(buildUnsubscribeUrl(recipient.unsubscribeToken))
+    .join(buildUnsubscribeUrl(recipient.unsubscribeToken, communityId))
     .split(DISPLAY_NAME_PLACEHOLDER)
     .join(recipient.displayName);
 }
@@ -87,7 +96,7 @@ async function sendBatchWithRetry(
   templatedHtml: string,
   fromName: string,
   replyTo: string,
-  previewText?: string
+  communityId: string
 ): Promise<{ batchId: string | null; error?: Error }> {
   let lastError: Error | undefined;
   for (let attempt = 0; attempt < MAX_BATCH_RETRIES; attempt++) {
@@ -97,8 +106,7 @@ async function sendBatchWithRetry(
         to: r.email,
         replyTo,
         subject,
-        html: personalize(templatedHtml, r),
-        headers: previewText ? { 'X-Preview': previewText } : undefined,
+        html: personalize(templatedHtml, r, communityId),
         tags: [{ name: 'category', value: 'teacher_broadcast' }],
       }));
       const result = await resend.batch.send(emails);
@@ -116,7 +124,7 @@ async function sendBatchWithRetry(
 }
 
 export async function runBroadcast(input: RunBroadcastInput): Promise<RunBroadcastResult> {
-  const { recipients, subject, htmlContent, fromName, replyTo, previewText } = input;
+  const { recipients, subject, htmlContent, fromName, replyTo, previewText, communityId } = input;
 
   const templatedHtml = await renderTemplate(fromName, subject, htmlContent, previewText);
   const chunks = chunk(recipients, BATCH_SIZE);
@@ -134,7 +142,7 @@ export async function runBroadcast(input: RunBroadcastInput): Promise<RunBroadca
       templatedHtml,
       fromName,
       replyTo,
-      previewText
+      communityId
     );
     if (batchId) {
       batchIds.push(batchId);

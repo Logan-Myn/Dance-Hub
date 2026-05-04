@@ -1,112 +1,110 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io';
+
 interface EmailPreferences {
-  id: string;
   user_id: string;
   email: string;
   unsubscribe_token: string;
   marketing_emails: boolean;
   course_announcements: boolean;
-  community_updates: boolean;
-  weekly_digest: boolean;
+  teacher_broadcast: boolean;
   unsubscribed_all: boolean;
-  unsubscribed_at: string | null;
-  created_at: string;
-  updated_at: string;
+}
+
+async function unsubscribeOneCategory(token: string, type: string): Promise<boolean> {
+  switch (type) {
+    case 'marketing':
+      await sql`UPDATE email_preferences SET marketing_emails = false, updated_at = NOW() WHERE unsubscribe_token = ${token}`;
+      return true;
+    case 'course_announcements':
+      await sql`UPDATE email_preferences SET course_announcements = false, updated_at = NOW() WHERE unsubscribe_token = ${token}`;
+      return true;
+    case 'teacher_broadcast':
+      await sql`UPDATE email_preferences SET teacher_broadcast = false, updated_at = NOW() WHERE unsubscribe_token = ${token}`;
+      return true;
+    default:
+      return false;
+  }
+}
+
+async function unsubscribeAllNonTransactional(token: string) {
+  await sql`
+    UPDATE email_preferences
+    SET
+      marketing_emails = false,
+      course_announcements = false,
+      teacher_broadcast = false,
+      unsubscribed_all = true,
+      unsubscribed_at = NOW(),
+      updated_at = NOW()
+    WHERE unsubscribe_token = ${token}
+  `;
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const token = searchParams.get('token');
-    const type = searchParams.get('type'); // Optional: specific email type to unsubscribe from
+    const token = request.nextUrl.searchParams.get('token');
+    const type = request.nextUrl.searchParams.get('type');
 
     if (!token) {
-      return NextResponse.redirect(new URL('/unsubscribe/error', process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io'));
+      return NextResponse.redirect(new URL('/unsubscribe/error', SITE_URL));
     }
 
-    // Find the email preferences by unsubscribe token
     const preferences = await queryOne<EmailPreferences>`
-      SELECT *
+      SELECT user_id, email, unsubscribe_token
       FROM email_preferences
       WHERE unsubscribe_token = ${token}
     `;
 
     if (!preferences) {
-      console.error('Error fetching preferences: not found');
-      return NextResponse.redirect(new URL('/unsubscribe/invalid', process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io'));
+      return NextResponse.redirect(new URL('/unsubscribe/invalid', SITE_URL));
     }
 
-    // Update preferences based on type
-    if (type) {
-      // Unsubscribe from specific type
-      switch (type) {
-        case 'marketing':
-          await sql`
-            UPDATE email_preferences
-            SET marketing_emails = false, updated_at = NOW()
-            WHERE unsubscribe_token = ${token}
-          `;
-          break;
-        case 'course_announcements':
-          await sql`
-            UPDATE email_preferences
-            SET course_announcements = false, updated_at = NOW()
-            WHERE unsubscribe_token = ${token}
-          `;
-          break;
-        case 'community_updates':
-          await sql`
-            UPDATE email_preferences
-            SET community_updates = false, updated_at = NOW()
-            WHERE unsubscribe_token = ${token}
-          `;
-          break;
-        case 'weekly_digest':
-          await sql`
-            UPDATE email_preferences
-            SET weekly_digest = false, updated_at = NOW()
-            WHERE unsubscribe_token = ${token}
-          `;
-          break;
-        case 'teacher_broadcast':
-          await sql`
-            UPDATE email_preferences
-            SET teacher_broadcast = false, updated_at = NOW()
-            WHERE unsubscribe_token = ${token}
-          `;
-          break;
-        default:
-          // Unknown type, unsubscribe from all non-transactional
-          await sql`
-            UPDATE email_preferences
-            SET
-              marketing_emails = false,
-              course_announcements = false,
-              community_updates = false,
-              weekly_digest = false,
-              updated_at = NOW()
-            WHERE unsubscribe_token = ${token}
-          `;
-      }
-    } else {
-      // Unsubscribe from all non-transactional emails
-      await sql`
-        UPDATE email_preferences
-        SET
-          marketing_emails = false,
-          course_announcements = false,
-          community_updates = false,
-          weekly_digest = false,
-          unsubscribed_all = true,
-          unsubscribed_at = NOW(),
-          updated_at = NOW()
-        WHERE unsubscribe_token = ${token}
+    const communityId = request.nextUrl.searchParams.get('community_id');
+
+    if (communityId && type === 'teacher_broadcast') {
+      // Per-community opt-out: flip just this one (user, community) row.
+      // Fetch the community name now so the success page can render
+      // "Unsubscribed from {Community}".
+      const community = await queryOne<{ id: string; name: string }>`
+        SELECT id, name FROM communities WHERE id = ${communityId}
       `;
+      if (community) {
+        await sql`
+          INSERT INTO community_email_preferences
+            (user_id, community_id, broadcasts_enabled, unsubscribed_at)
+          VALUES (${preferences.user_id}, ${community.id}, false, NOW())
+          ON CONFLICT (user_id, community_id) DO UPDATE
+            SET broadcasts_enabled = false,
+                unsubscribed_at = NOW(),
+                updated_at = NOW()
+        `;
+        await sql`
+          INSERT INTO email_events (user_id, email, event_type, email_type, metadata)
+          VALUES (
+            ${preferences.user_id},
+            ${preferences.email},
+            'unsubscribed',
+            'teacher_broadcast',
+            ${JSON.stringify({ token, type, community_id: community.id })}::jsonb
+          )
+        `;
+        const successUrl = new URL('/unsubscribe/success', SITE_URL);
+        successUrl.searchParams.set('community', community.name);
+        return NextResponse.redirect(successUrl);
+      }
+      // If community_id is bogus, fall through to the default category path.
+      // We still honor the unsubscribe click — better to global-opt-out the user
+      // than to fail their click because the URL was tampered with.
     }
 
-    // Log the unsubscribe event
+    const handled = type ? await unsubscribeOneCategory(token, type) : false;
+    if (!handled) {
+      await unsubscribeAllNonTransactional(token);
+    }
+
     await sql`
       INSERT INTO email_events (user_id, email, event_type, email_type, metadata)
       VALUES (
@@ -118,11 +116,10 @@ export async function GET(request: NextRequest) {
       )
     `;
 
-    // Redirect to success page
-    return NextResponse.redirect(new URL('/unsubscribe/success', process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io'));
+    return NextResponse.redirect(new URL('/unsubscribe/success', SITE_URL));
   } catch (error) {
     console.error('Unsubscribe error:', error);
-    return NextResponse.redirect(new URL('/unsubscribe/error', process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io'));
+    return NextResponse.redirect(new URL('/unsubscribe/error', SITE_URL));
   }
 }
 
@@ -131,45 +128,35 @@ export async function POST(request: NextRequest) {
     const { token, preferences: newPreferences } = await request.json();
 
     if (!token) {
-      return NextResponse.json(
-        { error: "Missing unsubscribe token" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing unsubscribe token" }, { status: 400 });
     }
 
-    // Find the email preferences by unsubscribe token
-    const existingPreferences = await queryOne<EmailPreferences>`
-      SELECT *
+    const existing = await queryOne<EmailPreferences>`
+      SELECT user_id, email, marketing_emails, course_announcements, teacher_broadcast
       FROM email_preferences
       WHERE unsubscribe_token = ${token}
     `;
 
-    if (!existingPreferences) {
-      return NextResponse.json(
-        { error: "Invalid token" },
-        { status: 400 }
-      );
+    if (!existing) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 400 });
     }
 
-    // Update preferences
     await sql`
       UPDATE email_preferences
       SET
-        marketing_emails = ${newPreferences.marketing_emails ?? existingPreferences.marketing_emails},
-        course_announcements = ${newPreferences.course_announcements ?? existingPreferences.course_announcements},
-        community_updates = ${newPreferences.community_updates ?? existingPreferences.community_updates},
-        weekly_digest = ${newPreferences.weekly_digest ?? existingPreferences.weekly_digest},
+        marketing_emails = ${newPreferences.marketing_emails ?? existing.marketing_emails},
+        course_announcements = ${newPreferences.course_announcements ?? existing.course_announcements},
+        teacher_broadcast = ${newPreferences.teacher_broadcast ?? existing.teacher_broadcast},
         unsubscribed_all = false,
         updated_at = NOW()
       WHERE unsubscribe_token = ${token}
     `;
 
-    // Log the preference update
     await sql`
       INSERT INTO email_events (user_id, email, event_type, email_type, metadata)
       VALUES (
-        ${existingPreferences.user_id},
-        ${existingPreferences.email},
+        ${existing.user_id},
+        ${existing.email},
         'preferences_updated',
         'preferences',
         ${JSON.stringify({ newPreferences })}::jsonb
@@ -182,9 +169,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Preferences update error:', error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

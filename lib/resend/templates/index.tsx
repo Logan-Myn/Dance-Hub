@@ -3,11 +3,6 @@ export interface EmailTemplate {
   subject: string;
 }
 
-export interface BaseEmailProps {
-  recipientName?: string;
-  recipientEmail: string;
-}
-
 export interface EmailFooterProps {
   unsubscribeUrl?: string;
   preferencesUrl?: string;

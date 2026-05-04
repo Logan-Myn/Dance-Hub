@@ -34,6 +34,7 @@ describe('runBroadcast', () => {
 
     const result = await runBroadcast({
       broadcastId: 'b1',
+      communityId: 'test-community-id',
       subject: 'Hello',
       htmlContent: '<p>hi</p>',
       previewText: 'preview',
@@ -55,6 +56,7 @@ describe('runBroadcast', () => {
 
     const result = await runBroadcast({
       broadcastId: 'b1',
+      communityId: 'test-community-id',
       subject: 'Hello',
       htmlContent: '<p>hi</p>',
       recipients,
@@ -77,6 +79,7 @@ describe('runBroadcast', () => {
 
     const result = await runBroadcast({
       broadcastId: 'b1',
+      communityId: 'test-community-id',
       subject: 'Hello',
       htmlContent: '<p>hi</p>',
       recipients,
@@ -94,6 +97,7 @@ describe('runBroadcast', () => {
     mockBatchSend.mockRejectedValue(new Error('boom'));
     const result = await runBroadcast({
       broadcastId: 'b1',
+      communityId: 'test-community-id',
       subject: 'X',
       htmlContent: '<p>x</p>',
       recipients: [recipient(1)],

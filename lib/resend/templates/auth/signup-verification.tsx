@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Heading, Text, Img } from '@react-email/components';
+import { Button, Heading, Text } from '@react-email/components';
 import { BaseLayout } from '../base-layout';
 import { EMAIL_STYLES } from '../index';
 
@@ -15,19 +15,9 @@ export const SignupVerificationEmail: React.FC<SignupVerificationEmailProps> = (
   verificationUrl,
 }) => {
   const preview = `Verify your DanceHub account`;
-  
+
   return (
     <BaseLayout preview={preview}>
-      <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-        <Img
-          src={`${process.env.NEXT_PUBLIC_SITE_URL}/Logo.png`}
-          alt="DanceHub Logo"
-          width="150"
-          height="auto"
-          style={{ margin: '0 auto' }}
-        />
-      </div>
-      
       <Heading style={EMAIL_STYLES.heading}>
         Welcome to DanceHub, {name}!
       </Heading>

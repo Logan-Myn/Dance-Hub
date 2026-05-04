@@ -3,6 +3,7 @@ import { query } from '@/lib/db';
 
 jest.mock('@/lib/db', () => ({
   query: jest.fn(),
+  sql: jest.fn().mockResolvedValue(undefined),
 }));
 
 const mockedQuery = query as unknown as jest.Mock;
@@ -45,5 +46,13 @@ describe('getActiveRecipientsForCommunity', () => {
     const result = await getActiveRecipientsForCommunity('c1');
     expect(result[0].displayName).toBe('there');
     expect(result[0].unsubscribeToken).toBeNull();
+  });
+
+  it('SQL filters out members with broadcasts_enabled=false in this community', async () => {
+    mockedQuery.mockResolvedValueOnce([]);
+    await getActiveRecipientsForCommunity('community-123');
+    const sqlText = mockedQuery.mock.calls[0][0].join('?');
+    expect(sqlText).toMatch(/community_email_preferences/);
+    expect(sqlText).toMatch(/cep\.broadcasts_enabled IS DISTINCT FROM false/);
   });
 });

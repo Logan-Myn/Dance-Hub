@@ -88,6 +88,7 @@ export async function POST(
 
     const result = await runBroadcast({
       broadcastId,
+      communityId: community.id,
       subject,
       htmlContent,
       previewText,

@@ -9,6 +9,7 @@ import { uploadFileToStorage, STORAGE_FOLDERS } from "@/lib/storage-client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "react-hot-toast";
 import { User2, Mail, Camera, AtSign, RefreshCw } from "lucide-react";
+import { EmailPreferencesCard } from "@/components/email-preferences/EmailPreferencesCard";
 
 interface Profile {
   id: string;
@@ -422,6 +423,8 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </form>
+
+      <EmailPreferencesCard />
     </div>
   );
-} 
+}

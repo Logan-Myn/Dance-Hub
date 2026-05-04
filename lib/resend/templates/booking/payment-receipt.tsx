@@ -213,15 +213,8 @@ export const PaymentReceiptEmail: React.FC<PaymentReceiptEmailProps> = ({
       )}
       
       <Text style={{ ...EMAIL_STYLES.paragraph, fontSize: '14px', color: EMAIL_COLORS.textLight, marginTop: '24px' }}>
-        This is an official receipt for your records. If you have any questions about this payment, 
+        This is an official receipt for your records. If you have any questions about this payment,
         please <Link href="mailto:billing@dance-hub.io" style={EMAIL_STYLES.link}>contact our billing team</Link>.
-      </Text>
-      
-      <Text style={{ ...EMAIL_STYLES.paragraph, fontSize: '12px', color: EMAIL_COLORS.textLight, marginTop: '16px' }}>
-        <strong>DanceHub</strong><br />
-        Tax ID: XX-XXXXXXX<br />
-        hello@dance-hub.io<br />
-        www.dance-hub.io
       </Text>
     </BaseLayout>
   );

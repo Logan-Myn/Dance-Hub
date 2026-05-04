@@ -1,4 +1,4 @@
-import { query } from '@/lib/db';
+import { query, sql } from '@/lib/db';
 
 export interface BroadcastRecipient {
   userId: string;
@@ -17,6 +17,22 @@ interface RecipientRow {
 export async function getActiveRecipientsForCommunity(
   communityId: string
 ): Promise<BroadcastRecipient[]> {
+  // Ensure every active member has an email_preferences row so they always
+  // have an unsubscribe_token (the column has a DEFAULT that generates one).
+  // Members who never visited /dashboard/settings would otherwise have no row,
+  // and the broadcast footer would fall back to a bare settings link without
+  // a token — breaking one-click unsubscribe.
+  await sql`
+    INSERT INTO email_preferences (user_id, email)
+    SELECT DISTINCT p.id, p.email
+    FROM community_members m
+    JOIN profiles p ON p.auth_user_id = m.user_id
+    WHERE m.community_id = ${communityId}
+      AND m.status = 'active'
+      AND p.email IS NOT NULL
+    ON CONFLICT (user_id) DO NOTHING
+  `;
+
   const rows = await query<RecipientRow>`
     SELECT
       m.user_id,
@@ -26,6 +42,8 @@ export async function getActiveRecipientsForCommunity(
     FROM community_members m
     JOIN profiles p ON p.auth_user_id = m.user_id
     LEFT JOIN email_preferences ep ON ep.email = p.email
+    LEFT JOIN community_email_preferences cep
+      ON cep.user_id = p.id AND cep.community_id = ${communityId}
     WHERE m.community_id = ${communityId}
       AND m.status = 'active'
       AND (
@@ -34,6 +52,7 @@ export async function getActiveRecipientsForCommunity(
       )
       AND (ep.teacher_broadcast IS DISTINCT FROM false)
       AND (ep.unsubscribed_all IS DISTINCT FROM true)
+      AND (cep.broadcasts_enabled IS DISTINCT FROM false)
       AND p.email IS NOT NULL
   `;
 

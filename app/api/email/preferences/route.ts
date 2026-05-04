@@ -9,112 +9,93 @@ interface EmailPreferences {
   unsubscribe_token: string;
   marketing_emails: boolean;
   course_announcements: boolean;
-  community_updates: boolean;
-  weekly_digest: boolean;
+  teacher_broadcast: boolean;
   unsubscribed_all: boolean;
   unsubscribed_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
+// session.user.id is the Better Auth text id; email_preferences.user_id is
+// the profiles.id UUID. Resolve through profiles before any query.
+async function resolveProfile(authUserId: string): Promise<{ id: string; email: string | null } | null> {
+  return queryOne<{ id: string; email: string | null }>`
+    SELECT id, email FROM profiles WHERE auth_user_id = ${authUserId}
+  `;
+}
+
 export async function GET() {
   try {
-    // Get the current user
     const session = await getSession();
-
     if (!session) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = session.user;
+    const profile = await resolveProfile(session.user.id);
+    if (!profile) {
+      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+    }
 
-    // Get user's email preferences
     let preferences = await queryOne<EmailPreferences>`
       SELECT *
       FROM email_preferences
-      WHERE user_id = ${user.id}
+      WHERE user_id = ${profile.id}
     `;
 
     if (!preferences) {
-      // If no preferences exist, create default ones
       preferences = await queryOne<EmailPreferences>`
         INSERT INTO email_preferences (user_id, email)
-        VALUES (${user.id}, ${user.email})
+        VALUES (${profile.id}, ${profile.email ?? session.user.email})
         RETURNING *
       `;
 
       if (!preferences) {
-        console.error('Error creating preferences: no row returned');
-        return NextResponse.json(
-          { error: "Failed to create preferences" },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: "Failed to create preferences" }, { status: 500 });
       }
     }
 
     return NextResponse.json({ preferences });
   } catch (error) {
     console.error('Error:', error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
-    // Get the current user
     const session = await getSession();
-
     if (!session) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = session.user;
+    const profile = await resolveProfile(session.user.id);
+    if (!profile) {
+      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+    }
+
     const updates = await request.json();
 
-    // Remove fields that shouldn't be updated directly
-    delete updates.id;
-    delete updates.user_id;
-    delete updates.email;
-    delete updates.unsubscribe_token;
-    delete updates.created_at;
-
-    // Build dynamic update query based on provided fields
     const preferences = await queryOne<EmailPreferences>`
       UPDATE email_preferences
       SET
         marketing_emails = COALESCE(${updates.marketing_emails ?? null}, marketing_emails),
         course_announcements = COALESCE(${updates.course_announcements ?? null}, course_announcements),
-        community_updates = COALESCE(${updates.community_updates ?? null}, community_updates),
-        weekly_digest = COALESCE(${updates.weekly_digest ?? null}, weekly_digest),
+        teacher_broadcast = COALESCE(${updates.teacher_broadcast ?? null}, teacher_broadcast),
         unsubscribed_all = COALESCE(${updates.unsubscribed_all ?? null}, unsubscribed_all),
         updated_at = NOW()
-      WHERE user_id = ${user.id}
+      WHERE user_id = ${profile.id}
       RETURNING *
     `;
 
     if (!preferences) {
-      console.error('Error updating preferences: no row returned');
-      return NextResponse.json(
-        { error: "Failed to update preferences" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Failed to update preferences" }, { status: 500 });
     }
 
-    // Log the preference update
     await sql`
       INSERT INTO email_events (user_id, email, event_type, email_type, metadata)
       VALUES (
-        ${user.id},
-        ${user.email},
+        ${profile.id},
+        ${preferences.email},
         'preferences_updated',
         'preferences',
         ${JSON.stringify({ updates })}::jsonb
@@ -127,9 +108,6 @@ export async function PUT(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error:', error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
