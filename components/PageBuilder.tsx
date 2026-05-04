@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent, type Modifier } from "@dnd-kit/core";
+
+const restrictToVerticalAxis: Modifier = ({ transform }) => ({
+  ...transform,
+  x: 0,
+});
 import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Section, SectionType } from "@/types/page-builder";
 import { useUndoableState } from "@/hooks/useUndoableState";
@@ -422,6 +427,7 @@ export default function PageBuilder({
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
         autoScroll={false}
+        modifiers={[restrictToVerticalAxis]}
       >
         <SortableContext
           items={sections.map((s) => s.id)}

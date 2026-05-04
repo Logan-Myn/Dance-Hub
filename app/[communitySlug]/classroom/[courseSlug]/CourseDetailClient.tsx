@@ -33,7 +33,13 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type Modifier,
 } from "@dnd-kit/core";
+
+const restrictToVerticalAxis: Modifier = ({ transform }) => ({
+  ...transform,
+  x: 0,
+});
 import {
   arrayMove,
   SortableContext,
@@ -1165,6 +1171,7 @@ export default function CourseDetailClient({
                   collisionDetection={closestCenter}
                   onDragEnd={handleDragEnd}
                   autoScroll={false}
+                  modifiers={[restrictToVerticalAxis]}
                 >
                   <SortableContext
                     items={chapters.map((chapter) => chapter.id)}
@@ -1222,6 +1229,7 @@ export default function CourseDetailClient({
                                     handleLessonDragEnd(chapter.id, event)
                                   }
                                   autoScroll={false}
+                                  modifiers={[restrictToVerticalAxis]}
                                 >
                                   <SortableContext
                                     items={(chapter.lessons || []).map(
