@@ -466,19 +466,20 @@ export default function FeedClient({
   };
 
   const handleNewThread = async (newThread: any) => {
+    // /api/threads/create returns DB-shaped fields (category_id), so accept
+    // both casings here.
+    const categoryId = newThread.categoryId ?? newThread.category_id;
     const selectedCategory = community?.threadCategories?.find(
-      (cat) => cat.id === newThread.categoryId
+      (cat) => cat.id === categoryId
     );
 
-    // /api/threads/create already returns `author` populated from the session
-    // user's profile.
     const threadWithAuthor = {
       ...newThread,
       author: newThread.author || {
         name: currentUser?.name || "Anonymous",
         image: currentUser?.image || "",
       },
-      categoryId: newThread.categoryId,
+      categoryId,
       category: selectedCategory?.name || "General",
       category_type: selectedCategory?.iconType,
       createdAt: newThread.createdAt || new Date().toISOString(),
@@ -795,6 +796,9 @@ export default function FeedClient({
               prevThreads.map((thread) =>
                 thread.id === threadId ? { ...thread, ...updates } : thread
               )
+            );
+            setSelectedThread((prev) =>
+              prev && prev.id === threadId ? { ...prev, ...updates } : prev
             );
           }}
           onDelete={(threadId) => {
