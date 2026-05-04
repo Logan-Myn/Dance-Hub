@@ -305,9 +305,8 @@ function Hero({ onCtaSignup }: { onCtaSignup: () => void }) {
           margin: "0 auto 36px",
         }}
       >
-        Threads, courses, live classes, and 1-on-1 lessons. One place to host your floor, get paid,
-        and keep the relationship with your students. No Discord plumbing, no half-broken
-        spreadsheet, no sales bot.
+        Threads, courses, live classes, and 1-on-1 lessons. One place to host your floor, get
+        paid, and keep the relationship with your students.
       </p>
       <div
         className="lp-cta-row"
@@ -764,8 +763,6 @@ function DecodedBand() {
         }}
       >
         Built ground-up for dance teachers.
-        <br />
-        Not creators. Not gamers. Not founders.
       </h2>
       <div
         style={{
@@ -861,7 +858,7 @@ const FEATURES: FeatureRow[] = [
   {
     kicker: "02 · Classroom",
     title: "Courses with chapters, lessons, and progress tracking",
-    body: "Upload your videos, structure them into chapters and lessons, and your students mark their way through. Streaming and transcoding are handled for you, so the same file plays smoothly on phones, tablets, laptops, big screens. You stop thinking about codecs.",
+    body: "Upload your videos, structure them into chapters and lessons, and your students mark their way through. Streaming and transcoding are handled for you, so the same file plays smoothly on phones, tablets, laptops, and big screens.",
     tone: "gold",
     side: "left",
   },
@@ -875,14 +872,14 @@ const FEATURES: FeatureRow[] = [
   {
     kicker: "04 · Private lessons",
     title: "1-on-1 lessons, booked and paid before the door opens",
-    body: "Set your hourly rate, set your availability, share the link. Students book and pay before they show up. They get a private video room with a token-protected link. You get a calendar event and a paid booking. No back-and-forth, no chasing payments.",
+    body: "Set your hourly rate, set your availability, share the link. Students book and pay before they show up. You get a calendar event and a paid booking. No back-and-forth, no chasing payments.",
     tone: "warm",
     side: "left",
   },
   {
     kicker: "05 · Memberships & payouts",
-    title: "Up to 96% goes to you. Your payout schedule, your bank.",
-    body: "0% platform fees for the first 30 days. After that, 8% under 50 members, 6% to 100, 4% beyond. Connect your payment account in three clicks. Choose weekly or monthly payouts. Refunds, subscriptions, and one-off purchases all in one dashboard.",
+    title: "Your payout schedule, your bank.",
+    body: "Connect your payment account in three clicks. Choose weekly or monthly payouts. Refunds, subscriptions, and one-off purchases all in one dashboard.",
     tone: "lavender",
     side: "right",
   },
@@ -1059,7 +1056,7 @@ function BoldClaim() {
             fontWeight: 600,
             letterSpacing: -2,
             lineHeight: 1.0,
-            margin: "0 0 28px",
+            margin: "0 0 50px",
           }}
         >
           Built for the floor.{" "}
@@ -1074,19 +1071,6 @@ function BoldClaim() {
             It shows.
           </span>
         </h2>
-        <p
-          style={{
-            fontSize: 18,
-            lineHeight: 1.55,
-            opacity: 0.75,
-            maxWidth: 720,
-            margin: "0 auto 50px",
-          }}
-        >
-          Skool was built for online business courses. Patreon for podcasters. Discord for gamers.
-          Dance-Hub is the only one where the platform is shaped like the way teachers actually
-          run a community: feed, classroom, live class, private lesson, payout. In one place.
-        </p>
         <div
           className="lp-stats"
           style={{
@@ -1142,114 +1126,7 @@ function BoldClaim() {
   );
 }
 
-// ── 7. "What you don't have to build" band ──
-function CommunityBand() {
-  const handled = [
-    "Sign-in & user accounts",
-    "Video hosting & transcoding",
-    "Browser-based live class rooms",
-    "Payment account onboarding",
-    "Subscriptions & refunds",
-    "Receipts & email broadcasts",
-    "Public directory listing",
-    "Mobile-responsive UI",
-  ];
-  return (
-    <section style={{ maxWidth: 1240, margin: "60px auto", padding: "0 32px" }}>
-      <div
-        className="lp-band"
-        style={{
-          background: LT.card,
-          border: `1px solid ${LT.border}`,
-          borderRadius: 24,
-          padding: "52px 56px",
-          display: "grid",
-          gridTemplateColumns: "1fr 1.1fr",
-          gap: 56,
-          alignItems: "center",
-        }}
-      >
-        <div>
-          <div
-            style={{
-              fontSize: 11,
-              letterSpacing: 3,
-              textTransform: "uppercase",
-              color: LT.primary,
-              marginBottom: 14,
-              fontWeight: 600,
-            }}
-          >
-            ─── What you don&apos;t have to build
-          </div>
-          <h2
-            className="lp-h2"
-            style={{
-              fontFamily: FONT_DISPLAY,
-              fontSize: 42,
-              fontWeight: 600,
-              letterSpacing: -1.4,
-              lineHeight: 1.05,
-              margin: "0 0 18px",
-            }}
-          >
-            The boring plumbing,{" "}
-            <span style={{ color: LT.primary }}>solved.</span>
-          </h2>
-          <p
-            style={{
-              fontSize: 16,
-              lineHeight: 1.55,
-              color: LT.fgSoft,
-              margin: "0 0 26px",
-              maxWidth: 460,
-            }}
-          >
-            You teach. We handle the rest. Everything below is wired in on day one, so your
-            Sunday goes back to choreography instead of plugging a sixth tool into a Google Sheet.
-          </p>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 24 }}>
-            {handled.map((p, i) => (
-              <div
-                key={i}
-                style={{
-                  padding: "7px 14px",
-                  borderRadius: 999,
-                  background: LT.primarySoft,
-                  color: LT.primaryDeep,
-                  fontSize: 13,
-                  fontWeight: 600,
-                }}
-              >
-                {p}
-              </div>
-            ))}
-          </div>
-          <Link
-            href="/discovery"
-            style={{
-              display: "inline-block",
-              padding: "12px 22px",
-              borderRadius: 10,
-              background: LT.primary,
-              color: "white",
-              fontWeight: 600,
-              fontSize: 14,
-              textDecoration: "none",
-            }}
-          >
-            See it in a real community →
-          </Link>
-        </div>
-        <div>
-          <PhotoPlaceholder label="admin dashboard · screenshot" h={340} radius={16} tone="lavender" />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ── 8. Pricing ──
+// ── 7. Pricing ──
 function Pricing({ onCtaSignup }: { onCtaSignup: () => void }) {
   return (
     <section
@@ -1461,7 +1338,7 @@ function PricingCard({
   );
 }
 
-// ── 9. FAQ ──
+// ── 8. FAQ ──
 const FAQS: Array<{ q: string; a: string }> = [
   {
     q: "How is Dance-Hub different from Skool, Patreon or Discord?",
@@ -1587,7 +1464,7 @@ function FAQ() {
   );
 }
 
-// ── 10. Founder note ──
+// ── 9. Founder note ──
 function FounderLetter() {
   return (
     <section style={{ background: LT.bgDeep, padding: "90px 0", margin: "60px 0" }}>
@@ -1642,20 +1519,13 @@ function FounderLetter() {
           <div style={{ fontSize: 16, lineHeight: 1.7, color: LT.fgSoft, marginBottom: 24 }}>
             <p style={{ margin: "0 0 14px" }}>Hey teachers,</p>
             <p style={{ margin: "0 0 14px" }}>
-              Before Dance-Hub, running a paid floor meant a Discord, a Patreon, a course
-              platform, two payment accounts, a mailing-list tool and a Google Sheet that broke
-              once a month. Sunday afternoons weren&apos;t for class prep. They were for tool
-              plumbing.
-            </p>
-            <p style={{ margin: "0 0 14px" }}>
-              We talked to teachers running real floors, physical and virtual. They all had the
-              same six tabs open. So we wrote down what one tool would have to do, and started
-              building.
+              Before Dance-Hub, running a paid floor meant six tabs open at once. We talked to
+              teachers running real floors, physical and virtual, and wrote down what one tool
+              would have to do. Then we built it.
             </p>
             <p style={{ margin: "0 0 18px" }}>
-              Dance-Hub is that tool. It&apos;s not for course launchers, business gurus, or
-              creators selling AI prompts. It&apos;s for teachers who run a real community, and
-              want to keep the relationship with their students intact.
+              It&apos;s for teachers who run a real community and want to keep the relationship
+              with their students intact.
             </p>
             <div
               style={{
@@ -1680,7 +1550,7 @@ function FounderLetter() {
   );
 }
 
-// ── 11. Final CTA ──
+// ── 10. Final CTA ──
 function FinalCTA({ onCtaSignup }: { onCtaSignup: () => void }) {
   return (
     <section style={{ maxWidth: 1240, margin: "60px auto", padding: "0 32px" }}>
@@ -1862,7 +1732,7 @@ function FinalCTA({ onCtaSignup }: { onCtaSignup: () => void }) {
   );
 }
 
-// ── 12. Footer ──
+// ── 11. Footer ──
 function FooterBlock() {
   return (
     <footer
@@ -2078,7 +1948,6 @@ export default function HomePageClient() {
       <DecodedBand />
       <FeatureRows />
       <BoldClaim />
-      <CommunityBand />
       <Pricing onCtaSignup={onCtaSignup} />
       <FAQ />
       <FounderLetter />
