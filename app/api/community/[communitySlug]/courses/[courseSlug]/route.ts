@@ -316,13 +316,36 @@ export async function PUT(
     const description = formData.get("description") as string;
     const isPublic = formData.get("is_public") === "true";
 
-    // Update the course
+    // Regenerate the slug when the title changes so the URL tracks the new
+    // title. Suffix with `-2`, `-3`, ... if the candidate collides with
+    // another course in this community.
+    let newSlug = currentCourse.slug;
+    if (title && title !== currentCourse.title) {
+      const base = slugify(title);
+      let candidate = base;
+      let n = 1;
+      while (true) {
+        const collision = await queryOne<{ id: string }>`
+          SELECT id FROM courses
+          WHERE community_id = ${community.id}
+            AND slug = ${candidate}
+            AND id != ${currentCourse.id}
+          LIMIT 1
+        `;
+        if (!collision) break;
+        n += 1;
+        candidate = `${base}-${n}`;
+      }
+      newSlug = candidate;
+    }
+
     await sql`
       UPDATE courses
       SET
         title = ${title},
         description = ${description},
         is_public = ${isPublic},
+        slug = ${newSlug},
         updated_at = NOW()
       WHERE id = ${currentCourse.id}
     `;
@@ -331,7 +354,7 @@ export async function PUT(
     // bulk insert (was previously one INSERT per member, taking minutes for
     // large communities).
     if (isPublic && !currentCourse.is_public) {
-      const courseUrl = `/${params.communitySlug}/classroom/${params.courseSlug}`;
+      const courseUrl = `/${params.communitySlug}/classroom/${newSlug}`;
       const notifTitle = `New Course Available: ${title}`;
       const notifMessage = `A new course is now available in your community: ${community.name}`;
 

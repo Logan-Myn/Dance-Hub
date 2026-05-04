@@ -421,6 +421,7 @@ export default function PageBuilder({
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
+        autoScroll={false}
       >
         <SortableContext
           items={sections.map((s) => s.id)}

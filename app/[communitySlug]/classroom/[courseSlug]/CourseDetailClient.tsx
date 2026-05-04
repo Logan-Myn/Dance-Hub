@@ -725,7 +725,16 @@ export default function CourseDetailClient({
 
       toast.success("Course updated successfully");
       setIsEditingCourse(false);
-      mutateCourse();
+
+      // If the title change produced a new slug, the current URL is now
+      // stale — replace it. router.refresh() also re-renders the parent RSC
+      // tree (classroom listing) so the renamed title shows up there too.
+      if (course.slug && course.slug !== courseSlug) {
+        router.replace(`/${communitySlug}/classroom/${course.slug}`);
+      } else {
+        mutateCourse();
+        router.refresh();
+      }
     } catch (error) {
       console.error("Error updating course:", error);
       toast.error("Error updating course");
@@ -1155,6 +1164,7 @@ export default function CourseDetailClient({
                   sensors={sensors}
                   collisionDetection={closestCenter}
                   onDragEnd={handleDragEnd}
+                  autoScroll={false}
                 >
                   <SortableContext
                     items={chapters.map((chapter) => chapter.id)}
@@ -1211,6 +1221,7 @@ export default function CourseDetailClient({
                                   onDragEnd={(event) =>
                                     handleLessonDragEnd(chapter.id, event)
                                   }
+                                  autoScroll={false}
                                 >
                                   <SortableContext
                                     items={(chapter.lessons || []).map(
