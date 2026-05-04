@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -158,6 +159,16 @@ export default function SettingsPage() {
     return formatDisplayName(profile.full_name) || '';
   };
 
+  const getUserInitial = () => {
+    return (
+      profile?.display_name?.[0] ||
+      profile?.full_name?.[0] ||
+      user?.name?.[0] ||
+      user?.email?.[0] ||
+      'U'
+    ).toUpperCase();
+  };
+
   const handleDisplayNameChange = (value: string) => {
     setProfile(prev =>
       prev ? { ...prev, display_name: value || null } : null
@@ -250,11 +261,12 @@ export default function SettingsPage() {
             {/* Avatar Upload */}
             <div className="flex items-center space-x-4">
               <div className="relative">
-                <img
-                  src={profile?.avatar_url || user?.image || '/placeholder-avatar.png'}
-                  alt="Profile"
-                  className="h-20 w-20 rounded-full object-cover"
-                />
+                <Avatar className="h-20 w-20">
+                  <AvatarImage src={profile?.avatar_url || user?.image || undefined} alt="Profile" />
+                  <AvatarFallback className="text-lg uppercase">
+                    {getUserInitial()}
+                  </AvatarFallback>
+                </Avatar>
                 <Label
                   htmlFor="avatar-upload"
                   className={`absolute bottom-0 right-0 p-1 bg-white rounded-full shadow-lg cursor-pointer hover:bg-gray-100 ${
