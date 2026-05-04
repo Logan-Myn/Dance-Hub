@@ -85,9 +85,9 @@ export default function Comment({
       });
 
       if (!response.ok) {
-        // Revert on error
-        setLocalLikes(wasLiked ? [...localLikes] : localLikes.filter(likeId => likeId !== user.id));
-        setLocalLikesCount(wasLiked ? localLikesCount : localLikesCount - 1);
+        // Revert to pre-optimistic state.
+        setLocalLikes(localLikes);
+        setLocalLikesCount(localLikesCount);
         const error = await response.text();
         throw new Error(error || 'Failed to like comment');
       }

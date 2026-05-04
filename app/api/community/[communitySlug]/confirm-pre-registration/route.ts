@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
 import { sql, queryOne } from "@/lib/db";
-import Stripe from "stripe";
+import { stripe } from "@/lib/stripe";
 import React from "react";
 import { getEmailService } from "@/lib/resend/email-service";
 import { PreRegistrationConfirmationEmail } from "@/lib/resend/templates/community/pre-registration-confirmation";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-12-15.clover" as Stripe.LatestApiVersion,
-});
 
 const emailService = getEmailService();
 

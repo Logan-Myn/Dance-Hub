@@ -111,7 +111,7 @@ interface Comment {
 interface CommentProps extends Comment {
   threadId: string;
   onReply: (commentId: string, content: string) => Promise<void>;
-  onLikeUpdate: (
+  onLike: (
     commentId: string,
     newLikesCount: number,
     liked: boolean
@@ -166,15 +166,15 @@ export default function ThreadView({
     fetchUserProfile();
   }, [user]);
 
-  // Use comments from props if available, otherwise fetch
+  // Use comments from props if available, otherwise fetch on demand.
+  // The feed list now ships threads without comment bodies (count only),
+  // so the modal/page lazy-loads them when first opened.
   useEffect(() => {
-    // If thread already has comments, use them directly
-    if (thread.comments && thread.comments.length > 0) {
+    if (thread.comments !== undefined && thread.comments.length > 0) {
       setLocalComments(thread.comments);
       return;
     }
 
-    // Only fetch if we have a thread id and no comments in props
     async function fetchComments() {
       try {
         const response = await fetch(`/api/threads/${thread.id}/comments`);
@@ -327,9 +327,6 @@ export default function ThreadView({
         title: editedTitle.trim(),
         content: editedContent.trim(),
       });
-
-      thread.title = editedTitle.trim();
-      thread.content = editedContent.trim();
 
       setIsEditing(false);
       toast.success("Thread updated successfully");
@@ -530,7 +527,7 @@ export default function ThreadView({
     ...comment,
     threadId: thread.id,
     onReply: handleReply,
-    onLikeUpdate: handleCommentLike,
+    onLike: handleCommentLike,
     replies: comment.replies?.map((reply: Comment) => mapCommentToProps(reply)),
   });
 
@@ -662,7 +659,11 @@ export default function ThreadView({
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuItem
-                        onClick={() => setIsEditing(true)}
+                        onClick={() => {
+                          setEditedTitle(thread.title);
+                          setEditedContent(thread.content);
+                          setIsEditing(true);
+                        }}
                         className="rounded-lg cursor-pointer"
                       >
                         <Edit2 className="h-4 w-4 mr-2" />
@@ -720,11 +721,11 @@ export default function ThreadView({
             ) : (
               <>
                 <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-4">
-                  {editedTitle}
+                  {thread.title}
                 </h2>
                 <div className="prose prose-sm max-w-none text-foreground">
                   <Editor
-                    content={editedContent}
+                    content={thread.content}
                     onChange={() => {}}
                     editable={false}
                   />

@@ -16,9 +16,6 @@ import {
 import { Switch } from "./ui/switch";
 import { CATEGORY_ICONS } from "@/lib/constants";
 import Editor from "./Editor";
-import { useEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
 import { formatDisplayName } from "@/lib/utils";
 
 interface ThreadProps {
@@ -66,16 +63,6 @@ export default function Thread({
 
     fetchProfile();
   }, [user]);
-
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Placeholder.configure({
-        placeholder: 'Write your post here...',
-      }),
-    ],
-    immediatelyRender: false,
-  });
 
   const handleSubmit = async () => {
     if (!title.trim()) {

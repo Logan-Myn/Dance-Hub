@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { queryOne, sql } from '@/lib/db';
+import { getSession } from '@/lib/auth-session';
 
 interface Profile {
   id: string;
@@ -17,10 +18,19 @@ export async function POST(
   { params }: { params: { threadId: string; commentId: string } }
 ) {
   try {
-    const { content, userId, author } = await request.json();
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+    const { content } = await request.json();
     const { threadId, commentId } = params;
 
-    // Verify parent comment exists
+    if (!content || typeof content !== 'string' || !content.trim()) {
+      return NextResponse.json({ error: 'Content is required' }, { status: 400 });
+    }
+
     const parentComment = await queryOne<Comment>`
       SELECT id
       FROM comments
@@ -31,7 +41,6 @@ export async function POST(
       return NextResponse.json({ error: 'Parent comment not found' }, { status: 404 });
     }
 
-    // Get user profile data
     const userData = await queryOne<Profile>`
       SELECT id, full_name, display_name, avatar_url
       FROM profiles
@@ -39,13 +48,12 @@ export async function POST(
     `;
 
     const authorData = {
-      name: author?.name || userData?.display_name || userData?.full_name || 'Anonymous',
-      image: author?.avatar_url || userData?.avatar_url || '',
+      name: userData?.display_name || userData?.full_name || 'Anonymous',
+      image: userData?.avatar_url || '',
     };
 
     const replyId = crypto.randomUUID();
 
-    // Insert reply into comments table with parent_id
     await sql`
       INSERT INTO comments (id, thread_id, user_id, content, parent_id, author, likes, likes_count)
       VALUES (
@@ -60,7 +68,6 @@ export async function POST(
       )
     `;
 
-    // Return the created reply
     const reply = {
       id: replyId,
       thread_id: threadId,

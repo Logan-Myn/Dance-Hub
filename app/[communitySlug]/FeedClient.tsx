@@ -1,20 +1,15 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { notFound, useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
-import { Users, ExternalLink, Search, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
-import Image from "next/image";
 import PaymentModal from "@/components/PaymentModal";
 import { PreRegistrationPaymentModal } from "@/components/PreRegistrationPaymentModal";
 import { PreRegistrationComingSoon } from "@/components/PreRegistrationComingSoon";
 import Thread from "@/components/Thread";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import ThreadModal from "@/components/ThreadModal";
-import ThreadCategories from "@/components/ThreadCategories";
 import CommunityHeader from "@/components/community/CommunityHeader";
 import ComposerBox from "@/components/community/ComposerBox";
 import CategoryPills from "@/components/community/CategoryPills";
@@ -31,24 +26,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ThreadCategory } from "@/types/community";
-import { Card } from "@/components/ui/card";
-import { cn, formatDisplayName } from "@/lib/utils";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
-import { Input } from "@/components/ui/input";
 import { useNextStep } from "nextstepjs";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 
 interface CustomLink {
   title: string;
   url: string;
-}
-
-interface Profile {
-  id: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  display_name: string | null;
 }
 
 interface Thread {
@@ -77,6 +62,9 @@ interface Member {
   community_id: string;
   role: string;
   created_at: string;
+  status?: string | null;
+  subscription_status?: string | null;
+  current_period_end?: string | null;
   profile?: {
     id: string;
     full_name: string | null;
@@ -109,67 +97,6 @@ interface Community {
   opening_date?: string | null;
 }
 
-interface ThreadCardProps {
-  thread: {
-    id: string;
-    title: string;
-    content: string;
-    createdAt: string;
-    userId: string;
-    likesCount: number;
-    commentsCount: number;
-    category?: string;
-    categoryId?: string;
-    author: {
-      name: string;
-      image: string;
-    };
-    likes?: string[];
-    comments?: any[];
-  };
-  currentUser: {
-    id: string;
-    email: string;
-    name?: string;
-    image?: string | null;
-  } | null;
-  onLike: (threadId: string, newLikesCount: number, liked: boolean) => void;
-  onClick: () => void;
-}
-
-interface ThreadCategoriesProps {
-  categories: ThreadCategory[];
-  selectedCategory: string | null;
-  onSelectCategory: (category: string | null) => void;
-}
-
-interface PaymentModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  clientSecret: string | null;
-  stripeAccountId: string | null;
-  price: number;
-  onSuccess: () => void;
-  communitySlug: string;
-}
-
-const reservedPaths = [
-  'admin',
-  'discovery',
-  'onboarding',
-  'login',
-  'register',
-  'dashboard',
-  'api',
-  'auth',
-  'components',
-  'fonts',
-  'favicon.ico',
-  'globals.css',
-  'robots.txt',
-  'sitemap.xml',
-];
-
 interface FeedClientProps {
   communitySlug: string;
   initialCommunity: Community;
@@ -199,40 +126,38 @@ export default function FeedClient({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isMobile = useIsMobile();
-  const { user: currentUser, loading: isAuthLoading } = useAuth();
-  const [searchQuery, setSearchQuery] = useState("");
+  const { user: currentUser } = useAuth();
 
-  // Add SWR for community data
+  // SWR keeps community / members / threads fresh in the background. We seed
+  // it with initialCommunity / initialThreads so the first paint never
+  // duplicates the server fetch — and skip a redundant /community for members
+  // since SSR didn't provide them.
   const {
     data: communityData,
     error: communityError,
-    isLoading: isCommunityLoading,
   } = useSWR<Community>(
     communitySlug ? `community:${communitySlug}` : null,
-    fetcher
+    fetcher,
+    { fallbackData: initialCommunity }
   );
 
-  // Add SWR for members data
   const {
     data: membersData,
     error: membersError,
-    isLoading: isMembersLoading,
   } = useSWR<Member[]>(
     communitySlug ? `community-members:${communitySlug}` : null,
     fetcher
   );
 
-  // Add SWR for threads data
   const {
     data: threadsData,
     error: threadsError,
-    isLoading: isThreadsLoading,
   } = useSWR<Thread[]>(
     communitySlug ? `community-threads:${communitySlug}` : null,
-    fetcher
+    fetcher,
+    { fallbackData: initialThreads }
   );
 
-  const [isLoading, setIsLoading] = useState(false);
   const [community, setCommunity] = useState<Community | null>(initialCommunity);
   const [members, setMembers] = useState<Member[]>([]);
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
@@ -276,26 +201,15 @@ export default function FeedClient({
   }, [selectedThread, searchParams, router, pathname]);
   const [totalMembers, setTotalMembers] = useState(0);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
-  const [newThreadId, setNewThreadId] = useState<string | null>(null);
-  const [lastCreatedThread, setLastCreatedThread] = useState<string | null>(
-    null
-  );
   const [accessEndDate, setAccessEndDate] = useState<string | null>(initialAccessEndDate);
   const [memberStatus, setMemberStatus] = useState<string | null>(initialMemberStatus);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(initialSubscriptionStatus);
-  // Server already gated access in page.tsx, so we start in the post-check
-  // state. Existing fetchData flow stays for now to refresh the data.
-  const [membershipChecked, setMembershipChecked] = useState(true);
 
   const { startNextStep, currentTour } = useNextStep();
 
-  // Initialize the onboarding tour for creators. Step routing and completion
-  // tracking live in NextStepWrapper so they survive cross-page navigation
-  // (FeedClient unmounts as soon as the tour pushes the user to /admin/*).
-  // Guard with a ref so we only schedule the timer once per mount, and
-  // bail if the tour is already running — otherwise FeedClient remounting
-  // (e.g. when a tour step routes back to /) would restart the tour from
-  // step 0 mid-flight.
+  // Schedule the onboarding tour for creators once per mount. Ref-guard so a
+  // FeedClient remount doesn't restart the tour mid-flight (the tour can route
+  // the user back through this page).
   const tourScheduledRef = useRef(false);
   useEffect(() => {
     if (!isCreator) return;
@@ -306,9 +220,10 @@ export default function FeedClient({
     if (localStorage.getItem(tourKey)) return;
 
     tourScheduledRef.current = true;
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       startNextStep('onboarding');
     }, 1500);
+    return () => clearTimeout(timer);
   }, [isCreator, communitySlug, startNextStep, currentTour]);
 
   // Update community state when SWR data changes
@@ -367,128 +282,22 @@ export default function FeedClient({
     }
   }, [threadsError]);
 
-  // (Membership / creator / admin / pre-registered checks now happen
-  // server-side in page.tsx and arrive as initial props. The fetchData
-  // useEffect below still refreshes the data on mount.)
+  // Membership / creator / admin / pre-registered checks happen server-side in
+  // page.tsx and arrive as initial props. SWR refreshes community / members /
+  // threads above; the manual mirror useEffects sync those caches into local
+  // state so existing code keeps working.
 
-  // Only fetch data after membership is confirmed
+  // Mirror SWR membersData into the current user's membership status.
   useEffect(() => {
-    if (!membershipChecked || !currentUser) return;
-
-    async function fetchData() {
-      try {
-        // Get community data via API
-        const communityResponse = await fetch(`/api/community/${communitySlug}`);
-        if (!communityResponse.ok) {
-          notFound();
-          return;
-        }
-        const communityData = await communityResponse.json();
-
-        // Get members with profiles via API
-        const membersResponse = await fetch(`/api/community/${communitySlug}/members`);
-        if (!membersResponse.ok) {
-          throw new Error("Failed to fetch members");
-        }
-        const { members: membersData } = await membersResponse.json();
-
-        // Format members data with profile information
-        const formattedMembers = (membersData || []).map((member: any) => ({
-          ...member,
-          user_id: member.user_id,
-          profile: {
-            id: member.user_id,
-            full_name: member.displayName || "Anonymous",
-            display_name: member.displayName,
-            avatar_url: member.imageUrl,
-          },
-        }));
-
-        // Check current user's membership status
-        if (currentUser) {
-          const currentMember = formattedMembers.find(
-            (m: any) => m.user_id === currentUser.id
-          );
-          if (currentMember) {
-            setMemberStatus(currentMember.status);
-            setSubscriptionStatus(currentMember.subscription_status);
-            if (currentMember.current_period_end) {
-              setAccessEndDate(currentMember.current_period_end);
-            }
-          }
-        }
-
-        // Get threads via API
-        const threadsResponse = await fetch(`/api/community/${communitySlug}/threads`);
-        if (!threadsResponse.ok) {
-          throw new Error("Failed to fetch threads");
-        }
-        const threadsData = await threadsResponse.json();
-
-        // Format threads data (API already formats author info)
-        const formattedThreads = (threadsData || []).map((thread: any) => ({
-          id: thread.id,
-          title: thread.title,
-          content: thread.content,
-          createdAt: thread.created_at || thread.createdAt,
-          userId: thread.user_id || thread.userId,
-          author: thread.author || {
-            name: "Anonymous",
-            image: "",
-          },
-          category: thread.category || "General",
-          category_type: thread.category_type || null,
-          categoryId: thread.category_id || thread.categoryId,
-          likesCount: thread.likes_count || thread.likesCount || 0,
-          commentsCount: thread.comments_count || thread.commentsCount || 0,
-          likes: thread.likes || [],
-          comments: thread.comments || [],
-          pinned: thread.pinned || false,
-        }));
-
-        // Format community data
-        const formattedCommunity: Community = {
-          ...communityData,
-          membersCount: formattedMembers.length,
-          createdBy: communityData.created_by || communityData.createdBy,
-          imageUrl: communityData.image_url || communityData.imageUrl,
-          imageFocalX: communityData.image_focal_x ?? communityData.imageFocalX ?? 50,
-          imageFocalY: communityData.image_focal_y ?? communityData.imageFocalY ?? 50,
-          imageZoom: Number(communityData.image_zoom ?? communityData.imageZoom ?? 1),
-          threadCategories: communityData.thread_categories || communityData.threadCategories || [],
-          customLinks: communityData.custom_links || communityData.customLinks || [],
-          membershipEnabled: communityData.membership_enabled || communityData.membershipEnabled || false,
-          membershipPrice: communityData.membership_price || communityData.membershipPrice || 0,
-          stripeAccountId: communityData.stripe_account_id || communityData.stripeAccountId || null,
-        };
-
-        setCommunity(formattedCommunity);
-        setMembers(formattedMembers);
-        setThreads(formattedThreads);
-        // isCreator is already set during membership check to prevent UI flash
-        setTotalMembers(formattedMembers.length);
-      } catch (error) {
-        console.error("Error:", error);
-        setError(error instanceof Error ? error : new Error("Unknown error"));
-      } finally {
-        setIsLoading(false);
-      }
+    if (!membersData || !currentUser) return;
+    const currentMember = membersData.find((m) => m.user_id === currentUser.id);
+    if (!currentMember) return;
+    setMemberStatus(currentMember.status ?? null);
+    setSubscriptionStatus(currentMember.subscription_status ?? null);
+    if (currentMember.current_period_end) {
+      setAccessEndDate(currentMember.current_period_end);
     }
-
-    fetchData();
-  }, [communitySlug, currentUser, membershipChecked]);
-
-  // Update loading state to include threads loading
-  useEffect(() => {
-    if (
-      !isAuthLoading &&
-      !isCommunityLoading &&
-      !isMembersLoading &&
-      !isThreadsLoading
-    ) {
-      setIsLoading(false);
-    }
-  }, [isAuthLoading, isCommunityLoading, isMembersLoading, isThreadsLoading]);
+  }, [membersData, currentUser]);
 
   const handleJoinCommunity = async () => {
     if (!currentUser) {
@@ -661,31 +470,18 @@ export default function FeedClient({
       (cat) => cat.id === newThread.categoryId
     );
 
-    // Get the current user's profile to get the display name via API
-    let profileData = null;
-    try {
-      const profileResponse = await fetch(`/api/profile?userId=${currentUser?.id}`);
-      if (profileResponse.ok) {
-        profileData = await profileResponse.json();
-      }
-    } catch (error) {
-      console.error("Error fetching profile:", error);
-    }
-
+    // /api/threads/create already returns `author` populated from the session
+    // user's profile.
     const threadWithAuthor = {
       ...newThread,
-      author: {
-        name:
-          profileData?.display_name || profileData?.full_name || currentUser?.name || "Anonymous",
-        image:
-          profileData?.avatar_url ||
-          currentUser?.image ||
-          "",
+      author: newThread.author || {
+        name: currentUser?.name || "Anonymous",
+        image: currentUser?.image || "",
       },
       categoryId: newThread.categoryId,
       category: selectedCategory?.name || "General",
       category_type: selectedCategory?.iconType,
-      createdAt: new Date().toISOString(),
+      createdAt: newThread.createdAt || new Date().toISOString(),
       likesCount: 0,
       commentsCount: 0,
       likes: [],
@@ -693,17 +489,8 @@ export default function FeedClient({
     };
 
     setThreads((prevThreads) => [threadWithAuthor, ...prevThreads]);
-    setLastCreatedThread(threadWithAuthor.id);
     setIsWriting(false);
   };
-
-  useEffect(() => {
-    if (lastCreatedThread) {
-      // Force a re-render for the new thread
-      setThreads((threads) => [...threads]);
-      setLastCreatedThread(null);
-    }
-  }, [lastCreatedThread]);
 
   const handleLikeUpdate = (
     threadId: string,
@@ -785,48 +572,14 @@ export default function FeedClient({
     });
   }, [threads, selectedCategory]);
 
-  const fetchThreads = async () => {
-    if (!community) return;
-
-    try {
-      // Get threads via API
-      const threadsResponse = await fetch(`/api/community/${communitySlug}/threads`);
-      if (!threadsResponse.ok) {
-        throw new Error("Failed to fetch threads");
-      }
-      const threadsData = await threadsResponse.json();
-
-      // Format threads data (API already formats author info)
-      const formattedThreads = (threadsData || []).map((thread: any) => ({
-        id: thread.id,
-        title: thread.title,
-        content: thread.content,
-        createdAt: thread.created_at || thread.createdAt,
-        userId: thread.user_id || thread.userId,
-        author: thread.author || {
-          name: "Anonymous",
-          image: "",
-        },
-        category: thread.category || "General",
-        category_type: thread.category_type || null,
-        categoryId: thread.category_id || thread.categoryId,
-        likesCount: thread.likes_count || thread.likesCount || 0,
-        commentsCount: thread.comments_count || thread.commentsCount || 0,
-        likes: thread.likes || [],
-        comments: thread.comments || [],
-        pinned: thread.pinned || false,
-      }));
-
-      setThreads(formattedThreads);
-    } catch (error) {
-      console.error("Error fetching threads:", error);
-      setError(error as Error);
-    } finally {
-      setIsLoading(false);
+  const categoriesById = useMemo(() => {
+    const map = new Map<string, ThreadCategory>();
+    for (const cat of community?.threadCategories ?? []) {
+      map.set(cat.id, cat);
     }
-  };
+    return map;
+  }, [community?.threadCategories]);
 
-  // Handle pre-registration cancellation
   const handleCancelPreRegistration = async () => {
     if (!currentUser || !community) return;
 
@@ -850,11 +603,6 @@ export default function FeedClient({
       toast.error('Failed to cancel pre-registration');
     }
   };
-
-  // Return nothing while checking membership or loading
-  if (!membershipChecked || isLoading) {
-    return null;
-  }
 
   if (error) {
     return <div>Error loading community: {error.message}</div>;
@@ -962,36 +710,29 @@ export default function FeedClient({
 
               {/* Threads list */}
               <div className="space-y-4">
-                {filteredThreads.map((thread) => (
-                  <ThreadCardFluid
-                    key={thread.id}
-                    id={thread.id}
-                    title={thread.title}
-                    content={thread.content}
-                    author={thread.author}
-                    created_at={thread.createdAt}
-                    likes_count={thread.likesCount}
-                    comments_count={thread.commentsCount}
-                    category={
-                      thread.id === newThreadId
-                        ? thread.category
-                        : community.threadCategories?.find(
-                            (cat) => cat.id === thread.categoryId
-                          )?.name || "General"
-                    }
-                    category_type={
-                      thread.id === newThreadId
-                        ? thread.category_type
-                        : community.threadCategories?.find(
-                            (cat) => cat.id === thread.categoryId
-                          )?.iconType
-                    }
-                    likes={thread.likes}
-                    pinned={thread.pinned}
-                    onClick={() => handleThreadClick(thread)}
-                    onLikeUpdate={handleLikeUpdate}
-                  />
-                ))}
+                {filteredThreads.map((thread) => {
+                  const cat = thread.categoryId
+                    ? categoriesById.get(thread.categoryId)
+                    : undefined;
+                  return (
+                    <ThreadCardFluid
+                      key={thread.id}
+                      id={thread.id}
+                      title={thread.title}
+                      content={thread.content}
+                      author={thread.author}
+                      created_at={thread.createdAt}
+                      likes_count={thread.likesCount}
+                      comments_count={thread.commentsCount}
+                      category={cat?.name || "General"}
+                      category_type={cat?.iconType}
+                      likes={thread.likes}
+                      pinned={thread.pinned}
+                      onClick={() => handleThreadClick(thread)}
+                      onLikeUpdate={handleLikeUpdate}
+                    />
+                  );
+                })}
                 {filteredThreads.length === 0 && (
                   <div className="text-center py-12 text-muted-foreground">
                     <p className="text-lg font-medium mb-2">No threads yet</p>
@@ -1024,7 +765,11 @@ export default function FeedClient({
         </div>
 
       {/* Modals */}
-      {selectedThread && (
+      {selectedThread && (() => {
+        const cat = selectedThread.categoryId
+          ? categoriesById.get(selectedThread.categoryId)
+          : undefined;
+        return (
         <ThreadModal
           thread={{
             id: selectedThread.id,
@@ -1035,13 +780,8 @@ export default function FeedClient({
             created_at: selectedThread.createdAt,
             likes_count: selectedThread.likesCount,
             comments_count: selectedThread.commentsCount,
-            category:
-              community.threadCategories?.find(
-                (cat) => cat.id === selectedThread.categoryId
-              )?.name || "General",
-            category_type: community.threadCategories?.find(
-              (cat) => cat.id === selectedThread.categoryId
-            )?.iconType,
+            category: cat?.name || "General",
+            category_type: cat?.iconType,
             likes: selectedThread.likes,
             comments: selectedThread.comments,
             pinned: selectedThread.pinned,
@@ -1065,7 +805,8 @@ export default function FeedClient({
           }}
           isCreator={currentUser?.id === community.created_by}
         />
-      )}
+        );
+      })()}
 
       <PaymentModal
         isOpen={showPaymentModal}

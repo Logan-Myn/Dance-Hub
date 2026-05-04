@@ -248,30 +248,11 @@ export const getCommunityThreads = cache(async (communityId: string): Promise<Co
     ORDER BY t.created_at DESC
   `;
 
-  const threadIds = threads.map((t) => t.id);
-  const comments = threadIds.length > 0
-    ? await query<CommentQueryRow>`
-        SELECT
-          c.id, c.thread_id, c.user_id, c.content, c.created_at,
-          c.parent_id, c.author,
-          COALESCE(c.likes, ARRAY[]::TEXT[]) as likes,
-          COALESCE(c.likes_count, 0) as likes_count
-        FROM comments c
-        WHERE c.thread_id = ANY(${threadIds}::uuid[])
-        ORDER BY c.created_at ASC
-      `
-    : [];
-
-  const commentsByThread = new Map<string, CommentQueryRow[]>();
-  for (const c of comments) {
-    const arr = commentsByThread.get(c.thread_id) ?? [];
-    arr.push(c);
-    commentsByThread.set(c.thread_id, arr);
-  }
-
   const toIso = (v: Date | string): string =>
     v instanceof Date ? v.toISOString() : v;
 
+  // Comment bodies are loaded on demand by ThreadView when a thread opens —
+  // the feed only needs `commentsCount`.
   return threads.map((t) => ({
     id: t.id,
     title: t.title,
@@ -287,17 +268,7 @@ export const getCommunityThreads = cache(async (communityId: string): Promise<Co
     likesCount: t.likes_count || 0,
     commentsCount: t.comments_count || 0,
     likes: t.likes || [],
-    comments: (commentsByThread.get(t.id) || []).map((c) => ({
-      id: c.id,
-      thread_id: c.thread_id,
-      user_id: c.user_id,
-      content: c.content,
-      created_at: toIso(c.created_at),
-      parent_id: c.parent_id,
-      author: c.author || { name: 'Anonymous', image: '' },
-      likes: c.likes || [],
-      likes_count: c.likes_count || 0,
-    })),
+    comments: [],
     pinned: t.pinned ?? false,
   }));
 });
