@@ -159,14 +159,14 @@ export default function SettingsPage() {
     return formatDisplayName(profile.full_name) || '';
   };
 
-  const getUserInitials = () => {
-    const name = profile?.display_name || profile?.full_name || user?.name;
-    if (name) {
-      const parts = name.split(' ');
-      if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-      return name.substring(0, 2).toUpperCase();
-    }
-    return user?.email ? user.email.substring(0, 2).toUpperCase() : 'U';
+  const getUserInitial = () => {
+    return (
+      profile?.display_name?.[0] ||
+      profile?.full_name?.[0] ||
+      user?.name?.[0] ||
+      user?.email?.[0] ||
+      'U'
+    ).toUpperCase();
   };
 
   const handleDisplayNameChange = (value: string) => {
@@ -263,8 +263,8 @@ export default function SettingsPage() {
               <div className="relative">
                 <Avatar className="h-20 w-20">
                   <AvatarImage src={profile?.avatar_url || user?.image || undefined} alt="Profile" />
-                  <AvatarFallback className="bg-primary/10 text-primary text-lg font-semibold">
-                    {getUserInitials()}
+                  <AvatarFallback className="text-lg uppercase">
+                    {getUserInitial()}
                   </AvatarFallback>
                 </Avatar>
                 <Label
