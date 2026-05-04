@@ -63,7 +63,7 @@ export async function GET(
         c.status,
         c.opening_date,
         c.can_change_opening_date,
-        (SELECT COUNT(*) FROM community_members cm WHERE cm.community_id = c.id)::int as members_count
+        (SELECT COUNT(*) FROM community_members cm WHERE cm.community_id = c.id AND cm.role != 'admin')::int as members_count
       FROM communities c
       WHERE c.slug = ${communitySlug}
     `;

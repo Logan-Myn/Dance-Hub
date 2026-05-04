@@ -47,7 +47,7 @@ export async function GET(
       communities = await sql`
         SELECT
           c.*,
-          COALESCE((SELECT COUNT(*) FROM community_members WHERE community_id = c.id), 0)::int as members_count
+          COALESCE((SELECT COUNT(*) FROM community_members WHERE community_id = c.id AND role != 'admin'), 0)::int as members_count
         FROM communities c
         WHERE c.id = ANY(${communityIds})
         ORDER BY c.created_at DESC

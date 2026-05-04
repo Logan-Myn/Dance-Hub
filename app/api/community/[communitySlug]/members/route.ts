@@ -38,12 +38,15 @@ export async function GET(
       );
     }
 
-    // Get members with their profiles (only active members with successful payment)
+    // Get members with their profiles (only active members with successful payment).
+    // Exclude the community creator/admin — they should not appear in the member roster
+    // shown to themselves or other members.
     const membersData = await query<MemberWithProfile>`
       SELECT *
       FROM community_members_with_profiles
       WHERE community_id = ${community.id}
         AND status = 'active'
+        AND role != 'admin'
         AND (subscription_status = 'active' OR subscription_status IS NULL)
     `;
 
