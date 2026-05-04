@@ -30,15 +30,12 @@ export async function PUT(
 ) {
   try {
     const { lessons } = await req.json();
-    console.log('Received lessons to reorder:', lessons);
 
-    // Verify authentication using Better Auth session
     const session = await getSession();
     if (!session) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    // Check if user is the community creator
     const community = await queryOne<Community>`
       SELECT id, created_by
       FROM communities
@@ -53,19 +50,23 @@ export async function PUT(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    // Update each lesson's position
-    for (const [index, lesson] of lessons.entries()) {
-      console.log(`Updating lesson ${lesson.id} to position ${index}`);
+    if (lessons.length > 0) {
+      const ids = lessons.map((l: { id: string }) => l.id);
+      const positions = lessons.map((_: unknown, i: number) => i);
 
       await sql`
         UPDATE lessons
-        SET lesson_position = ${index}
-        WHERE id = ${lesson.id}
-          AND chapter_id = ${params.chapterId}
+        SET lesson_position = data.pos
+        FROM (
+          SELECT
+            unnest(${ids}::uuid[]) AS id,
+            unnest(${positions}::int[]) AS pos
+        ) AS data
+        WHERE lessons.id = data.id
+          AND lessons.chapter_id = ${params.chapterId}
       `;
     }
 
-    // Fetch the updated lessons
     const updatedLessons = await query<Lesson>`
       SELECT *
       FROM lessons
@@ -73,9 +74,6 @@ export async function PUT(
       ORDER BY lesson_position ASC
     `;
 
-    console.log('Updated lessons from database:', updatedLessons);
-
-    // Transform lessons for frontend compatibility
     const transformedLessons = updatedLessons.map(lesson => ({
       id: lesson.id,
       title: lesson.title,

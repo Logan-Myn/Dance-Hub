@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Section, SectionType } from "@/types/page-builder";
 import { useUndoableState } from "@/hooks/useUndoableState";
@@ -49,13 +49,94 @@ const AVAILABLE_SECTIONS: { type: SectionType; label: string; icon: typeof Layou
   { type: "video", label: "Video Section", icon: Video, description: "Embed video content" },
 ];
 
+const TEMPLATES = [
+  {
+    key: 'classic',
+    name: 'Classic Introduction',
+    description: 'A welcoming hero, your story, a team photo, and a call to action.',
+    sections: [
+      {
+        type: 'hero',
+        content: {
+          title: 'Welcome to Our Community!',
+          subtitle: 'Join us and be part of something special.',
+          buttonType: 'join' as const,
+        },
+      },
+      {
+        type: 'text',
+        content: {
+          title: 'About Us',
+          text: 'We are passionate about dance and building a vibrant community. Our story began...'
+        },
+      },
+      {
+        type: 'image',
+        content: {
+          imageUrl: '',
+          caption: 'Our team or studio',
+          altText: 'Team or studio photo',
+        },
+      },
+      {
+        type: 'cta',
+        content: {
+          title: 'Ready to Join?',
+          ctaText: 'Become a member',
+          ctaLink: '',
+          buttonType: 'join' as const,
+        },
+      },
+    ],
+  },
+  {
+    key: 'media',
+    name: 'Media Welcome',
+    description: 'A big intro, welcome video, short about, and a call to action.',
+    sections: [
+      {
+        type: 'hero',
+        content: {
+          title: 'Welcome to Our Dance Community!',
+          subtitle: 'Watch our story and join the movement.',
+          buttonType: 'join' as const,
+        },
+      },
+      {
+        type: 'video',
+        content: {
+          title: 'Welcome Video',
+          videoId: '',
+          description: 'A quick look at what we do.'
+        },
+      },
+      {
+        type: 'text',
+        content: {
+          title: 'Who We Are',
+          text: 'We bring dancers together to learn, share, and grow.'
+        },
+      },
+      {
+        type: 'cta',
+        content: {
+          title: 'Join Us',
+          ctaText: 'Become a member',
+          ctaLink: '',
+          buttonType: 'join' as const,
+        },
+      },
+    ],
+  },
+];
+
 interface PageBuilderProps {
   initialSections: Section[];
   onChange: (sections: Section[]) => void;
   onSave: () => Promise<void>;
   isEditing: boolean;
   isSaving?: boolean;
-  communityData?: {
+  communityData: {
     id: string;
     slug: string;
     name: string;
@@ -86,88 +167,6 @@ export default function PageBuilder({
   } = useUndoableState<Section[]>(initialSections, { onCommit: onChange });
   const [selectedSectionType, setSelectedSectionType] = useState<SectionType | ''>('');
   const [showClearDialog, setShowClearDialog] = useState(false);
-
-  // Template definitions
-  const TEMPLATES = [
-    {
-      key: 'classic',
-      name: 'Classic Introduction',
-      description: 'A welcoming hero, your story, a team photo, and a call to action.',
-      sections: [
-        {
-          type: 'hero',
-          content: {
-            title: 'Welcome to Our Community!',
-            subtitle: 'Join us and be part of something special.',
-            buttonType: 'join' as const,
-          },
-        },
-        {
-          type: 'text',
-          content: {
-            title: 'About Us',
-            text: 'We are passionate about dance and building a vibrant community. Our story began...'
-          },
-        },
-        {
-          type: 'image',
-          content: {
-            imageUrl: '',
-            caption: 'Our team or studio',
-            altText: 'Team or studio photo',
-          },
-        },
-        {
-          type: 'cta',
-          content: {
-            title: 'Ready to Join?',
-            ctaText: 'Become a member',
-            ctaLink: '',
-            buttonType: 'join' as const,
-          },
-        },
-      ],
-    },
-    {
-      key: 'media',
-      name: 'Media Welcome',
-      description: 'A big intro, welcome video, short about, and a call to action.',
-      sections: [
-        {
-          type: 'hero',
-          content: {
-            title: 'Welcome to Our Dance Community!',
-            subtitle: 'Watch our story and join the movement.',
-            buttonType: 'join' as const,
-          },
-        },
-        {
-          type: 'video',
-          content: {
-            title: 'Welcome Video',
-            videoId: '',
-            description: 'A quick look at what we do.'
-          },
-        },
-        {
-          type: 'text',
-          content: {
-            title: 'Who We Are',
-            text: 'We bring dancers together to learn, share, and grow.'
-          },
-        },
-        {
-          type: 'cta',
-          content: {
-            title: 'Join Us',
-            ctaText: 'Become a member',
-            ctaLink: '',
-            buttonType: 'join' as const,
-          },
-        },
-      ],
-    },
-  ];
 
   // Template selection handler
   const handleTemplateSelect = (templateKey: string) => {
@@ -208,7 +207,7 @@ export default function PageBuilder({
     setSelectedSectionType('');
   };
 
-  const handleDragEnd = (event: any) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = sections.findIndex((item) => item.id === active.id);
@@ -470,6 +469,7 @@ export default function PageBuilder({
                     onUpdate={(content) => handleUpdateSection(section.id, content)}
                     onDelete={() => handleDeleteSection(section.id)}
                     isEditing={isEditing}
+                    communityId={communityData.id}
                   />
                 )}
                 {!["hero", "text", "image", "cta", "video"].includes(section.type) && (

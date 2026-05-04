@@ -1,4 +1,5 @@
-import { queryOne, query } from '@/lib/db';
+import { query } from '@/lib/db';
+import { getCommunityBySlug } from '@/lib/community-data';
 import { MembersTable, MemberRow } from '@/components/admin/MembersTable';
 
 // Match the Emails/Dashboard/General admin pages: opt out of the data cache so
@@ -11,9 +12,7 @@ export default async function MembersPage({
 }: {
   params: { communitySlug: string };
 }) {
-  const community = await queryOne<{ id: string }>`
-    SELECT id FROM communities WHERE slug = ${params.communitySlug}
-  `;
+  const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 
   // Replicates the GET handler in app/api/community/[communitySlug]/members/route.ts:

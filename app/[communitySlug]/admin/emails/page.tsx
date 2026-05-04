@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { queryOne, query } from '@/lib/db';
+import { query } from '@/lib/db';
+import { getCommunityBySlug } from '@/lib/community-data';
 import { getQuota } from '@/lib/broadcasts/quota';
 import { QuotaBadge } from '@/components/emails/QuotaBadge';
 import {
@@ -18,9 +19,7 @@ export default async function EmailsListPage({
 }: {
   params: { communitySlug: string };
 }) {
-  const community = await queryOne<{ id: string; name: string }>`
-    SELECT id, name FROM communities WHERE slug = ${params.communitySlug}
-  `;
+  const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 
   const [quota, broadcasts] = await Promise.all([

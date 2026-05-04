@@ -1,26 +1,35 @@
 import Mux from '@mux/mux-node';
 
-if (!process.env.MUX_TOKEN_ID || !process.env.MUX_TOKEN_SECRET) {
-  throw new Error('Missing Mux API credentials');
+let muxClient: Mux | null = null;
+
+function getMux(): Mux {
+  if (muxClient) return muxClient;
+  const tokenId = process.env.MUX_TOKEN_ID;
+  const tokenSecret = process.env.MUX_TOKEN_SECRET;
+  if (!tokenId || !tokenSecret) {
+    throw new Error('Missing Mux API credentials');
+  }
+  muxClient = new Mux({ tokenId, tokenSecret });
+  return muxClient;
 }
 
-if (!process.env.NEXT_PUBLIC_APP_URL) {
-  throw new Error('Missing NEXT_PUBLIC_APP_URL environment variable');
-}
-
-const mux = new Mux({
-  tokenId: process.env.MUX_TOKEN_ID,
-  tokenSecret: process.env.MUX_TOKEN_SECRET,
+// Back-compat for callers that import { Video }; resolved lazily.
+export const Video = new Proxy({} as Mux['video'], {
+  get(_target, prop) {
+    return Reflect.get(getMux().video, prop);
+  },
 });
 
-export const Video = mux.video;
-
 export async function createMuxUploadUrl() {
-  const upload = await Video.uploads.create({
+  const corsOrigin = process.env.NEXT_PUBLIC_APP_URL;
+  if (!corsOrigin) {
+    throw new Error('Missing NEXT_PUBLIC_APP_URL environment variable');
+  }
+  const upload = await getMux().video.uploads.create({
     new_asset_settings: {
       playback_policy: ['public'],
     },
-    cors_origin: process.env.NEXT_PUBLIC_APP_URL!,
+    cors_origin: corsOrigin,
   });
 
   return {

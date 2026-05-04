@@ -3,7 +3,7 @@
 import { Section } from "@/types/page-builder";
 import { Button } from "@/components/ui/button";
 import { GripVertical, Trash, Settings, Upload } from "lucide-react";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
@@ -23,13 +23,15 @@ interface VideoSectionProps {
   onUpdate: (content: Section['content']) => void;
   onDelete: () => void;
   isEditing?: boolean;
+  communityId: string;
 }
 
-export default function VideoSection({ 
-  section, 
-  onUpdate, 
+export default function VideoSection({
+  section,
+  onUpdate,
   onDelete,
-  isEditing = false 
+  isEditing = false,
+  communityId,
 }: VideoSectionProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -37,7 +39,14 @@ export default function VideoSection({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cancelledRef = useRef(false);
   const { session } = useAuth();
+
+  useEffect(() => {
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, []);
 
   const {
     attributes,
@@ -65,6 +74,8 @@ export default function VideoSection({
       // Get upload URL
       const response = await fetch('/api/mux/upload-url', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ communityId }),
       });
 
       if (!response.ok) {
@@ -110,6 +121,9 @@ export default function VideoSection({
       const pollInterval = 1000; // 1 second
 
       const pollAsset = async (): Promise<any> => {
+        if (cancelledRef.current) {
+          throw new Error('Upload cancelled');
+        }
         if (attempts >= maxAttempts) {
           throw new Error('Timeout waiting for asset to be ready');
         }
@@ -136,8 +150,8 @@ export default function VideoSection({
         }
       };
 
-      // Start polling for asset readiness
       const readyAsset = await pollAsset();
+      if (cancelledRef.current) return;
       onUpdate({
         ...section.content,
         videoId: readyAsset.playbackId

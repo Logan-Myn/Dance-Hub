@@ -32,6 +32,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  type DragEndEvent,
 } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -85,131 +86,6 @@ interface Community {
   created_by: string;
 }
 
-const VideoPlayer = ({ url }: { url: string }) => {
-  return (
-    <div className="relative pb-[56.25%] h-0">
-      <iframe
-        className="absolute top-0 left-0 w-full h-full rounded-lg"
-        src={url}
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-      />
-    </div>
-  );
-};
-
-interface AddLessonDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (lessonData: {
-    title: string;
-    content: string;
-    videoAssetId?: string;
-  }) => void;
-  chapterId: string;
-}
-
-function AddLessonDialog({
-  isOpen,
-  onClose,
-  onSubmit,
-  chapterId,
-}: AddLessonDialogProps) {
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [videoAssetId, setVideoAssetId] = useState<string | undefined>();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    try {
-      await onSubmit({ title, content, videoAssetId });
-      setTitle("");
-      setContent("");
-      setVideoAssetId(undefined);
-      onClose();
-    } catch (error) {
-      console.error("Error creating lesson:", error);
-      toast.error("Failed to create lesson");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px] rounded-2xl border-border/50 bg-card">
-        <DialogHeader>
-          <DialogTitle className="font-display text-xl">Add New Lesson</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="title" className="text-sm font-medium text-foreground">
-              Lesson Title
-            </label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Enter lesson title"
-              required
-              className="rounded-xl border-border/50 focus:border-primary focus:ring-primary/20"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">
-              Video Content (Optional)
-            </label>
-            <VideoUpload
-              onUploadComplete={(assetId) => {
-                setVideoAssetId(assetId);
-                toast.success("Video uploaded successfully");
-              }}
-              onUploadError={(error) => toast.error(error)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">
-              Lesson Content
-            </label>
-            <Editor
-              content={content}
-              onChange={setContent}
-              placeholder="Enter lesson content..."
-              showHeadings={false}
-              showAlignment={false}
-              minHeight="120px"
-            />
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="rounded-xl border-border/50 hover:bg-muted"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className="rounded-xl bg-primary hover:bg-primary/90"
-            >
-              {isSubmitting ? "Creating..." : "Create Lesson"}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // Inline lesson content editor component
 interface InlineLessonEditorProps {
   lesson: Lesson;
@@ -219,14 +95,14 @@ interface InlineLessonEditorProps {
     playbackId?: string;
   }) => Promise<void>;
   isEditMode: boolean;
-  onVideoUploadStart?: () => void;
-  onVideoUploadEnd?: () => void;
+  communityId: string;
 }
 
 function InlineLessonContent({
   lesson,
   onSave,
   isEditMode,
+  communityId,
 }: InlineLessonEditorProps) {
   const [isEditingText, setIsEditingText] = useState(false);
   const [isChangingVideo, setIsChangingVideo] = useState(false);
@@ -312,6 +188,7 @@ function InlineLessonContent({
                 </Button>
               </div>
               <VideoUpload
+                communityId={communityId}
                 onUploadComplete={(assetId, playbackId) => handleVideoUpload(assetId, playbackId)}
                 onUploadError={(error) => toast.error(error)}
               />
@@ -425,12 +302,6 @@ function InlineLessonContent({
   );
 }
 
-// Add type for VideoUpload props
-interface VideoUploadProps {
-  onUploadComplete: (assetId: string) => void;
-  onUploadError: (error: string) => void;
-}
-
 interface CourseDetailClientProps {
   communitySlug: string;
   courseSlug: string;
@@ -456,7 +327,7 @@ export default function CourseDetailClient({
   const [newChapterTitle, setNewChapterTitle] = useState("");
   const [isAddingLesson, setIsAddingLesson] = useState<string | null>(null);
   const [newLessonTitle, setNewLessonTitle] = useState("");
-  const [community, setCommunity] = useState<Community | null>(initialCommunity);
+  const community = initialCommunity;
   const [isEditingCourse, setIsEditingCourse] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [showNotifyModal, setShowNotifyModal] = useState(false);
@@ -468,43 +339,40 @@ export default function CourseDetailClient({
 
   const { user, session, loading: authLoading } = useAuth();
 
-  // SWR hydrates from server-fetched initialCourse, then revalidates on
-  // focus/mount as usual. Removes the need for the access-gate.
+  // SWR hydrates from initialCourse and only revalidates when we explicitly
+  // call mutate after a write — the server-side fetch in page.tsx already
+  // produced the freshest tree.
   const { data: courseData, error: courseError, mutate: mutateCourse } = useSWR(
     `course:${communitySlug}:${courseSlug}`,
     fetcher,
-    { fallbackData: initialCourse }
+    {
+      fallbackData: initialCourse,
+      revalidateOnMount: false,
+      revalidateOnFocus: false,
+    }
   );
 
   // (Auth + access gating now happens server-side in page.tsx; community
   // and access flags arrive as props, so no client check needed here.)
 
-  // Add selected lesson logic
+  // Mirror SWR data into chapters/course local state. selectedLesson is only
+  // assigned here on first hydration (or when the previously selected lesson
+  // disappeared) — otherwise revalidating the course tree would yank the user
+  // out of the lesson they're reading.
   useEffect(() => {
-    if (courseData) {
-      setCourse(courseData);
-      setChapters(courseData.chapters || []);
-      setIsLoading(false);
+    if (!courseData) return;
+    setCourse(courseData);
+    setChapters(courseData.chapters || []);
+    setIsLoading(false);
 
-      // Find the next uncompleted lesson
-      let foundNextLesson = false;
-      let nextLesson = null;
-
-      for (const chapter of courseData.chapters || []) {
-        for (const lesson of chapter.lessons || []) {
-          if (!lesson.completed) {
-            nextLesson = lesson;
-            foundNextLesson = true;
-            break;
-          }
-        }
-        if (foundNextLesson) break;
+    setSelectedLesson((prev) => {
+      const allLessons = (courseData.chapters || []).flatMap((c: Chapter) => c.lessons || []);
+      if (prev && allLessons.some((l: Lesson) => l.id === prev.id)) {
+        return prev;
       }
-
-      setSelectedLesson(
-        nextLesson || courseData.chapters?.[0]?.lessons?.[0] || null
-      );
-    }
+      const nextLesson = allLessons.find((l: Lesson) => !l.completed);
+      return nextLesson || allLessons[0] || null;
+    });
   }, [courseData]);
 
   const [expandedChapters, setExpandedChapters] = useState<{
@@ -521,8 +389,6 @@ export default function CourseDetailClient({
     }
   }, [chapters]);
 
-  const [isDragging, setIsDragging] = useState(false);
-
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -536,8 +402,6 @@ export default function CourseDetailClient({
       [chapterId]: !prev[chapterId],
     }));
   };
-
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleAddChapter = async () => {
     if (!newChapterTitle.trim()) return;
@@ -854,7 +718,6 @@ export default function CourseDetailClient({
 
       const { course, madePublic } = await response.json();
       setCourse(course);
-      setRefreshTrigger((prev) => prev + 1);
 
       if (madePublic) {
         setShowNotifyModal(true);
@@ -863,22 +726,18 @@ export default function CourseDetailClient({
       toast.success("Course updated successfully");
       setIsEditingCourse(false);
       mutateCourse();
-      router.refresh();
     } catch (error) {
       console.error("Error updating course:", error);
       toast.error("Error updating course");
     }
   };
 
-  const handleDragStart = () => {
-    setIsDragging(true);
-  };
-
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const isProcessingRef = useRef(false);
 
-  const handleDragEnd = async (event: any) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
+    if (!over) return;
 
     if (active.id !== over.id) {
       setChapters((items) => {
@@ -894,8 +753,9 @@ export default function CourseDetailClient({
     }
   };
 
-  const handleLessonDragEnd = async (chapterId: string, event: any) => {
+  const handleLessonDragEnd = async (chapterId: string, event: DragEndEvent) => {
     const { active, over } = event;
+    if (!over) return;
 
     if (active.id !== over.id && !isProcessingRef.current) {
       isProcessingRef.current = true;
@@ -932,12 +792,10 @@ export default function CourseDetailClient({
         await updateLessonsOrder(chapterId, newLessons);
 
         // Force a refresh of the data from the server
-        setRefreshTrigger((prev) => prev + 1);
       } catch (error) {
         console.error("Error in handleLessonDragEnd:", error);
         toast.error("Failed to update lesson order");
         // On error, force a refresh to get back to the server state
-        setRefreshTrigger((prev) => prev + 1);
       } finally {
         isProcessingRef.current = false;
       }
@@ -1009,7 +867,6 @@ export default function CourseDetailClient({
         throw new Error("Failed to update lessons order");
       }
 
-      setRefreshTrigger((prev) => prev + 1);
       toast.success("Order updated", {
         duration: 2000,
         position: "bottom-right",
@@ -1130,6 +987,7 @@ export default function CourseDetailClient({
           lesson={selectedLesson}
           onSave={handleUpdateLesson}
           isEditMode={isCreator && isEditMode}
+          communityId={initialCommunity.id}
         />
 
         {/* Navigation Buttons */}

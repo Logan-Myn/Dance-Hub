@@ -63,14 +63,25 @@ export async function PUT(
       return new NextResponse("Course not found", { status: 404 });
     }
 
-    // Update positions for all chapters using individual updates
-    // (Neon doesn't support the same upsert syntax as Supabase)
-    for (let index = 0; index < chapters.length; index++) {
-      const chapter = chapters[index];
+    // Bulk-update all positions in a single statement so a 20-chapter reorder
+    // is one round-trip instead of 20.
+    if (chapters.length > 0) {
+      const ids = chapters.map((c: { id: string }) => c.id);
+      const positions = chapters.map((_: unknown, i: number) => i);
+      const titles = chapters.map((c: { title: string }) => c.title);
+
       await sql`
         UPDATE chapters
-        SET chapter_position = ${index}, title = ${chapter.title}
-        WHERE id = ${chapter.id} AND course_id = ${course.id}
+        SET chapter_position = data.pos,
+            title = data.title
+        FROM (
+          SELECT
+            unnest(${ids}::uuid[]) AS id,
+            unnest(${positions}::int[]) AS pos,
+            unnest(${titles}::text[]) AS title
+        ) AS data
+        WHERE chapters.id = data.id
+          AND chapters.course_id = ${course.id}
       `;
     }
 

@@ -79,15 +79,6 @@ export const fetcher = async (key: string) => {
     );
   }
 
-  if (resource === 'courses') {
-    const [communityId, visibility] = params;
-    const visibilityParam = visibility === 'public' ? '&visibility=public' : '';
-    return fetchJson(
-      `/api/courses?communityId=${communityId}${visibilityParam}`,
-      'Failed to fetch courses'
-    );
-  }
-
   if (resource === 'profile') {
     const userId = params[0];
     return fetchJson(`/api/profile?userId=${userId}`, 'Failed to fetch profile');
