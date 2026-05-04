@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     const communities = await query<CommunityRow>`
       SELECT
         c.*,
-        COALESCE((SELECT COUNT(*) FROM community_members WHERE community_id = c.id), 0)::int as members_count
+        COALESCE((SELECT COUNT(*) FROM community_members WHERE community_id = c.id AND role != 'admin'), 0)::int as members_count
       FROM communities c
       ORDER BY c.created_at DESC
     `;

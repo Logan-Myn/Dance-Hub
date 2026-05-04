@@ -33,6 +33,7 @@ export default async function MembersPage({
     FROM community_members_with_profiles
     WHERE community_id = ${community.id}
       AND status = 'active'
+      AND role != 'admin'
       AND (subscription_status = 'active' OR subscription_status IS NULL)
     ORDER BY joined_at DESC
   `;
