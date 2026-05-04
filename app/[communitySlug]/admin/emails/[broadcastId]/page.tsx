@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { queryOne } from '@/lib/db';
+import { getCommunityBySlug } from '@/lib/community-data';
 import { format } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
@@ -37,9 +38,7 @@ export default async function BroadcastDetailPage({
 }: {
   params: { communitySlug: string; broadcastId: string };
 }) {
-  const community = await queryOne<{ id: string; name: string }>`
-    SELECT id, name FROM communities WHERE slug = ${params.communitySlug}
-  `;
+  const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 
   const broadcast = await queryOne<BroadcastRow>`

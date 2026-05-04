@@ -14,7 +14,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useDropzone } from 'react-dropzone';
 import Image from 'next/image';
-import { Course } from "@/types/course";
 import { slugify } from "@/lib/utils";
 import { toast } from "react-hot-toast";
 

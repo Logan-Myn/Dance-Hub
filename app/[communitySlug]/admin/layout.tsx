@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth-session';
-import { queryOne } from '@/lib/db';
-import { getUserIsAdmin } from '@/lib/community-data';
+import { getCommunityBySlug, getUserIsAdmin } from '@/lib/community-data';
 import { AdminNav } from '@/components/admin/AdminNav';
 
 export default async function AdminLayout({
@@ -14,9 +13,7 @@ export default async function AdminLayout({
   const session = await getSession();
   if (!session) redirect('/auth/login');
 
-  const community = await queryOne<{ id: string; created_by: string; name: string }>`
-    SELECT id, created_by, name FROM communities WHERE slug = ${params.communitySlug}
-  `;
+  const community = await getCommunityBySlug(params.communitySlug);
   if (!community) redirect(`/${params.communitySlug}`);
 
   // The community owner OR a site-wide admin (profiles.is_admin) can manage.

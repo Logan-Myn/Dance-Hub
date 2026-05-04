@@ -1,4 +1,5 @@
 import { queryOne, query } from '@/lib/db';
+import { getCommunityBySlug } from '@/lib/community-data';
 import {
   getCalendarMonthRange,
   getMonthlyRevenue,
@@ -18,14 +19,6 @@ import { DashboardActivityFeed } from '@/components/admin/DashboardActivityFeed'
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-type CommunityRow = {
-  id: string;
-  created_by: string;
-  membership_enabled: boolean;
-  stripe_account_id: string | null;
-};
-
-type MembersCounts = { total: number };
 type CountRow = { count: number };
 type JoinEvent = { user_id: string; display_name: string | null; avatar_url: string | null; joined_at: Date };
 type CancelEvent = { user_id: string; display_name: string | null; avatar_url: string | null; cancelled_at: Date };
@@ -36,11 +29,7 @@ export default async function AdminDashboardPage({
 }: {
   params: { communitySlug: string };
 }) {
-  const community = await queryOne<CommunityRow>`
-    SELECT id, created_by, membership_enabled, stripe_account_id
-    FROM communities
-    WHERE slug = ${params.communitySlug}
-  `;
+  const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 
   const now = new Date();
@@ -49,11 +38,7 @@ export default async function AdminDashboardPage({
   const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
   const [
-    membersCountsRow,
-    newMembersThisMonthRow,
-    newMembersLastMonthRow,
-    cancellationsThisMonthRow,
-    cancellationsLastMonthRow,
+    memberAggregateRow,
     threadsRow,
     commentsRow,
     revenue,
@@ -65,45 +50,36 @@ export default async function AdminDashboardPage({
     recentPostEvents,
     failedPayments,
   ] = await Promise.all([
-    queryOne<MembersCounts>`
-      SELECT COUNT(*) FILTER (WHERE status='active')::int AS total
+    queryOne<{
+      total: number;
+      new_this_month: number;
+      new_last_month: number;
+      cancelled_this_month: number;
+      cancelled_last_month: number;
+    }>`
+      SELECT
+        COUNT(*) FILTER (WHERE status='active')::int AS total,
+        COUNT(*) FILTER (
+          WHERE joined_at >= ${thisMonth.start.toISOString()}
+            AND joined_at < ${thisMonth.end.toISOString()}
+        )::int AS new_this_month,
+        COUNT(*) FILTER (
+          WHERE joined_at >= ${lastMonth.start.toISOString()}
+            AND joined_at < ${lastMonth.end.toISOString()}
+        )::int AS new_last_month,
+        COUNT(*) FILTER (
+          WHERE status IN ('inactive','cancelled')
+            AND cancelled_at >= ${thisMonth.start.toISOString()}
+            AND cancelled_at < ${thisMonth.end.toISOString()}
+        )::int AS cancelled_this_month,
+        COUNT(*) FILTER (
+          WHERE status IN ('inactive','cancelled')
+            AND cancelled_at >= ${lastMonth.start.toISOString()}
+            AND cancelled_at < ${lastMonth.end.toISOString()}
+        )::int AS cancelled_last_month
       FROM community_members
       WHERE community_id = ${community.id}
         AND user_id != ${community.created_by}
-    `,
-    queryOne<CountRow>`
-      SELECT COUNT(*)::int AS count
-      FROM community_members
-      WHERE community_id = ${community.id}
-        AND user_id != ${community.created_by}
-        AND joined_at >= ${thisMonth.start.toISOString()}
-        AND joined_at < ${thisMonth.end.toISOString()}
-    `,
-    queryOne<CountRow>`
-      SELECT COUNT(*)::int AS count
-      FROM community_members
-      WHERE community_id = ${community.id}
-        AND user_id != ${community.created_by}
-        AND joined_at >= ${lastMonth.start.toISOString()}
-        AND joined_at < ${lastMonth.end.toISOString()}
-    `,
-    queryOne<CountRow>`
-      SELECT COUNT(*)::int AS count
-      FROM community_members
-      WHERE community_id = ${community.id}
-        AND user_id != ${community.created_by}
-        AND status IN ('inactive','cancelled')
-        AND cancelled_at >= ${thisMonth.start.toISOString()}
-        AND cancelled_at < ${thisMonth.end.toISOString()}
-    `,
-    queryOne<CountRow>`
-      SELECT COUNT(*)::int AS count
-      FROM community_members
-      WHERE community_id = ${community.id}
-        AND user_id != ${community.created_by}
-        AND status IN ('inactive','cancelled')
-        AND cancelled_at >= ${lastMonth.start.toISOString()}
-        AND cancelled_at < ${lastMonth.end.toISOString()}
     `,
     queryOne<CountRow>`
       SELECT COUNT(*)::int AS count
@@ -120,8 +96,8 @@ export default async function AdminDashboardPage({
         AND c.created_at >= ${thisMonth.start.toISOString()}
         AND c.created_at < ${thisMonth.end.toISOString()}
     `,
-    getMonthlyRevenue(community.stripe_account_id, now),
-    getRevenueChart6Months(community.stripe_account_id, now),
+    getMonthlyRevenue(community.stripe_account_id ?? null, now),
+    getRevenueChart6Months(community.stripe_account_id ?? null, now),
     query<{ joined_at: Date }>`
       SELECT joined_at
       FROM community_members
@@ -172,19 +148,19 @@ export default async function AdminDashboardPage({
       ORDER BY created_at DESC
       LIMIT 10
     `,
-    getRecentFailedPayments(community.stripe_account_id, now),
+    getRecentFailedPayments(community.stripe_account_id ?? null, now),
   ]);
 
-  const membersTotal = membersCountsRow?.total ?? 0;
-  const newMembersThisMonth = newMembersThisMonthRow?.count ?? 0;
-  const newMembersLastMonth = newMembersLastMonthRow?.count ?? 0;
-  const cancellationsThisMonth = cancellationsThisMonthRow?.count ?? 0;
-  const cancellationsLastMonth = cancellationsLastMonthRow?.count ?? 0;
+  const membersTotal = memberAggregateRow?.total ?? 0;
+  const newMembersThisMonth = memberAggregateRow?.new_this_month ?? 0;
+  const newMembersLastMonth = memberAggregateRow?.new_last_month ?? 0;
+  const cancellationsThisMonth = memberAggregateRow?.cancelled_this_month ?? 0;
+  const cancellationsLastMonth = memberAggregateRow?.cancelled_last_month ?? 0;
   const threadsThisMonth = threadsRow?.count ?? 0;
   const commentsThisMonth = commentsRow?.count ?? 0;
 
   const stats: DashboardStats = {
-    isPaid: community.membership_enabled,
+    isPaid: community.membership_enabled ?? false,
     monthlyRevenue: revenue.monthlyRevenue,
     revenueGrowth: revenue.revenueGrowth,
     membersTotal,

@@ -544,9 +544,12 @@ export const getCourseWithChapters = cache(async (
     : [];
 
   let completedLessonIds = new Set<string>();
-  if (userId) {
+  const lessonIds = lessons.map((l) => l.id);
+  if (userId && lessonIds.length > 0) {
     const completions = await query<{ lesson_id: string }>`
-      SELECT lesson_id FROM lesson_completions WHERE user_id = ${userId}
+      SELECT lesson_id FROM lesson_completions
+      WHERE user_id = ${userId}
+        AND lesson_id = ANY(${lessonIds}::uuid[])
     `;
     completedLessonIds = new Set(completions.map((c) => c.lesson_id));
   }

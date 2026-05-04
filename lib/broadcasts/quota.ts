@@ -26,17 +26,17 @@ async function getUsedThisMonth(communityId: string): Promise<number> {
 }
 
 export async function getQuota(communityId: string): Promise<Quota> {
-  const community = await queryOne<{ is_broadcast_vip: boolean }>`
-    SELECT is_broadcast_vip FROM communities WHERE id = ${communityId}
-  `;
-
-  const subscription = await queryOne<{ status: string }>`
-    SELECT status
-    FROM community_broadcast_subscriptions
-    WHERE community_id = ${communityId}
-  `;
-
-  const used = await getUsedThisMonth(communityId);
+  const [community, subscription, used] = await Promise.all([
+    queryOne<{ is_broadcast_vip: boolean }>`
+      SELECT is_broadcast_vip FROM communities WHERE id = ${communityId}
+    `,
+    queryOne<{ status: string }>`
+      SELECT status
+      FROM community_broadcast_subscriptions
+      WHERE community_id = ${communityId}
+    `,
+    getUsedThisMonth(communityId),
+  ]);
 
   if (community?.is_broadcast_vip) {
     return { tier: 'vip', used, limit: null };

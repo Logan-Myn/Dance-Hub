@@ -75,7 +75,7 @@ export default function EditCourseModal({
       onClose();
     } catch (error) {
       console.error("Error updating course:", error);
-      toast.error("Failed to update course");
+      toast.error(error instanceof Error ? error.message : "Failed to update course");
     } finally {
       setIsSubmitting(false);
     }

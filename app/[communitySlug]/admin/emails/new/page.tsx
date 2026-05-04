@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getSession } from '@/lib/auth-session';
-import { queryOne } from '@/lib/db';
+import { getCommunityBySlug } from '@/lib/community-data';
 import { getQuota } from '@/lib/broadcasts/quota';
 import { getActiveRecipientsForCommunity } from '@/lib/broadcasts/recipients';
 import { EmailComposer } from '@/components/emails/EmailComposer';
@@ -15,9 +15,7 @@ export default async function NewEmailPage({
   const session = await getSession();
   if (!session) return null;
 
-  const community = await queryOne<{ id: string; name: string }>`
-    SELECT id, name FROM communities WHERE slug = ${params.communitySlug}
-  `;
+  const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 
   const [quota, recipients] = await Promise.all([

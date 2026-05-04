@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -8,11 +8,13 @@ import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface VideoUploadProps {
+  communityId: string;
   onUploadComplete: (assetId: string, playbackId: string) => void;
   onUploadError: (error: string) => void;
 }
 
 export default function VideoUpload({
+  communityId,
   onUploadComplete,
   onUploadError,
 }: VideoUploadProps) {
@@ -21,7 +23,14 @@ export default function VideoUpload({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cancelledRef = useRef(false);
   const { session } = useAuth();
+
+  useEffect(() => {
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, []);
 
   const handleUpload = async (file: File) => {
     try {
@@ -35,6 +44,8 @@ export default function VideoUpload({
       // Get upload URL
       const response = await fetch("/api/mux/upload-url", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ communityId }),
       });
 
       if (!response.ok) {
@@ -89,6 +100,9 @@ export default function VideoUpload({
       const pollInterval = 1000; // 1 second
 
       const pollAsset = async (): Promise<any> => {
+        if (cancelledRef.current) {
+          throw new Error("Upload cancelled");
+        }
         if (attempts >= maxAttempts) {
           throw new Error("Timeout waiting for asset to be ready");
         }
@@ -101,18 +115,11 @@ export default function VideoUpload({
           }
 
           const asset = await assetResponse.json();
-          console.log("Mux asset response:", {
-            id: asset.id,
-            playbackId: asset.playbackId,
-            status: asset.status,
-            uploadId
-          });
 
           if (asset.status === "ready") {
             return asset;
           }
 
-          // If not ready, wait and try again
           attempts++;
           await new Promise((resolve) => setTimeout(resolve, pollInterval));
           return pollAsset();
@@ -122,8 +129,8 @@ export default function VideoUpload({
         }
       };
 
-      // Start polling for asset readiness
       const readyAsset = await pollAsset();
+      if (cancelledRef.current) return;
       onUploadComplete(readyAsset.id, readyAsset.playbackId);
       setIsUploading(false);
       setSelectedFile(null);

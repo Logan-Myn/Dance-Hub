@@ -47,10 +47,6 @@ interface LessonCompletion {
   lesson_id: string;
 }
 
-interface Member {
-  user_id: string;
-}
-
 export async function GET(
   request: Request,
   { params }: { params: { communitySlug: string; courseSlug: string } }
@@ -80,39 +76,14 @@ export async function GET(
       );
     }
 
-    console.log("Found community:", {
-      id: community.id,
-      slug: params.communitySlug,
-      timestamp: new Date().toISOString(),
-    });
-
-    // Get course with retries to ensure consistency
-    let course: Course | null = null;
-    let attempts = 0;
-    const maxAttempts = 3;
-
-    while (attempts < maxAttempts) {
-      console.log(`Attempt ${attempts + 1} to fetch course`);
-
-      const fetchedCourse = await queryOne<Course>`
-        SELECT *
-        FROM courses
-        WHERE community_id = ${community.id}
-          AND slug = ${params.courseSlug}
-      `;
-
-      if (fetchedCourse) {
-        course = fetchedCourse;
-        console.log("Successfully fetched course on attempt", attempts + 1);
-        break;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      attempts++;
-    }
+    const course = await queryOne<Course>`
+      SELECT *
+      FROM courses
+      WHERE community_id = ${community.id}
+        AND slug = ${params.courseSlug}
+    `;
 
     if (!course) {
-      console.error("Failed to fetch course after multiple attempts");
       return NextResponse.json({ error: "Course not found" }, { status: 404 });
     }
 
@@ -151,26 +122,19 @@ export async function GET(
       lessons: lessonsByChapter.get(chapter.id) || []
     }));
 
-    console.log("Raw course data:", JSON.stringify(course, null, 2));
-    console.log("Chapters data:", JSON.stringify(chaptersWithLessons, null, 2));
-    chaptersWithLessons.forEach((chapter, i) => {
-      console.log(
-        `Chapter ${i + 1} lessons:`,
-        JSON.stringify(chapter.lessons, null, 2)
-      );
-    });
-
-    // Get user from session
     const session = await getSession();
     const userId = session?.user?.id || null;
 
-    // If user is authenticated, fetch completion status
+    // If user is authenticated, fetch completion status — scoped to this
+    // course's lesson IDs so we don't ship every completion they've ever made.
     let completedLessonIds = new Set<string>();
-    if (userId) {
+    const allLessonIds = chaptersWithLessons.flatMap(c => c.lessons.map(l => l.id));
+    if (userId && allLessonIds.length > 0) {
       const completions = await query<LessonCompletion>`
         SELECT lesson_id
         FROM lesson_completions
         WHERE user_id = ${userId}
+          AND lesson_id = ANY(${allLessonIds}::uuid[])
       `;
 
       if (completions) {
@@ -352,79 +316,69 @@ export async function PUT(
     const description = formData.get("description") as string;
     const isPublic = formData.get("is_public") === "true";
 
-    // Update the course
+    // Regenerate the slug when the title changes so the URL tracks the new
+    // title. Suffix with `-2`, `-3`, ... if the candidate collides with
+    // another course in this community.
+    let newSlug = currentCourse.slug;
+    if (title && title !== currentCourse.title) {
+      const base = slugify(title);
+      let candidate = base;
+      let n = 1;
+      while (true) {
+        const collision = await queryOne<{ id: string }>`
+          SELECT id FROM courses
+          WHERE community_id = ${community.id}
+            AND slug = ${candidate}
+            AND id != ${currentCourse.id}
+          LIMIT 1
+        `;
+        if (!collision) break;
+        n += 1;
+        candidate = `${base}-${n}`;
+      }
+      newSlug = candidate;
+    }
+
     await sql`
       UPDATE courses
       SET
         title = ${title},
         description = ${description},
         is_public = ${isPublic},
+        slug = ${newSlug},
         updated_at = NOW()
       WHERE id = ${currentCourse.id}
     `;
 
-    // If the course was made public, create in-app notifications
+    // If the course was made public, fan out in-app notifications in a single
+    // bulk insert (was previously one INSERT per member, taking minutes for
+    // large communities).
     if (isPublic && !currentCourse.is_public) {
-      // Get all community members except the creator
-      const members = await query<Member>`
-        SELECT user_id
-        FROM community_members
-        WHERE community_id = ${community.id}
-          AND user_id != ${community.created_by}
-      `;
+      const courseUrl = `/${params.communitySlug}/classroom/${newSlug}`;
+      const notifTitle = `New Course Available: ${title}`;
+      const notifMessage = `A new course is now available in your community: ${community.name}`;
 
-      // Create the course URL
-      const courseUrl = `/${params.communitySlug}/classroom/${params.courseSlug}`;
-
-      // Create notifications for all members except creator
-      if (members && members.length > 0) {
-        for (const member of members) {
-          try {
-            await sql`
-              INSERT INTO notifications (
-                user_id,
-                title,
-                message,
-                link,
-                type
-              ) VALUES (
-                ${member.user_id},
-                ${'New Course Available: ' + title},
-                ${'A new course is now available in your community: ' + community.name},
-                ${courseUrl},
-                'course_published'
-              )
-            `;
-          } catch (notificationError) {
-            console.error("Error creating notification for member:", member.user_id, notificationError);
-          }
-        }
+      try {
+        await sql`
+          INSERT INTO notifications (user_id, title, message, link, type)
+          SELECT user_id, ${notifTitle}, ${notifMessage}, ${courseUrl}, 'course_published'
+          FROM community_members
+          WHERE community_id = ${community.id}
+            AND user_id != ${community.created_by}
+        `;
+      } catch (notificationError) {
+        console.error('Error creating course-published notifications:', notificationError);
       }
     }
 
-    // Fetch updated course with retries
-    let updatedCourse: Course | null = null;
-    let attempts = 0;
-    const maxAttempts = 3;
-
-    while (attempts < maxAttempts) {
-      const fetchedCourse = await queryOne<Course>`
-        SELECT *
-        FROM courses
-        WHERE id = ${currentCourse.id}
-      `;
-
-      if (fetchedCourse && fetchedCourse.is_public === isPublic) {
-        updatedCourse = fetchedCourse;
-        break;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      attempts++;
-    }
+    // The UPDATE above already wrote the row synchronously; trust it.
+    const updatedCourse = await queryOne<Course>`
+      SELECT *
+      FROM courses
+      WHERE id = ${currentCourse.id}
+    `;
 
     if (!updatedCourse) {
-      console.error("Failed to verify course update after multiple attempts");
       return NextResponse.json(
         { error: "Failed to verify course update" },
         { status: 500 }
