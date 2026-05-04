@@ -306,7 +306,7 @@ function Hero({ onCtaSignup }: { onCtaSignup: () => void }) {
         }}
       >
         Threads, courses, live classes, and 1-on-1 lessons. One place to host your floor, get paid,
-        and keep the relationship with your students. No Discord plumbing, no Stripe-to-Patreon
+        and keep the relationship with your students. No Discord plumbing, no half-broken
         spreadsheet, no sales bot.
       </p>
       <div
@@ -327,7 +327,7 @@ function Hero({ onCtaSignup }: { onCtaSignup: () => void }) {
             boxShadow: `0 10px 26px -10px ${LT.primary}`,
           }}
         >
-          Create your community — free
+          Create your community. Free.
         </button>
         <Link
           href="/discovery"
@@ -562,7 +562,7 @@ function HeroImage() {
                 initial: "K",
                 color: LT.coral,
                 time: "5h",
-                title: "My shoulder tension drill — 4 mins, no music",
+                title: "My shoulder tension drill. 4 mins, no music",
                 body: "Filmed this morning before class. Borrowed from a Cuban son teacher in Havana, adapted for…",
                 reactions: 41,
                 replies: 12,
@@ -853,50 +853,50 @@ type FeatureRow = {
 const FEATURES: FeatureRow[] = [
   {
     kicker: "01 · Community feed",
-    title: "Threads, replies, reactions — and the people stay yours",
-    body: "Your community space, your members. Threaded discussions, categories per topic, pinned posts, likes and replies. Members get notified when their teacher posts. You own the relationship — not Instagram, not Discord, not us.",
+    title: "Threads, replies, reactions. The people stay yours.",
+    body: "Your community space, your members. Threaded discussions, categories per topic, pinned posts, likes and replies. Members get notified when their teacher posts. You own the relationship. Not Instagram, not Discord, not us.",
     tone: "lavender",
     side: "right",
   },
   {
     kicker: "02 · Classroom",
     title: "Courses with chapters, lessons, and progress tracking",
-    body: "Upload your videos, structure them into chapters and lessons, and your students mark their way through. Streaming and transcoding handled by Mux, so it just works on phones, tablets, laptops, big screens — without you thinking about codecs.",
+    body: "Upload your videos, structure them into chapters and lessons, and your students mark their way through. Streaming and transcoding are handled for you, so the same file plays smoothly on phones, tablets, laptops, big screens. You stop thinking about codecs.",
     tone: "gold",
     side: "left",
   },
   {
     kicker: "03 · Live classes",
-    title: "Stream live to your community — straight from the browser",
-    body: "Schedule it on the calendar, hit go-live in your community. Browser-based video rooms with chat, screen-share, and hand-raise — built on LiveKit, not Zoom links you have to copy-paste. Members see live classes appear right where they already are.",
+    title: "Stream live to your community, straight from the browser",
+    body: "Schedule it on the calendar, hit go-live in your community. Browser-based video rooms with chat, screen-share, and hand-raise. No Zoom links to copy-paste, no extra app to install. Members see live classes appear right where they already are.",
     tone: "deep",
     side: "right",
   },
   {
     kicker: "04 · Private lessons",
     title: "1-on-1 lessons, booked and paid before the door opens",
-    body: "Set your hourly rate, set your availability, share the link. Students book and pay through Stripe. They get a private video room with a token-protected link. You get a calendar event and a paid booking. No back-and-forth, no chasing payments.",
+    body: "Set your hourly rate, set your availability, share the link. Students book and pay before they show up. They get a private video room with a token-protected link. You get a calendar event and a paid booking. No back-and-forth, no chasing payments.",
     tone: "warm",
     side: "left",
   },
   {
     kicker: "05 · Memberships & payouts",
-    title: "Up to 96% goes to you. Stripe under the hood. Your payout schedule.",
-    body: "0% platform fees for the first 30 days. After that: 8% under 50 members, 6% to 100, 4% beyond. Connect your Stripe in three clicks. Choose weekly or monthly payouts. Refunds, subscriptions, and one-offs all in one dashboard.",
+    title: "Up to 96% goes to you. Your payout schedule, your bank.",
+    body: "0% platform fees for the first 30 days. After that, 8% under 50 members, 6% to 100, 4% beyond. Connect your payment account in three clicks. Choose weekly or monthly payouts. Refunds, subscriptions, and one-off purchases all in one dashboard.",
     tone: "lavender",
     side: "right",
   },
   {
     kicker: "06 · Discovery",
     title: "A public directory that brings new students to your floor",
-    body: "Every community on Dance-Hub is listed in our public directory. Browse by activity, language, region. Free traffic to teachers — measured by what their members do, not by who pays for placement.",
+    body: "Every community on Dance-Hub is listed in our public directory. Browse by activity, language, region. Free traffic to teachers, measured by what their members do, not by who pays for placement.",
     tone: "deep",
     side: "left",
   },
   {
     kicker: "07 · Email & broadcasts",
     title: "Reach your members without burning the inbox",
-    body: "Send announcements to your community — new course, going live, the studio is back open. Every member controls marketing, course-announcement, and broadcast preferences per community. Built-in monthly quotas keep your sender reputation clean and your members opted-in.",
+    body: "Send announcements to your community. New course, going live, the studio is back open. Every member controls marketing, course-announcement, and broadcast preferences per community. Built-in monthly quotas keep your sender reputation clean and your members opted-in.",
     tone: "gold",
     side: "right",
   },
@@ -934,7 +934,7 @@ function FeatureRows() {
           }}
         >
           The toolkit for teachers running
-          <br />a paid floor — physical or virtual
+          <br />a paid floor, physical or virtual
         </h2>
       </div>
 
@@ -1101,7 +1101,7 @@ function BoldClaim() {
             [
               ["0%", "Fees · first 30 days"],
               ["8 → 4%", "Drops as you grow"],
-              ["Weekly", "Stripe payouts"],
+              ["Weekly", "Payouts to your bank"],
               ["100%", "Yours · export anytime"],
             ] as Array<[string, string]>
           ).map(([n, l], i) => (
@@ -1145,10 +1145,10 @@ function BoldClaim() {
 // ── 7. "What you don't have to build" band ──
 function CommunityBand() {
   const handled = [
-    "Auth & user accounts",
-    "Video hosting (Mux)",
-    "Live class rooms (LiveKit)",
-    "Stripe Connect onboarding",
+    "Sign-in & user accounts",
+    "Video hosting & transcoding",
+    "Browser-based live class rooms",
+    "Payment account onboarding",
     "Subscriptions & refunds",
     "Receipts & email broadcasts",
     "Public directory listing",
@@ -1205,7 +1205,7 @@ function CommunityBand() {
               maxWidth: 460,
             }}
           >
-            You teach. We handle the rest. Everything below is wired in on day one — so your
+            You teach. We handle the rest. Everything below is wired in on day one, so your
             Sunday goes back to choreography instead of plugging a sixth tool into a Google Sheet.
           </p>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 24 }}>
@@ -1282,14 +1282,14 @@ function Pricing({ onCtaSignup }: { onCtaSignup: () => void }) {
           tier="Run your floor"
           price="Free"
           priceSuffix="for 30 days"
-          subtitle="Build your community, set up your courses, plug in Stripe. Keep 100% of revenue for the first month, while you find your rhythm."
+          subtitle="Build your community, set up your courses, plug in payments. Keep 100% of revenue for the first month, while you find your rhythm."
           highlight
           features={[
             "Threads, channels, replies, reactions",
-            "Courses with Mux video & progress tracking",
-            "Live classes from the browser (LiveKit)",
+            "Courses with hosted video & progress tracking",
+            "Live classes from the browser",
             "Private 1-on-1 lessons with paid booking",
-            "Memberships, bundles, one-offs (Stripe)",
+            "Memberships, bundles, one-off purchases",
             "Public listing in the discovery directory",
           ]}
           cta="Create your community"
@@ -1299,13 +1299,13 @@ function Pricing({ onCtaSignup }: { onCtaSignup: () => void }) {
           tier="How fees scale"
           price="4 → 8%"
           priceSuffix="of revenue"
-          subtitle="After day 30, we take a small share of money your members pay you. The more you grow, the lower it gets. Card processing (Stripe) is on top of this — same as anywhere."
+          subtitle="After day 30, we take a small share of the money your members pay you. The more you grow, the lower it gets. Card processing fees are on top of this, same as anywhere."
           features={[
-            "Under 50 paying members — 8%",
-            "50 to 100 members — 6%",
-            "Over 100 members — 4%",
-            "Stripe payouts: weekly or monthly, your call",
-            "Refunds, subscriptions, one-offs included",
+            "Under 50 paying members. 8%",
+            "50 to 100 members. 6%",
+            "Over 100 members. 4%",
+            "Payouts: weekly or monthly, your call",
+            "Refunds, subscriptions, one-off purchases included",
             "Export your members & threads any time",
           ]}
           cta="See how it scales"
@@ -1366,7 +1366,7 @@ function PricingCard({
             textTransform: "uppercase",
           }}
         >
-          Day 1 — Day 30
+          First 30 days
         </div>
       )}
       <div
@@ -1469,15 +1469,15 @@ const FAQS: Array<{ q: string; a: string }> = [
   },
   {
     q: "What does it cost to start?",
-    a: "Nothing. Run your community with 0% platform fees for the first 30 days. After that we take a share of revenue that drops as you grow: 8% under 50 members, 6% to 100, 4% above. No setup fee, no monthly seat fee. Stripe processing is on top, same as any other platform.",
+    a: "Nothing. Run your community with 0% platform fees for the first 30 days. After that we take a share of revenue that drops as you grow: 8% under 50 members, 6% to 100, 4% above. No setup fee, no monthly seat fee. Card processing fees are on top, same as any other platform.",
   },
   {
     q: "Can I import my videos to the Classroom?",
-    a: "Yes. Drag-and-drop upload to any chapter. We use Mux to host and transcode, so the same file plays smoothly on phones, tablets, and laptops without you thinking about formats.",
+    a: "Yes. Drag-and-drop upload to any chapter. We host and transcode for you, so the same file plays smoothly on phones, tablets, and laptops without you thinking about formats.",
   },
   {
     q: "When do I get paid?",
-    a: "On your schedule. Connect Stripe, choose weekly or monthly payouts, and money lands in your bank on that cadence. Standard 7-day buffer for chargebacks, then everything moves on schedule.",
+    a: "On your schedule. Connect your payment account, choose weekly or monthly payouts, and money lands in your bank on that cadence. Standard 7-day buffer for chargebacks, then everything moves on schedule.",
   },
   {
     q: "Who owns the community? My members or you?",
@@ -1485,11 +1485,11 @@ const FAQS: Array<{ q: string; a: string }> = [
   },
   {
     q: "Does it work on mobile?",
-    a: "Yes. Dance-Hub is fully responsive — your community, classroom, live classes and 1-on-1 video sessions work in any modern mobile browser. Native iOS and Android apps are on the roadmap, not shipped.",
+    a: "Yes. Dance-Hub is fully responsive. Your community, classroom, live classes and 1-on-1 video sessions work in any modern mobile browser. Native iOS and Android apps are on the roadmap, not shipped.",
   },
   {
     q: "I have a question that isn't here.",
-    a: "Email info@latinpassion.ee. It goes to a real person on the team. We try to reply within a working day.",
+    a: "Email hello@dance-hub.io. It goes to a real person on the team. We try to reply within a working day.",
   },
 ];
 
@@ -1642,18 +1642,19 @@ function FounderLetter() {
           <div style={{ fontSize: 16, lineHeight: 1.7, color: LT.fgSoft, marginBottom: 24 }}>
             <p style={{ margin: "0 0 14px" }}>Hey teachers,</p>
             <p style={{ margin: "0 0 14px" }}>
-              Before Dance-Hub, running a paid floor meant a Discord, a Patreon, a Thinkific
-              course, two Stripe accounts, a Mailchimp list and a Google Sheet that broke once a
-              month. Sunday afternoons weren&apos;t for class prep — they were for tool plumbing.
+              Before Dance-Hub, running a paid floor meant a Discord, a Patreon, a course
+              platform, two payment accounts, a mailing-list tool and a Google Sheet that broke
+              once a month. Sunday afternoons weren&apos;t for class prep. They were for tool
+              plumbing.
             </p>
             <p style={{ margin: "0 0 14px" }}>
-              We talked to teachers running real floors — physical and virtual. They all had the
+              We talked to teachers running real floors, physical and virtual. They all had the
               same six tabs open. So we wrote down what one tool would have to do, and started
               building.
             </p>
             <p style={{ margin: "0 0 18px" }}>
               Dance-Hub is that tool. It&apos;s not for course launchers, business gurus, or
-              creators selling AI prompts. It&apos;s for teachers who run a real community — and
+              creators selling AI prompts. It&apos;s for teachers who run a real community, and
               want to keep the relationship with their students intact.
             </p>
             <div
@@ -1664,7 +1665,7 @@ function FounderLetter() {
                 color: LT.fg,
               }}
             >
-              — The Dance-Hub team
+              The Dance-Hub team
             </div>
             <div style={{ fontSize: 13, color: LT.muted, marginTop: 6 }}>
               Built in Estonia 🇪🇪
@@ -1731,7 +1732,7 @@ function FinalCTA({ onCtaSignup }: { onCtaSignup: () => void }) {
               lineHeight: 1.55,
             }}
           >
-            Five minutes to a working community. 0% fees for 30 days. Stripe handled. No setup
+            Five minutes to a working community. 0% fees for 30 days. Payments handled. No setup
             call, no AI sales bot.
           </p>
           <div
@@ -1751,7 +1752,7 @@ function FinalCTA({ onCtaSignup }: { onCtaSignup: () => void }) {
                 cursor: "pointer",
               }}
             >
-              Create your community — free
+              Create your community. Free.
             </button>
             <Link
               href="/discovery"
