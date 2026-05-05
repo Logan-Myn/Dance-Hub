@@ -5,47 +5,37 @@ import { CSSProperties, ReactNode } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAuthModal } from "@/contexts/AuthModalContext";
 
-// ViewStats-shaped landing — clean SaaS, off-white bg, orange accent, 3-col feature grid,
-// one dark community band, all-caps section labels, pill CTAs.
+// ViewStats-shaped landing — explicitly mimicking that page's anatomy:
+//   centered hero with a mosaic of thumbnails behind it →
+//   dark video band →
+//   single-row of small "tools" cards →
+//   FULL-BLEED RED claim panel (white text, ranked list on the right) →
+//   community-connect band (dark image left / text right) →
+//   "your next X should go viral" CTA + 2-card pricing →
+//   FAQ →
+//   FULL-BLEED RED founder block →
+//   dark final-CTA with 3 phone mockups in a row →
+//   footer.
 const T = {
-  bg: "hsl(30, 25%, 97%)",
-  bgWarm: "hsl(30, 35%, 94%)",
+  bg: "hsl(0, 0%, 99%)",
   card: "hsl(0, 0%, 100%)",
-  fg: "hsl(20, 15%, 12%)",
-  fgSoft: "hsl(20, 12%, 30%)",
-  muted: "hsl(20, 8%, 48%)",
-  border: "hsl(30, 18%, 88%)",
-  rule: "hsl(30, 18%, 92%)",
-  primary: "hsl(18, 92%, 55%)",
-  primaryDeep: "hsl(14, 85%, 42%)",
-  primarySoft: "hsl(22, 90%, 95%)",
-  ink: "hsl(20, 18%, 8%)",
-  inkSoft: "hsl(20, 14%, 18%)",
-  gold: "hsl(40, 95%, 58%)",
+  fg: "hsl(0, 0%, 10%)",
+  fgSoft: "hsl(0, 0%, 30%)",
+  muted: "hsl(0, 0%, 50%)",
+  border: "hsl(0, 0%, 90%)",
+  rule: "hsl(0, 0%, 94%)",
+  red: "hsl(2, 82%, 52%)",
+  redDeep: "hsl(2, 80%, 42%)",
+  redSoft: "hsl(2, 90%, 96%)",
+  ink: "hsl(0, 0%, 6%)",
+  inkSoft: "hsl(0, 0%, 14%)",
 };
 
 const FONT_DISPLAY = "var(--font-outfit), system-ui, sans-serif";
 const FONT_BODY = "var(--font-figtree), system-ui, sans-serif";
 const FONT_MONO = "var(--font-geist-mono), ui-monospace, monospace";
 
-// Tiny logo mark, kept consistent with the brand.
-function DHMark({ size = 28, color }: { size?: number; color?: string }) {
-  const c = color || T.primary;
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden>
-      <circle cx="16" cy="16" r="15" fill={c} />
-      <path
-        d="M10 8 L10 24 M10 8 Q18 8 18 16 Q18 24 10 24 M22 12 L22 20"
-        stroke="white"
-        strokeWidth="2.5"
-        fill="none"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-type Tone = "warm" | "deep" | "ink" | "light";
+type Tone = "warm" | "deep" | "ink" | "light" | "red";
 function Mock({
   label,
   h = 200,
@@ -54,16 +44,17 @@ function Mock({
   style = {},
 }: {
   label: string;
-  h?: number;
+  h?: number | string;
   radius?: number;
   tone?: Tone;
   style?: CSSProperties;
 }) {
   const tones: Record<Tone, { a: string; b: string; ink: string }> = {
     warm: { a: "hsl(22, 60%, 88%)", b: "hsl(22, 50%, 80%)", ink: "hsl(22, 50%, 28%)" },
-    deep: { a: "hsl(14, 65%, 45%)", b: "hsl(14, 60%, 35%)", ink: "hsl(14, 40%, 90%)" },
-    ink: { a: "hsl(20, 20%, 14%)", b: "hsl(20, 20%, 10%)", ink: "hsl(20, 15%, 70%)" },
-    light: { a: "hsl(30, 25%, 92%)", b: "hsl(30, 20%, 86%)", ink: "hsl(20, 18%, 38%)" },
+    deep: { a: "hsl(0, 0%, 22%)", b: "hsl(0, 0%, 14%)", ink: "hsl(0, 0%, 80%)" },
+    ink: { a: "hsl(0, 0%, 14%)", b: "hsl(0, 0%, 8%)", ink: "hsl(0, 0%, 70%)" },
+    light: { a: "hsl(0, 0%, 92%)", b: "hsl(0, 0%, 86%)", ink: "hsl(0, 0%, 38%)" },
+    red: { a: "hsl(2, 70%, 60%)", b: "hsl(2, 65%, 50%)", ink: "hsl(2, 30%, 92%)" },
   };
   const t = tones[tone];
   return (
@@ -78,7 +69,7 @@ function Mock({
         alignItems: "center",
         justifyContent: "center",
         fontFamily: FONT_MONO,
-        fontSize: 11,
+        fontSize: 10,
         color: t.ink,
         letterSpacing: 1,
         textTransform: "uppercase",
@@ -93,49 +84,41 @@ function Mock({
   );
 }
 
-// ── Promo bar ──
-function PromoBar() {
+function DHMark({ size = 28, color }: { size?: number; color?: string }) {
+  const c = color || T.red;
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden>
+      <circle cx="16" cy="16" r="15" fill={c} />
+      <path
+        d="M10 8 L10 24 M10 8 Q18 8 18 16 Q18 24 10 24 M22 12 L22 20"
+        stroke="white"
+        strokeWidth="2.5"
+        fill="none"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function Kicker({ children, color }: { children: ReactNode; color?: string }) {
   return (
     <div
-      className="lp-promo"
       style={{
-        background: T.ink,
-        color: "white",
-        padding: "10px 20px",
-        textAlign: "center",
-        fontSize: 13,
-        letterSpacing: 0.2,
+        fontFamily: FONT_MONO,
+        fontSize: 11,
+        letterSpacing: 3,
+        textTransform: "uppercase",
+        color: color || T.red,
+        fontWeight: 700,
+        marginBottom: 14,
       }}
     >
-      <span
-        style={{
-          background: T.primary,
-          color: "white",
-          fontWeight: 700,
-          padding: "3px 9px",
-          borderRadius: 6,
-          fontSize: 11,
-          letterSpacing: 1,
-          marginRight: 14,
-        }}
-      >
-        LAUNCH
-      </span>
-      <span style={{ opacity: 0.9 }}>
-        Run your community with{" "}
-        <b style={{ color: T.gold }}>0% platform fees</b> for your first 30 days.
-      </span>{" "}
-      <Link
-        href="/onboarding"
-        style={{ color: T.primary, fontWeight: 600, textDecoration: "underline", marginLeft: 8 }}
-      >
-        Start now →
-      </Link>
+      {children}
     </div>
   );
 }
 
-// ── Nav ──
+// ── Tight nav (ViewStats has a minimal one) ──
 function Nav({ user }: { user: unknown }) {
   const isAuthed = !!user;
   return (
@@ -144,74 +127,37 @@ function Nav({ user }: { user: unknown }) {
       style={{
         maxWidth: 1280,
         margin: "0 auto",
-        padding: "18px 32px",
+        padding: "20px 32px",
         display: "flex",
         alignItems: "center",
-        gap: 32,
       }}
     >
       <Link
         href="/"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          textDecoration: "none",
-          color: T.fg,
-        }}
+        style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: T.fg }}
       >
-        <DHMark size={30} />
+        <DHMark size={28} />
         <span
-          style={{
-            fontFamily: FONT_DISPLAY,
-            fontSize: 20,
-            fontWeight: 700,
-            letterSpacing: -0.4,
-          }}
+          style={{ fontFamily: FONT_DISPLAY, fontSize: 19, fontWeight: 800, letterSpacing: -0.4 }}
         >
           Dance-Hub
         </span>
-        <span
-          style={{
-            background: T.primary,
-            color: "white",
-            fontFamily: FONT_MONO,
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: 1,
-            padding: "2px 7px",
-            borderRadius: 4,
-            marginLeft: 4,
-          }}
-        >
-          PRO
-        </span>
       </Link>
-      <div
-        className="lp-nav-links"
-        style={{ display: "flex", gap: 26, fontSize: 14, color: T.fgSoft, marginLeft: 24 }}
-      >
-        <Link href="/discovery" style={{ color: "inherit", textDecoration: "none" }}>
+      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 22 }}>
+        <Link
+          href="/discovery"
+          className="lp-nav-link"
+          style={{ fontSize: 14, color: T.fgSoft, textDecoration: "none", fontWeight: 500 }}
+        >
           Discover
         </Link>
-        <a href="#features" style={{ color: "inherit", textDecoration: "none" }}>
-          Features
-        </a>
-        <a href="#pricing" style={{ color: "inherit", textDecoration: "none" }}>
-          Pricing
-        </a>
-        <a href="#faq" style={{ color: "inherit", textDecoration: "none" }}>
-          FAQ
-        </a>
-      </div>
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14 }}>
         {isAuthed ? (
           <Link
             href="/onboarding"
             style={{
-              padding: "10px 20px",
-              borderRadius: 999,
-              background: T.primary,
+              padding: "9px 18px",
+              borderRadius: 8,
+              background: T.red,
               color: "white",
               fontWeight: 700,
               fontSize: 14,
@@ -224,16 +170,17 @@ function Nav({ user }: { user: unknown }) {
           <>
             <Link
               href="/onboarding"
-              style={{ fontSize: 14, color: T.fgSoft, textDecoration: "none" }}
+              className="lp-nav-link"
+              style={{ fontSize: 14, color: T.fgSoft, textDecoration: "none", fontWeight: 500 }}
             >
               Log in
             </Link>
             <Link
               href="/onboarding"
               style={{
-                padding: "10px 20px",
-                borderRadius: 999,
-                background: T.primary,
+                padding: "9px 18px",
+                borderRadius: 8,
+                background: T.red,
                 color: "white",
                 fontWeight: 700,
                 fontSize: 14,
@@ -249,60 +196,49 @@ function Nav({ user }: { user: unknown }) {
   );
 }
 
-function Kicker({ children }: { children: ReactNode }) {
-  return (
-    <div
-      style={{
-        fontFamily: FONT_MONO,
-        fontSize: 11,
-        letterSpacing: 3,
-        textTransform: "uppercase",
-        color: T.primary,
-        fontWeight: 700,
-        marginBottom: 14,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-// ── Hero ──
+// ── Hero with thumbnail mosaic ──
+// Replicates the ViewStats hero where the headline sits on top of a scattered
+// arrangement of YouTube-style thumbnails. Here the "thumbnails" become
+// dance-class clip placeholders + scribbled SVG arrows.
 function Hero({ onCtaSignup }: { onCtaSignup: () => void }) {
   return (
     <section
       className="lp-hero"
-      style={{ maxWidth: 1180, margin: "0 auto", padding: "70px 32px 30px", textAlign: "center" }}
+      style={{
+        maxWidth: 1180,
+        margin: "0 auto",
+        padding: "60px 32px 40px",
+        textAlign: "center",
+        position: "relative",
+      }}
     >
-      <Kicker>The community OS for dance teachers</Kicker>
       <h1
         className="lp-h1"
         style={{
           fontFamily: FONT_DISPLAY,
-          fontSize: 80,
-          fontWeight: 700,
-          letterSpacing: -3,
-          lineHeight: 0.98,
-          margin: "0 auto 22px",
-          maxWidth: 1000,
+          fontSize: 64,
+          fontWeight: 800,
+          letterSpacing: -2.2,
+          lineHeight: 1.0,
+          margin: "0 auto 20px",
+          maxWidth: 900,
           color: T.ink,
         }}
       >
-        Run a paid dance community
+        Build a paid dance community
         <br />
-        students <span style={{ color: T.primary }}>actually open</span> every week.
+        students actually open every week
       </h1>
       <p
         style={{
-          fontSize: 18,
+          fontSize: 17,
           lineHeight: 1.55,
           color: T.fgSoft,
-          maxWidth: 660,
-          margin: "0 auto 36px",
+          maxWidth: 600,
+          margin: "0 auto 28px",
         }}
       >
-        Threads, courses, live classes, and 1-on-1 lessons. One place to host your floor, get
-        paid, and keep the relationship with your students.
+        Threads, courses, live classes, 1-on-1 lessons, and weekly payouts. One place, your brand.
       </p>
       <div
         className="lp-cta-row"
@@ -310,22 +246,20 @@ function Hero({ onCtaSignup }: { onCtaSignup: () => void }) {
           display: "flex",
           gap: 12,
           justifyContent: "center",
-          marginBottom: 22,
           flexWrap: "wrap",
         }}
       >
         <button
           onClick={onCtaSignup}
           style={{
-            padding: "16px 28px",
-            borderRadius: 999,
+            padding: "14px 24px",
+            borderRadius: 10,
             border: "none",
-            background: T.primary,
+            background: T.red,
             color: "white",
             fontWeight: 700,
             fontSize: 15,
             cursor: "pointer",
-            boxShadow: `0 14px 30px -10px ${T.primary}`,
           }}
         >
           Sign up. Free for 30 days.
@@ -333,8 +267,8 @@ function Hero({ onCtaSignup }: { onCtaSignup: () => void }) {
         <Link
           href="/discovery"
           style={{
-            padding: "16px 24px",
-            borderRadius: 999,
+            padding: "14px 22px",
+            borderRadius: 10,
             background: "white",
             color: T.fg,
             fontWeight: 600,
@@ -343,530 +277,232 @@ function Hero({ onCtaSignup }: { onCtaSignup: () => void }) {
             textDecoration: "none",
           }}
         >
-          Browse communities
+          Continue free
         </Link>
       </div>
-      <div style={{ fontSize: 13, color: T.muted, marginBottom: 56 }}>
-        No card. 5-minute setup. Cancel any time.
-      </div>
 
-      <HeroImage />
+      <ThumbnailMosaic />
     </section>
   );
 }
 
-// Big banner-style hero image: a wide product shot.
-function HeroImage() {
+// Scattered grid of placeholder "thumbnails" with playful rotations.
+function ThumbnailMosaic() {
+  const items: Array<{ tone: Tone; w: number; h: number; rot: number; mt: number; label: string }> = [
+    { tone: "warm", w: 200, h: 130, rot: -4, mt: 30, label: "bachata · floorwork" },
+    { tone: "deep", w: 240, h: 150, rot: 2, mt: 0, label: "live · wk 3" },
+    { tone: "red", w: 180, h: 120, rot: -2, mt: 40, label: "salsa drills" },
+    { tone: "light", w: 220, h: 140, rot: 4, mt: 10, label: "kizomba pulse" },
+    { tone: "warm", w: 200, h: 130, rot: -3, mt: 26, label: "cuban son · havana" },
+    { tone: "deep", w: 230, h: 150, rot: 3, mt: 6, label: "shoulder drill" },
+  ];
   return (
     <div
-      className="lp-hero-img"
+      className="lp-mosaic"
       style={{
+        marginTop: 56,
         position: "relative",
-        maxWidth: 1180,
-        margin: "0 auto",
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent: "center",
+        gap: 20,
+        maxWidth: 1100,
+        marginLeft: "auto",
+        marginRight: "auto",
       }}
     >
-      <div
+      {/* Hand-drawn arrow connecting two thumbnails — pure SVG, kept subtle */}
+      <svg
+        viewBox="0 0 1100 80"
         style={{
-          borderRadius: 24,
-          overflow: "hidden",
-          background: T.card,
-          border: `1px solid ${T.border}`,
-          boxShadow:
-            "0 50px 100px -40px rgba(60,30,10,0.30), 0 8px 18px -6px rgba(60,30,10,0.08)",
+          position: "absolute",
+          top: 30,
+          left: 0,
+          width: "100%",
+          height: 80,
+          pointerEvents: "none",
+          zIndex: 0,
         }}
+        aria-hidden
       >
+        <path
+          d="M 200 50 Q 320 -10 460 40"
+          stroke={T.red}
+          strokeWidth="2"
+          fill="none"
+          strokeDasharray="6 4"
+          strokeLinecap="round"
+        />
+        <path d="M 455 35 L 470 42 L 458 50 Z" fill={T.red} />
+      </svg>
+      {items.map((it, i) => (
         <div
+          key={i}
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 7,
-            padding: "12px 18px",
-            borderBottom: `1px solid ${T.rule}`,
-            background: T.bgWarm,
+            width: it.w,
+            marginTop: it.mt,
+            transform: `rotate(${it.rot}deg)`,
+            zIndex: 1,
           }}
         >
-          <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#ff5f57" }} />
-          <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#febc2e" }} />
-          <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#28c840" }} />
-          <span
+          <Mock
+            label={it.label}
+            h={it.h}
+            radius={10}
+            tone={it.tone}
             style={{
-              marginLeft: 16,
-              fontSize: 12,
-              color: T.muted,
-              fontFamily: FONT_MONO,
+              boxShadow: "0 18px 40px -18px rgba(0,0,0,0.25), 0 4px 10px -4px rgba(0,0,0,0.08)",
+              border: `2px solid white`,
             }}
-          >
-            dance-hub.io/c/bachataflow
-          </span>
+          />
         </div>
-        <div
-          className="lp-hero-app"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "200px 1fr 240px",
-            minHeight: 480,
-          }}
-        >
-          <div
-            className="lp-hero-side"
-            style={{
-              padding: 16,
-              borderRight: `1px solid ${T.rule}`,
-              background: T.bg,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginBottom: 16,
-                padding: 8,
-                borderRadius: 10,
-                background: T.card,
-                border: `1px solid ${T.border}`,
-              }}
-            >
-              <div
-                style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: 7,
-                  background: `linear-gradient(135deg, ${T.primary}, ${T.gold})`,
-                }}
-              />
-              <div style={{ fontSize: 12, fontWeight: 700 }}>BachataFlow</div>
-            </div>
-            {(
-              [
-                ["Community", true],
-                ["Classroom", false],
-                ["Calendar", false],
-                ["Members", false],
-                ["About", false],
-              ] as Array<[string, boolean]>
-            ).map(([label, on], i) => (
-              <div
-                key={i}
-                style={{
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  fontSize: 13,
-                  background: on ? T.primarySoft : "transparent",
-                  color: on ? T.primaryDeep : T.muted,
-                  fontWeight: on ? 600 : 500,
-                }}
-              >
-                {label}
-              </div>
-            ))}
-          </div>
-          <div style={{ padding: 22, background: T.card }}>
-            <div
-              style={{
-                borderRadius: 14,
-                marginBottom: 18,
-                background: `linear-gradient(135deg, ${T.primary} 0%, ${T.primaryDeep} 100%)`,
-                padding: "20px 22px",
-                color: "white",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontFamily: FONT_DISPLAY,
-                    fontWeight: 700,
-                    fontSize: 22,
-                    letterSpacing: -0.6,
-                  }}
-                >
-                  Bachata · Floorwork Wk 3
-                </div>
-                <div style={{ fontSize: 12, opacity: 0.9, marginTop: 4 }}>
-                  Live in 14 minutes · 86 going
-                </div>
-              </div>
-              <div
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: 999,
-                  background: "white",
-                  color: T.primaryDeep,
-                  fontWeight: 700,
-                  fontSize: 13,
-                }}
-              >
-                Join class →
-              </div>
-            </div>
-            {[
-              {
-                name: "Marta S.",
-                initial: "M",
-                color: T.primary,
-                time: "2h",
-                title: "Grounding through the standing leg",
-                body: "I used to tell students 'push the floor away.' I now think this language is actively…",
-                reactions: 24,
-                replies: 8,
-              },
-              {
-                name: "Kofi A.",
-                initial: "K",
-                color: T.gold,
-                time: "5h",
-                title: "Shoulder tension drill. 4 mins, no music",
-                body: "Filmed this morning before class. Adapted from a Cuban son teacher in Havana, for…",
-                reactions: 41,
-                replies: 12,
-              },
-            ].map((p, i) => (
-              <div
-                key={i}
-                style={{
-                  border: `1px solid ${T.border}`,
-                  borderRadius: 12,
-                  padding: 14,
-                  marginBottom: 10,
-                }}
-              >
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}
-                >
-                  <div
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: "50%",
-                      background: p.color,
-                      color: "white",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {p.initial}
-                  </div>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</span>
-                  <span style={{ fontSize: 11, color: T.muted }}>· {p.time}</span>
-                </div>
-                <div
-                  style={{
-                    fontFamily: FONT_DISPLAY,
-                    fontSize: 15,
-                    fontWeight: 600,
-                    marginBottom: 4,
-                  }}
-                >
-                  {p.title}
-                </div>
-                <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5 }}>{p.body}</div>
-                <div style={{ display: "flex", gap: 14, fontSize: 11, color: T.muted, marginTop: 8 }}>
-                  <span>♥ {p.reactions}</span>
-                  <span>↩ {p.replies}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div
-            className="lp-hero-rail"
-            style={{
-              padding: 18,
-              borderLeft: `1px solid ${T.rule}`,
-              background: T.bg,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 10,
-                color: T.muted,
-                letterSpacing: 1.5,
-                textTransform: "uppercase",
-                marginBottom: 10,
-                fontWeight: 700,
-              }}
-            >
-              This month
-            </div>
-            <div
-              style={{
-                background: "white",
-                borderRadius: 12,
-                padding: 14,
-                marginBottom: 14,
-                border: `1px solid ${T.border}`,
-              }}
-            >
-              <div style={{ fontSize: 11, color: T.muted, marginBottom: 4 }}>Net revenue</div>
-              <div
-                style={{
-                  fontFamily: FONT_DISPLAY,
-                  fontSize: 28,
-                  fontWeight: 700,
-                  letterSpacing: -0.8,
-                }}
-              >
-                €4,380
-              </div>
-              <div
-                style={{ fontSize: 11, color: "hsl(145, 55%, 40%)", fontWeight: 600, marginTop: 2 }}
-              >
-                ▲ 18% vs last month
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 4,
-                  alignItems: "flex-end",
-                  height: 36,
-                  marginTop: 12,
-                }}
-              >
-                {[40, 52, 48, 56, 62, 70, 80].map((h, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      flex: 1,
-                      height: `${h}%`,
-                      borderRadius: 3,
-                      background: i >= 5 ? T.primary : `${T.primary}55`,
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      ))}
     </div>
   );
 }
 
-// ── Video band ──
+// ── Dark video band ──
 function VideoBand() {
   return (
     <section
       style={{
-        maxWidth: 1180,
-        margin: "70px auto 30px",
-        padding: "0 32px",
-        textAlign: "center",
+        background: T.ink,
+        color: "white",
+        padding: "80px 32px",
+        marginTop: 80,
       }}
     >
-      <h2
-        className="lp-h2"
-        style={{
-          fontFamily: FONT_DISPLAY,
-          fontSize: 40,
-          fontWeight: 700,
-          letterSpacing: -1.4,
-          lineHeight: 1.1,
-          margin: "0 auto 32px",
-          maxWidth: 760,
-        }}
-      >
-        Built ground-up for dance teachers.
-      </h2>
-      <div
-        style={{
-          position: "relative",
-          maxWidth: 920,
-          margin: "0 auto",
-          borderRadius: 22,
-          overflow: "hidden",
-          aspectRatio: "16/9",
-          background: `linear-gradient(135deg, ${T.ink}, ${T.inkSoft})`,
-          boxShadow: "0 30px 80px -25px rgba(60,30,10,0.45)",
-        }}
-      >
-        <div
+      <div style={{ maxWidth: 1000, margin: "0 auto", textAlign: "center" }}>
+        <h2
+          className="lp-h2"
           style={{
-            position: "absolute",
-            inset: 0,
-            opacity: 0.18,
-            background: `repeating-linear-gradient(135deg, transparent 0 18px, ${T.primary} 18px 19px)`,
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            fontFamily: FONT_DISPLAY,
+            fontSize: 44,
+            fontWeight: 800,
+            letterSpacing: -1.6,
+            lineHeight: 1.1,
+            margin: "0 auto 36px",
+            maxWidth: 760,
           }}
         >
+          We took the workflow of full-time dance teachers
+          <br />
+          and built it into one tool.
+        </h2>
+        <div
+          style={{
+            position: "relative",
+            margin: "0 auto",
+            borderRadius: 18,
+            overflow: "hidden",
+            aspectRatio: "16/9",
+            background: "hsl(0, 0%, 12%)",
+            border: `1px solid hsl(0, 0%, 22%)`,
+          }}
+        >
+          <Mock label="founders' tour · 02:14" h="100%" radius={18} tone="deep" />
           <div
             style={{
-              width: 92,
-              height: 92,
-              borderRadius: "50%",
-              background: T.primary,
+              position: "absolute",
+              inset: 0,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 16px 36px rgba(0,0,0,0.35)",
-              cursor: "pointer",
             }}
           >
             <div
               style={{
-                width: 0,
-                height: 0,
-                marginLeft: 7,
-                borderLeft: "26px solid white",
-                borderTop: "16px solid transparent",
-                borderBottom: "16px solid transparent",
+                width: 92,
+                height: 92,
+                borderRadius: "50%",
+                background: T.red,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 16px 36px rgba(0,0,0,0.45)",
+                cursor: "pointer",
               }}
-            />
+            >
+              <div
+                style={{
+                  width: 0,
+                  height: 0,
+                  marginLeft: 7,
+                  borderLeft: "24px solid white",
+                  borderTop: "16px solid transparent",
+                  borderBottom: "16px solid transparent",
+                }}
+              />
+            </div>
           </div>
-        </div>
-        <div
-          style={{
-            position: "absolute",
-            bottom: 22,
-            left: 26,
-            color: "white",
-            fontFamily: FONT_MONO,
-            fontSize: 12,
-            letterSpacing: 1.5,
-            textTransform: "uppercase",
-            opacity: 0.85,
-          }}
-        >
-          02:14 · Product tour
         </div>
       </div>
     </section>
   );
 }
 
-// ── Feature grid (3-col, ViewStats-style) ──
-type Feature = {
-  label: string;
-  title: string;
-  body: string;
-  tone: Tone;
-};
-const FEATURES: Feature[] = [
-  {
-    label: "Community",
-    title: "Threads, replies, reactions",
-    body: "A feed your students actually open. Threaded discussions, categories per topic, pinned posts. The relationship stays yours.",
-    tone: "warm",
-  },
-  {
-    label: "Classroom",
-    title: "Courses with chapters & progress",
-    body: "Upload videos, organize them into chapters and lessons. Students mark their way through. Plays smoothly on phone, tablet, laptop.",
-    tone: "light",
-  },
-  {
-    label: "Live classes",
-    title: "Stream live from the browser",
-    body: "Schedule on the calendar. Hit go-live in your community. Browser-based video rooms with chat, screen-share, and hand-raise.",
-    tone: "deep",
-  },
-  {
-    label: "Private lessons",
-    title: "1-on-1, booked and paid",
-    body: "Set your hourly rate, set your availability, share the link. Students book and pay before they show up. You get a calendar event and a paid booking.",
-    tone: "warm",
-  },
-  {
-    label: "Memberships",
-    title: "Up to 96% goes to you",
-    body: "0% platform fees for your first 30 days. After that, 8% under 50 members, 6% to 100, 4% beyond. Weekly or monthly payouts to your bank.",
-    tone: "light",
-  },
-  {
-    label: "Discovery",
-    title: "A directory that brings students in",
-    body: "Every community on Dance-Hub is listed in our public directory. Free traffic to teachers who keep their members happy.",
-    tone: "ink",
-  },
+// ── Single horizontal row of small "tools" cards ──
+const TOOLS: Array<{ label: string; tone: Tone }> = [
+  { label: "Threads", tone: "warm" },
+  { label: "Classroom", tone: "light" },
+  { label: "Live", tone: "deep" },
+  { label: "Private lessons", tone: "warm" },
+  { label: "Memberships", tone: "red" },
+  { label: "Discovery", tone: "ink" },
 ];
 
-function Features() {
+function ToolsRow() {
   return (
-    <section
-      id="features"
-      style={{ maxWidth: 1180, margin: "70px auto", padding: "0 32px" }}
-    >
-      <div style={{ textAlign: "center", marginBottom: 44 }}>
-        <Kicker>Everything in one place</Kicker>
+    <section style={{ maxWidth: 1280, margin: "70px auto 60px", padding: "0 32px" }}>
+      <div style={{ textAlign: "center", marginBottom: 32 }}>
         <h2
           className="lp-h2"
           style={{
             fontFamily: FONT_DISPLAY,
-            fontSize: 48,
+            fontSize: 26,
             fontWeight: 700,
-            letterSpacing: -1.6,
-            lineHeight: 1.05,
+            letterSpacing: -0.6,
+            lineHeight: 1.2,
             margin: 0,
             color: T.ink,
           }}
         >
-          The toolkit for teachers
-          <br />
-          running a paid floor
+          The most complete toolkit for dance teachers
         </h2>
       </div>
-
       <div
-        className="lp-features-grid"
+        className="lp-tools"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: 22,
+          gridTemplateColumns: "repeat(6, 1fr)",
+          gap: 14,
         }}
       >
-        {FEATURES.map((f, i) => (
+        {TOOLS.map((t, i) => (
           <div
             key={i}
             style={{
               background: T.card,
               border: `1px solid ${T.border}`,
-              borderRadius: 18,
-              padding: 22,
+              borderRadius: 14,
+              padding: 12,
               display: "flex",
               flexDirection: "column",
-              gap: 16,
+              gap: 10,
             }}
           >
-            <Mock label={`${f.label.toLowerCase()} · screenshot`} h={180} radius={12} tone={f.tone} />
+            <Mock label={t.label.toLowerCase()} h={110} radius={9} tone={t.tone} />
             <div
               style={{
-                fontFamily: FONT_MONO,
-                fontSize: 11,
-                letterSpacing: 2.5,
-                textTransform: "uppercase",
-                color: T.primary,
-                fontWeight: 700,
-              }}
-            >
-              {f.label}
-            </div>
-            <h3
-              style={{
                 fontFamily: FONT_DISPLAY,
-                fontSize: 22,
+                fontSize: 14,
                 fontWeight: 700,
-                letterSpacing: -0.6,
-                lineHeight: 1.2,
-                margin: 0,
                 color: T.ink,
+                textAlign: "center",
               }}
             >
-              {f.title}
-            </h3>
-            <p style={{ fontSize: 14, lineHeight: 1.6, color: T.fgSoft, margin: 0 }}>{f.body}</p>
+              {t.label}
+            </div>
           </div>
         ))}
       </div>
@@ -874,58 +510,33 @@ function Features() {
   );
 }
 
-// ── Differentiator (bold claim, no decoration) ──
-function Differentiator() {
-  return (
-    <section style={{ maxWidth: 980, margin: "100px auto 60px", padding: "0 32px", textAlign: "center" }}>
-      <Kicker>Why teachers pick Dance-Hub</Kicker>
-      <h2
-        className="lp-h2"
-        style={{
-          fontFamily: FONT_DISPLAY,
-          fontSize: 56,
-          fontWeight: 700,
-          letterSpacing: -2,
-          lineHeight: 1.0,
-          margin: "0 0 24px",
-          color: T.ink,
-        }}
-      >
-        Built for the floor.
-      </h2>
-      <p
-        style={{
-          fontSize: 19,
-          lineHeight: 1.55,
-          color: T.fgSoft,
-          maxWidth: 660,
-          margin: "0 auto",
-        }}
-      >
-        The platform is shaped like the way teachers actually run a community: feed, classroom,
-        live class, private lesson, payout. In one place, under your brand.
-      </p>
-    </section>
-  );
-}
-
-// ── Dark community band ──
-function DarkBand() {
+// ── FULL-BLEED RED claim panel — split: text left, ranked list right ──
+function RedClaim() {
+  const ranked = [
+    "Threaded discussions, replies, reactions",
+    "Drag-and-drop course builder",
+    "Browser-based live classes",
+    "1-on-1 private lessons (paid bookings)",
+    "Tiered fees: 8 → 6 → 4%",
+    "Weekly or monthly payouts",
+    "Per-community email preferences",
+    "Public discovery directory",
+    "Custom subdomain · yourname.dance-hub.io",
+    "Member & content export, any time",
+  ];
   return (
     <section
       style={{
-        background: T.ink,
+        background: T.red,
         color: "white",
-        padding: "80px 0",
-        margin: "60px 0",
+        padding: "90px 32px",
       }}
     >
       <div
-        className="lp-dark"
+        className="lp-redclaim"
         style={{
-          maxWidth: 1100,
+          maxWidth: 1180,
           margin: "0 auto",
-          padding: "0 32px",
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
           gap: 56,
@@ -933,139 +544,183 @@ function DarkBand() {
         }}
       >
         <div>
-          <div
+          <h2
+            className="lp-h2"
             style={{
-              fontFamily: FONT_MONO,
-              fontSize: 11,
-              letterSpacing: 3,
-              textTransform: "uppercase",
-              color: T.gold,
-              fontWeight: 700,
-              marginBottom: 14,
+              fontFamily: FONT_DISPLAY,
+              fontSize: 60,
+              fontWeight: 800,
+              letterSpacing: -2.2,
+              lineHeight: 1.0,
+              margin: "0 0 24px",
             }}
           >
-            Teachers&apos; room
+            We know what makes a dance community show up every week.
+          </h2>
+          <p style={{ fontSize: 18, lineHeight: 1.55, opacity: 0.92, maxWidth: 460 }}>
+            We talked to teachers running real floors. We wrote down what one tool would have to
+            do. Then we built it. Every feature on this page is shipped.
+          </p>
+        </div>
+        <div
+          style={{
+            background: "white",
+            color: T.ink,
+            borderRadius: 14,
+            padding: 28,
+            boxShadow: "0 30px 60px -25px rgba(0,0,0,0.4)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              gap: 12,
+              marginBottom: 22,
+              borderBottom: `1px solid ${T.border}`,
+              paddingBottom: 16,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: FONT_DISPLAY,
+                fontSize: 56,
+                fontWeight: 800,
+                letterSpacing: -2,
+                color: T.red,
+                lineHeight: 1,
+              }}
+            >
+              #1
+            </div>
+            <div style={{ fontSize: 14, color: T.fgSoft }}>
+              Built ground-up <br /> for dance teachers
+            </div>
           </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+            {ranked.map((r, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  fontSize: 14,
+                  paddingBottom: 10,
+                  borderBottom: i === ranked.length - 1 ? "none" : `1px solid ${T.rule}`,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: FONT_MONO,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: T.muted,
+                    width: 22,
+                  }}
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span style={{ flex: 1, color: T.fg }}>{r}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Connect-with-X-teachers band (image left, text right) ──
+function ConnectBand() {
+  return (
+    <section style={{ maxWidth: 1180, margin: "90px auto 60px", padding: "0 32px" }}>
+      <div
+        className="lp-connect"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 56,
+          alignItems: "center",
+        }}
+      >
+        <Mock label="teachers' room · screenshot" h={380} radius={18} tone="ink" />
+        <div>
+          <Kicker>Teachers&apos; room</Kicker>
           <h2
             className="lp-h2"
             style={{
               fontFamily: FONT_DISPLAY,
               fontSize: 44,
-              fontWeight: 700,
-              letterSpacing: -1.4,
+              fontWeight: 800,
+              letterSpacing: -1.6,
               lineHeight: 1.05,
-              margin: "0 0 20px",
+              margin: "0 0 18px",
+              color: T.ink,
             }}
           >
-            Build alongside other teachers.
+            Build alongside other dance teachers
           </h2>
           <p
             style={{
               fontSize: 16,
               lineHeight: 1.6,
-              opacity: 0.78,
+              color: T.fgSoft,
               maxWidth: 460,
-              margin: "0 0 24px",
+              margin: "0 0 22px",
             }}
           >
             Every paying teacher gets a seat in our private space for working teachers: pricing
             playbooks, retention tactics, monthly office hours, a direct line to the team.
           </p>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {["Pricing playbooks", "Office hours", "Direct line to the team", "Beta access"].map(
-              (p, i) => (
-                <div
-                  key={i}
-                  style={{
-                    padding: "8px 14px",
-                    borderRadius: 999,
-                    background: "rgba(255,255,255,0.08)",
-                    color: "white",
-                    fontSize: 13,
-                    fontWeight: 500,
-                  }}
-                >
-                  {p}
-                </div>
-              )
-            )}
-          </div>
-        </div>
-        <div>
-          <Mock label="teachers' room · screenshot" h={320} radius={16} tone="ink" />
+          <Link
+            href="/onboarding"
+            style={{
+              display: "inline-block",
+              padding: "12px 22px",
+              borderRadius: 10,
+              background: T.red,
+              color: "white",
+              fontWeight: 700,
+              fontSize: 14,
+              textDecoration: "none",
+            }}
+          >
+            Join the room →
+          </Link>
         </div>
       </div>
     </section>
   );
 }
 
-// ── Big CTA banner ──
-function BigCTA({ onCtaSignup }: { onCtaSignup: () => void }) {
+// ── Mid CTA + Pricing pair ──
+function MidCTA({ onCtaSignup }: { onCtaSignup: () => void }) {
   return (
-    <section
-      style={{ maxWidth: 1100, margin: "60px auto", padding: "0 32px", textAlign: "center" }}
-    >
-      <h2
-        className="lp-h2"
-        style={{
-          fontFamily: FONT_DISPLAY,
-          fontSize: 64,
-          fontWeight: 700,
-          letterSpacing: -2.2,
-          lineHeight: 1.0,
-          margin: "0 0 28px",
-          color: T.ink,
-        }}
-      >
-        Your next class
-        <br />
-        should be <span style={{ color: T.primary }}>packed.</span>
-      </h2>
-      <button
-        onClick={onCtaSignup}
-        style={{
-          padding: "18px 32px",
-          borderRadius: 999,
-          border: "none",
-          background: T.primary,
-          color: "white",
-          fontWeight: 700,
-          fontSize: 16,
-          cursor: "pointer",
-          boxShadow: `0 16px 36px -12px ${T.primary}`,
-        }}
-      >
-        Get started. Free for 30 days.
-      </button>
-    </section>
-  );
-}
-
-// ── Pricing ──
-function Pricing({ onCtaSignup }: { onCtaSignup: () => void }) {
-  return (
-    <section id="pricing" style={{ maxWidth: 1100, margin: "100px auto 60px", padding: "0 32px" }}>
-      <div style={{ textAlign: "center", marginBottom: 44 }}>
-        <Kicker>Pricing</Kicker>
+    <section style={{ maxWidth: 1100, margin: "90px auto 60px", padding: "0 32px" }}>
+      <div style={{ textAlign: "center", marginBottom: 36 }}>
         <h2
           className="lp-h2"
           style={{
             fontFamily: FONT_DISPLAY,
-            fontSize: 48,
-            fontWeight: 700,
-            letterSpacing: -1.6,
-            lineHeight: 1.05,
-            margin: "0 0 14px",
+            fontSize: 56,
+            fontWeight: 800,
+            letterSpacing: -2,
+            lineHeight: 1.0,
+            margin: "0 0 12px",
             color: T.ink,
           }}
         >
-          One plan. Honest fees.
+          Your next class should be packed.
         </h2>
         <p style={{ fontSize: 16, color: T.fgSoft, maxWidth: 540, margin: "0 auto" }}>
-          Free for 30 days. After that, a small share of revenue that drops as you grow.
+          Get started with Dance-Hub today.
         </p>
       </div>
-      <div className="lp-pricing-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+      <div
+        className="lp-pricing-grid"
+        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}
+      >
         <PricingCard
           tier="Run your floor"
           price="Free"
@@ -1086,12 +741,12 @@ function Pricing({ onCtaSignup }: { onCtaSignup: () => void }) {
           tier="How fees scale"
           price="4 → 8%"
           priceSuffix="of revenue"
-          subtitle="Card processing fees are on top, same as anywhere."
+          subtitle="A small share of money your members pay you. Drops as you grow."
           features={[
             "Under 50 paying members. 8%",
             "50 to 100 members. 6%",
             "Over 100 members. 4%",
-            "Payouts: weekly or monthly, your call",
+            "Payouts: weekly or monthly",
             "Export your members & threads any time",
           ]}
           cta="See how it scales"
@@ -1124,58 +779,38 @@ function PricingCard({
   return (
     <div
       style={{
-        borderRadius: 22,
-        padding: "34px 32px 28px",
-        background: highlight ? T.ink : T.card,
+        borderRadius: 18,
+        padding: "30px 30px 26px",
+        background: highlight ? T.red : T.card,
         color: highlight ? "white" : T.fg,
         border: highlight ? "none" : `1px solid ${T.border}`,
         boxShadow: highlight
-          ? `0 24px 60px -22px rgba(0,0,0,0.4)`
-          : "0 8px 24px -16px rgba(60,30,10,0.08)",
+          ? `0 24px 60px -22px rgba(2,82,52,0.4)`
+          : "0 8px 24px -16px rgba(0,0,0,0.08)",
         position: "relative",
       }}
     >
-      {highlight && (
-        <div
-          style={{
-            position: "absolute",
-            top: 22,
-            right: 22,
-            padding: "5px 12px",
-            borderRadius: 999,
-            background: T.primary,
-            color: "white",
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: 1,
-            textTransform: "uppercase",
-          }}
-        >
-          First 30 days
-        </div>
-      )}
       <div
         style={{
           fontFamily: FONT_MONO,
           fontSize: 11,
           letterSpacing: 2.5,
           textTransform: "uppercase",
-          opacity: highlight ? 0.8 : 0.55,
-          marginBottom: 14,
+          opacity: highlight ? 0.85 : 0.55,
+          marginBottom: 10,
           fontWeight: 700,
         }}
       >
         {tier}
       </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 12 }}>
         <div
           style={{
             fontFamily: FONT_DISPLAY,
-            fontSize: 56,
-            fontWeight: 700,
+            fontSize: 52,
+            fontWeight: 800,
             letterSpacing: -1.6,
             lineHeight: 1,
-            color: highlight ? "white" : T.ink,
           }}
         >
           {price}
@@ -1187,7 +822,7 @@ function PricingCard({
           fontSize: 14,
           lineHeight: 1.55,
           margin: "0 0 22px",
-          opacity: highlight ? 0.85 : 1,
+          opacity: highlight ? 0.92 : 1,
           color: highlight ? "white" : T.fgSoft,
         }}
       >
@@ -1197,10 +832,10 @@ function PricingCard({
         onClick={onCta}
         style={{
           width: "100%",
-          padding: "14px 18px",
-          borderRadius: 999,
-          background: highlight ? T.primary : T.ink,
-          color: "white",
+          padding: "13px 18px",
+          borderRadius: 10,
+          background: highlight ? "white" : T.ink,
+          color: highlight ? T.red : "white",
           border: "none",
           fontWeight: 700,
           fontSize: 14,
@@ -1210,7 +845,7 @@ function PricingCard({
       >
         {cta} →
       </button>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
         {features.map((f, i) => (
           <div
             key={i}
@@ -1226,15 +861,15 @@ function PricingCard({
               style={{
                 flexShrink: 0,
                 marginTop: 4,
-                width: 16,
-                height: 16,
+                width: 14,
+                height: 14,
                 borderRadius: "50%",
-                background: highlight ? "rgba(255,255,255,0.15)" : T.primarySoft,
-                color: highlight ? "white" : T.primary,
+                background: highlight ? "rgba(255,255,255,0.18)" : T.redSoft,
+                color: highlight ? "white" : T.red,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: 700,
               }}
             >
@@ -1252,15 +887,15 @@ function PricingCard({
 const FAQS = [
   {
     q: "How is Dance-Hub different from Skool, Patreon or Discord?",
-    a: "Skool is built for online business courses. Patreon for podcasters and artists. Discord is a chat app. Dance-Hub does what dance teachers actually need: a feed, a classroom, live classes, paid 1-on-1 lessons, and the membership and payout machinery underneath, all in one place.",
+    a: "Skool is built for online business courses. Patreon for podcasters and artists. Discord is a chat app. Dance-Hub does what dance teachers actually need in one place: a feed, a classroom, live classes, paid 1-on-1 lessons, plus the membership and payout machinery underneath.",
   },
   {
     q: "What does it cost?",
-    a: "0% platform fees for the first 30 days. After that we take a share of revenue that drops as you grow: 8% under 50 members, 6% to 100, 4% above. No setup fee, no monthly seat fee.",
+    a: "0% platform fees for the first 30 days. After that, 8% under 50 members, 6% to 100, 4% above. No setup fee, no monthly seat fee.",
   },
   {
     q: "Can I import my videos?",
-    a: "Yes. Drag-and-drop upload to any chapter. We host and transcode for you, so the same file plays smoothly on phones, tablets, and laptops without you thinking about formats.",
+    a: "Yes. Drag-and-drop upload to any chapter. We host and transcode for you, so the same file plays smoothly on phones, tablets, and laptops.",
   },
   {
     q: "When do I get paid?",
@@ -1277,29 +912,28 @@ const FAQS = [
 ];
 function FAQ() {
   return (
-    <section id="faq" style={{ maxWidth: 880, margin: "60px auto", padding: "0 32px" }}>
-      <div style={{ textAlign: "center", marginBottom: 40 }}>
-        <Kicker>FAQ</Kicker>
+    <section style={{ maxWidth: 880, margin: "60px auto 40px", padding: "0 32px" }}>
+      <div style={{ textAlign: "center", marginBottom: 36 }}>
         <h2
           className="lp-h2"
           style={{
             fontFamily: FONT_DISPLAY,
             fontSize: 44,
-            fontWeight: 700,
+            fontWeight: 800,
             letterSpacing: -1.4,
             lineHeight: 1,
             margin: 0,
             color: T.ink,
           }}
         >
-          Questions teachers ask
+          FAQ
         </h2>
       </div>
       <div style={{ borderTop: `1px solid ${T.border}` }}>
         {FAQS.map((f, i) => (
           <details
             key={i}
-            style={{ borderBottom: `1px solid ${T.border}`, padding: "20px 4px" }}
+            style={{ borderBottom: `1px solid ${T.border}`, padding: "18px 4px" }}
             open={i === 0}
           >
             <summary
@@ -1311,7 +945,7 @@ function FAQ() {
                 justifyContent: "space-between",
                 gap: 24,
                 fontFamily: FONT_DISPLAY,
-                fontSize: 19,
+                fontSize: 18,
                 fontWeight: 700,
                 letterSpacing: -0.4,
                 lineHeight: 1.3,
@@ -1322,15 +956,15 @@ function FAQ() {
               <span
                 style={{
                   flexShrink: 0,
-                  width: 26,
-                  height: 26,
+                  width: 24,
+                  height: 24,
                   borderRadius: "50%",
-                  background: T.primarySoft,
-                  color: T.primary,
+                  background: T.redSoft,
+                  color: T.red,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: 700,
                 }}
               >
@@ -1338,13 +972,7 @@ function FAQ() {
               </span>
             </summary>
             <div
-              style={{
-                fontSize: 15,
-                lineHeight: 1.65,
-                color: T.fgSoft,
-                marginTop: 12,
-                maxWidth: 740,
-              }}
+              style={{ fontSize: 15, lineHeight: 1.65, color: T.fgSoft, marginTop: 12, maxWidth: 720 }}
             >
               {f.a}
             </div>
@@ -1355,16 +983,15 @@ function FAQ() {
   );
 }
 
-// ── Founder note ──
-function Founder() {
+// ── FULL-BLEED RED founder block ──
+function RedFounder() {
   return (
-    <section style={{ background: T.bgWarm, padding: "80px 0", margin: "60px 0" }}>
+    <section style={{ background: T.red, color: "white", padding: "70px 32px" }}>
       <div
         className="lp-letter"
         style={{
-          maxWidth: 1080,
+          maxWidth: 1100,
           margin: "0 auto",
-          padding: "0 32px",
           display: "grid",
           gridTemplateColumns: "1.1fr 1fr",
           gap: 56,
@@ -1372,23 +999,21 @@ function Founder() {
         }}
       >
         <div>
-          <Kicker>A note from the team</Kicker>
+          <Kicker color="rgba(255,255,255,0.85)">Built by the team behind Dance-Hub</Kicker>
           <h2
             className="lp-h2"
             style={{
               fontFamily: FONT_DISPLAY,
               fontSize: 38,
-              fontWeight: 700,
+              fontWeight: 800,
               letterSpacing: -1.2,
               lineHeight: 1.1,
               margin: "0 0 22px",
-              color: T.ink,
             }}
           >
             Built by people who got tired of gluing five tools together every Sunday.
           </h2>
-          <div style={{ fontSize: 16, lineHeight: 1.7, color: T.fgSoft, marginBottom: 18 }}>
-            <p style={{ margin: "0 0 14px" }}>Hey teachers,</p>
+          <div style={{ fontSize: 15, lineHeight: 1.7, opacity: 0.95 }}>
             <p style={{ margin: "0 0 14px" }}>
               Before Dance-Hub, running a paid floor meant six tabs open at once. We talked to
               teachers running real floors, physical and virtual, and wrote down what one tool
@@ -1399,316 +1024,196 @@ function Founder() {
               with their students intact.
             </p>
           </div>
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, color: T.ink }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17 }}>
             The Dance-Hub team
           </div>
-          <div style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>
-            Built in Estonia 🇪🇪
-          </div>
+          <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>Built in Estonia 🇪🇪</div>
         </div>
-        <div>
-          <Mock label="studio · founders" h={420} radius={20} tone="warm" />
+        <div style={{ position: "relative" }}>
+          <Mock
+            label="studio · founders"
+            h={380}
+            radius={16}
+            tone="warm"
+            style={{ border: "4px solid white", boxShadow: "0 24px 50px -20px rgba(0,0,0,0.4)" }}
+          />
         </div>
       </div>
     </section>
   );
 }
 
-// ── Final CTA with phone ──
+// ── Final CTA: dark band with 3 phone mockups ──
 function FinalCTA({ onCtaSignup }: { onCtaSignup: () => void }) {
   return (
-    <section style={{ maxWidth: 1180, margin: "60px auto", padding: "0 32px" }}>
+    <section style={{ background: T.ink, color: "white", padding: "80px 32px 60px" }}>
+      <div style={{ maxWidth: 1180, margin: "0 auto", textAlign: "center" }}>
+        <h2
+          className="lp-h2"
+          style={{
+            fontFamily: FONT_DISPLAY,
+            fontSize: 52,
+            fontWeight: 800,
+            letterSpacing: -1.8,
+            lineHeight: 1.0,
+            margin: "0 auto 22px",
+            maxWidth: 800,
+          }}
+        >
+          Start running your dance community today
+        </h2>
+        <button
+          onClick={onCtaSignup}
+          style={{
+            padding: "16px 28px",
+            borderRadius: 10,
+            border: "none",
+            background: T.red,
+            color: "white",
+            fontWeight: 700,
+            fontSize: 16,
+            cursor: "pointer",
+            marginBottom: 50,
+          }}
+        >
+          Sign up. Free for 30 days.
+        </button>
+
+        <div
+          className="lp-phones"
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "flex-end",
+            gap: 24,
+            flexWrap: "wrap",
+            marginTop: 30,
+          }}
+        >
+          <Phone label="Threads" tone="warm" rotate={-6} h={420} accentText="2 new replies" />
+          <Phone label="Live class" tone="red" rotate={0} h={460} accentText="Live in 14m" />
+          <Phone label="Classroom" tone="light" rotate={6} h={420} accentText="Wk 3 unlocked" />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Phone({
+  label,
+  tone,
+  rotate,
+  h,
+  accentText,
+}: {
+  label: string;
+  tone: Tone;
+  rotate: number;
+  h: number;
+  accentText: string;
+}) {
+  return (
+    <div
+      style={{
+        width: 200,
+        height: h,
+        borderRadius: 32,
+        background: T.ink,
+        border: "7px solid hsl(0, 0%, 0%)",
+        padding: 7,
+        boxShadow: "0 30px 60px -20px rgba(0,0,0,0.6)",
+        transform: `rotate(${rotate}deg)`,
+      }}
+    >
       <div
-        className="lp-final"
         style={{
-          borderRadius: 28,
-          padding: "70px 56px",
-          background: `linear-gradient(135deg, ${T.primary} 0%, ${T.primaryDeep} 70%, ${T.ink} 100%)`,
-          color: "white",
-          position: "relative",
-          overflow: "hidden",
-          display: "grid",
-          gridTemplateColumns: "1.4fr 1fr",
-          gap: 40,
-          alignItems: "center",
+          width: "100%",
+          height: "100%",
+          borderRadius: 25,
+          background: T.bg,
+          padding: 10,
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
         }}
       >
         <div
           style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "radial-gradient(circle at 80% 20%, rgba(255,255,255,0.18), transparent 55%)",
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "4px 6px",
           }}
-        />
-        <div style={{ position: "relative" }}>
-          <h2
-            className="lp-h2"
-            style={{
-              fontFamily: FONT_DISPLAY,
-              fontSize: 56,
-              fontWeight: 700,
-              letterSpacing: -2,
-              lineHeight: 1.0,
-              margin: "0 0 18px",
-            }}
-          >
-            Your floor is ready.
-            <br />
-            Open the door.
-          </h2>
-          <p style={{ fontSize: 17, opacity: 0.88, maxWidth: 460, margin: "0 0 28px", lineHeight: 1.55 }}>
-            Five minutes to a working community. Free for 30 days. Cancel any time.
-          </p>
-          <div className="lp-cta-row" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <button
-              onClick={onCtaSignup}
-              style={{
-                padding: "16px 28px",
-                borderRadius: 999,
-                border: "none",
-                background: "white",
-                color: T.primaryDeep,
-                fontWeight: 700,
-                fontSize: 16,
-                cursor: "pointer",
-              }}
-            >
-              Sign up. Free for 30 days.
-            </button>
-            <Link
-              href="/discovery"
-              style={{
-                padding: "16px 24px",
-                borderRadius: 999,
-                background: "transparent",
-                color: "white",
-                fontWeight: 600,
-                fontSize: 15,
-                border: `1px solid rgba(255,255,255,0.4)`,
-                textDecoration: "none",
-              }}
-            >
-              Browse communities
-            </Link>
-          </div>
+        >
+          <DHMark size={16} color={T.red} />
+          <span style={{ fontSize: 10, fontWeight: 800, color: T.fg }}>BachataFlow</span>
         </div>
         <div
-          className="lp-final-phone"
-          style={{ position: "relative", display: "flex", justifyContent: "center" }}
+          style={{
+            background: T.red,
+            color: "white",
+            borderRadius: 8,
+            padding: 8,
+            fontSize: 9,
+          }}
         >
-          <div
-            style={{
-              width: 230,
-              height: 460,
-              borderRadius: 36,
-              background: T.ink,
-              border: "8px solid hsl(20, 25%, 5%)",
-              padding: 8,
-              boxShadow: "0 30px 60px -20px rgba(0,0,0,0.5)",
-              transform: "rotate(4deg)",
-            }}
-          >
-            <div
-              style={{
-                width: "100%",
-                height: "100%",
-                borderRadius: 26,
-                background: T.bg,
-                padding: 12,
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 6px" }}>
-                <div
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 6,
-                    background: `linear-gradient(135deg, ${T.primary}, ${T.gold})`,
-                  }}
-                />
-                <span style={{ fontSize: 11, fontWeight: 700, color: T.fg }}>BachataFlow</span>
-              </div>
-              <div style={{ background: "white", borderRadius: 10, padding: 8, fontSize: 9 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
-                  <div
-                    style={{ width: 14, height: 14, borderRadius: "50%", background: T.primary }}
-                  />
-                  <span style={{ fontWeight: 600, color: T.fg }}>Marta · 2h</span>
-                </div>
-                <div style={{ fontWeight: 600, color: T.fg, marginBottom: 2 }}>
-                  Standing leg cue
-                </div>
-                <div style={{ color: T.muted, lineHeight: 1.4 }}>
-                  Stop saying push the floor away…
-                </div>
-              </div>
-              <div
-                style={{
-                  background: T.primary,
-                  color: "white",
-                  borderRadius: 10,
-                  padding: 10,
-                  fontSize: 9,
-                }}
-              >
-                <div style={{ fontSize: 7, opacity: 0.85, letterSpacing: 1 }}>LIVE IN 14M</div>
-                <div style={{ fontWeight: 700, fontSize: 11, marginTop: 2 }}>Floorwork Wk 3</div>
-                <div style={{ opacity: 0.85, marginTop: 1 }}>86 going</div>
-              </div>
-              <Mock label="clip" h={88} radius={10} tone="warm" />
-            </div>
-          </div>
+          <div style={{ fontSize: 7, opacity: 0.85, letterSpacing: 1 }}>{accentText.toUpperCase()}</div>
+          <div style={{ fontWeight: 800, fontSize: 11, marginTop: 2 }}>{label}</div>
+        </div>
+        <Mock label={label.toLowerCase()} h={140} radius={8} tone={tone} />
+        <div
+          style={{
+            background: "white",
+            borderRadius: 8,
+            padding: 8,
+            fontSize: 9,
+            border: `1px solid ${T.border}`,
+          }}
+        >
+          <div style={{ fontWeight: 700, color: T.fg, marginBottom: 2 }}>Marta · 2h</div>
+          <div style={{ color: T.muted, lineHeight: 1.4 }}>Standing leg cue…</div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
 // ── Footer ──
 function FooterBlock() {
   return (
-    <footer style={{ background: T.ink, color: "rgba(255,255,255,0.7)", padding: "56px 0 36px" }}>
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "0 32px" }}>
-        <div
-          className="lp-foot-grid"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.4fr 1fr 1fr 1fr 1fr",
-            gap: 36,
-            marginBottom: 44,
-          }}
-        >
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <DHMark size={26} color="white" />
-              <span
-                style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, color: "white" }}
-              >
-                Dance-Hub
-              </span>
-            </div>
-            <p
-              style={{
-                fontSize: 13,
-                lineHeight: 1.6,
-                opacity: 0.7,
-                margin: "0 0 16px",
-                maxWidth: 280,
-              }}
-            >
-              The community OS for dance teachers. Built in Estonia.
-            </p>
-          </div>
-          {(
-            [
-              ["Product", ["Community", "Classroom", "Live classes", "Private lessons"]],
-              ["Discover", ["All communities", "By style", "By city", "Pricing"]],
-              ["For teachers", ["Onboarding", "FAQ", "Contact", "Roadmap"]],
-              ["Company", ["Privacy", "Terms", "Status", "Support"]],
-            ] as Array<[string, string[]]>
-          ).map(([title, items], i) => (
-            <div key={i}>
-              <div
-                style={{
-                  fontFamily: FONT_MONO,
-                  fontSize: 11,
-                  letterSpacing: 2,
-                  textTransform: "uppercase",
-                  color: "white",
-                  fontWeight: 700,
-                  marginBottom: 14,
-                }}
-              >
-                {title}
-              </div>
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13 }}
-              >
-                {items.map((it, k) => (
-                  <span key={k}>{it}</span>
-                ))}
-              </div>
-            </div>
-          ))}
+    <footer style={{ background: T.ink, color: "rgba(255,255,255,0.7)", padding: "32px 32px 28px" }}>
+      <div
+        style={{
+          maxWidth: 1180,
+          margin: "0 auto",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          fontSize: 12,
+          opacity: 0.7,
+          flexWrap: "wrap",
+          gap: 12,
+          borderTop: `1px solid rgba(255,255,255,0.12)`,
+          paddingTop: 28,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <DHMark size={20} color="white" />
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, color: "white" }}>
+            Dance-Hub
+          </span>
+          <span style={{ marginLeft: 14 }}>© {new Date().getFullYear()} · Built in Estonia 🇪🇪</span>
         </div>
-
-        <div
-          style={{
-            padding: "20px 0",
-            borderTop: `1px solid rgba(255,255,255,0.12)`,
-            borderBottom: `1px solid rgba(255,255,255,0.12)`,
-            marginBottom: 22,
-          }}
-        >
-          <div
-            style={{
-              fontFamily: FONT_MONO,
-              fontSize: 11,
-              letterSpacing: 2,
-              textTransform: "uppercase",
-              color: "white",
-              fontWeight: 700,
-              marginBottom: 12,
-            }}
-          >
-            Top categories
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {[
-              "Bachata",
-              "Salsa",
-              "Kizomba",
-              "Afro House",
-              "Hip-Hop",
-              "Contemporary",
-              "Vogue",
-              "Zouk",
-              "Tango",
-              "Cuban Son",
-              "Forró",
-              "Lindy Hop",
-            ].map((c, i) => (
-              <div
-                key={i}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 999,
-                  background: "rgba(255,255,255,0.07)",
-                  color: "white",
-                  fontSize: 12,
-                }}
-              >
-                {c}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            fontSize: 12,
-            opacity: 0.6,
-            flexWrap: "wrap",
-            gap: 12,
-          }}
-        >
-          <div>© {new Date().getFullYear()} Dance-Hub · Built in Estonia 🇪🇪</div>
-          <div style={{ display: "flex", gap: 22 }}>
-            <Link href="/terms" style={{ color: "inherit", textDecoration: "none" }}>
-              Terms
-            </Link>
-            <Link href="/privacy" style={{ color: "inherit", textDecoration: "none" }}>
-              Privacy
-            </Link>
-            <span>Status</span>
-          </div>
+        <div style={{ display: "flex", gap: 22 }}>
+          <Link href="/discovery" style={{ color: "inherit", textDecoration: "none" }}>
+            Discover
+          </Link>
+          <Link href="/terms" style={{ color: "inherit", textDecoration: "none" }}>
+            Terms
+          </Link>
+          <Link href="/privacy" style={{ color: "inherit", textDecoration: "none" }}>
+            Privacy
+          </Link>
         </div>
       </div>
     </footer>
@@ -1728,49 +1233,35 @@ export default function LandingAltClient() {
   };
 
   return (
-    <div
-      style={{
-        background: T.bg,
-        color: T.fg,
-        fontFamily: FONT_BODY,
-        overflowX: "hidden",
-      }}
-    >
+    <div style={{ background: T.bg, color: T.fg, fontFamily: FONT_BODY, overflowX: "hidden" }}>
       <style>{`
-        .lp-h1 { font-size: 80px; }
+        .lp-h1 { font-size: 64px; }
         .lp-h2 { font-size: 48px; }
         @media (max-width: 1080px) {
-          .lp-features-grid { grid-template-columns: repeat(2, 1fr) !important; }
-          .lp-hero-app { grid-template-columns: 1fr !important; }
-          .lp-hero-side, .lp-hero-rail { display: none !important; }
-          .lp-foot-grid { grid-template-columns: 1.4fr 1fr 1fr !important; }
+          .lp-tools { grid-template-columns: repeat(3, 1fr) !important; }
+          .lp-redclaim, .lp-connect, .lp-letter { grid-template-columns: 1fr !important; gap: 36px !important; }
         }
         @media (max-width: 820px) {
-          .lp-h1 { font-size: 46px !important; letter-spacing: -1.4px !important; }
-          .lp-h2 { font-size: 30px !important; letter-spacing: -1px !important; }
-          .lp-nav-links { display: none !important; }
-          .lp-features-grid { grid-template-columns: 1fr !important; }
-          .lp-dark { grid-template-columns: 1fr !important; }
+          .lp-h1 { font-size: 38px !important; letter-spacing: -1.2px !important; }
+          .lp-h2 { font-size: 28px !important; letter-spacing: -1px !important; }
+          .lp-nav-link { display: none !important; }
+          .lp-tools { grid-template-columns: repeat(2, 1fr) !important; }
+          .lp-mosaic > div { width: 130px !important; }
           .lp-pricing-grid { grid-template-columns: 1fr !important; }
-          .lp-final { grid-template-columns: 1fr !important; padding: 48px 28px !important; }
-          .lp-final-phone { display: none !important; }
-          .lp-letter { grid-template-columns: 1fr !important; }
-          .lp-foot-grid { grid-template-columns: 1fr 1fr !important; }
-          .lp-promo { font-size: 11px !important; padding: 8px 12px !important; }
+          .lp-phones { gap: 12px !important; }
+          .lp-phones > div { transform: scale(0.7) !important; margin: -40px -20px !important; }
         }
       `}</style>
 
-      <PromoBar />
       <Nav user={user} />
       <Hero onCtaSignup={onCtaSignup} />
       <VideoBand />
-      <Features />
-      <Differentiator />
-      <DarkBand />
-      <BigCTA onCtaSignup={onCtaSignup} />
-      <Pricing onCtaSignup={onCtaSignup} />
+      <ToolsRow />
+      <RedClaim />
+      <ConnectBand />
+      <MidCTA onCtaSignup={onCtaSignup} />
       <FAQ />
-      <Founder />
+      <RedFounder />
       <FinalCTA onCtaSignup={onCtaSignup} />
       <FooterBlock />
     </div>
