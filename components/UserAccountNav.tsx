@@ -49,7 +49,9 @@ export default function UserAccountNav({ user, profile }: UserAccountNavProps) {
         <Avatar className="h-8 w-8">
           <AvatarImage src={profile?.avatar_url || user.image || undefined} />
           <AvatarFallback className="uppercase">
-            {profile?.full_name?.[0] || user.email?.[0] || "U"}
+            <span suppressHydrationWarning>
+              {profile?.full_name?.[0] || user.email?.[0] || "U"}
+            </span>
           </AvatarFallback>
         </Avatar>
       </DropdownMenuTrigger>

@@ -1234,7 +1234,9 @@ export default function LandingAltClient() {
 
   return (
     <div style={{ background: T.bg, color: T.fg, fontFamily: FONT_BODY, overflowX: "hidden" }}>
-      <style>{`
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         .lp-h1 { font-size: 64px; }
         .lp-h2 { font-size: 48px; }
         @media (max-width: 1080px) {
@@ -1251,7 +1253,9 @@ export default function LandingAltClient() {
           .lp-phones { gap: 12px !important; }
           .lp-phones > div { transform: scale(0.7) !important; margin: -40px -20px !important; }
         }
-      `}</style>
+      `,
+        }}
+      />
 
       <Nav user={user} />
       <Hero onCtaSignup={onCtaSignup} />
