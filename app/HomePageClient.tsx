@@ -247,6 +247,7 @@ function DecodedBand() {
           <MuxPlayer
             streamType="on-demand"
             playbackId={MUX_PRODUCT_TOUR_PLAYBACK_ID}
+            poster="/landing-video-poster.jpg"
             accentColor={LT.primary}
             preload="metadata"
             metadata={{ video_title: "Dance-Hub product tour" }}
