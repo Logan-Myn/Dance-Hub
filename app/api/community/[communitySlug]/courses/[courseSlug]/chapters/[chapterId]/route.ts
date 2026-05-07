@@ -11,6 +11,70 @@ interface Course {
   id: string;
 }
 
+export async function PUT(
+  request: Request,
+  props: {
+    params: Promise<{ communitySlug: string; courseSlug: string; chapterId: string }>;
+  }
+) {
+  const params = await props.params;
+  try {
+    const session = await getSession();
+
+    if (!session) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const user = session.user;
+    const { title } = await request.json();
+
+    // Check if user is the community creator
+    const community = await queryOne<Community>`
+      SELECT id, created_by
+      FROM communities
+      WHERE slug = ${params.communitySlug}
+    `;
+
+    if (!community) {
+      return new NextResponse("Community not found", { status: 404 });
+    }
+
+    if (community.created_by !== user.id) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    // Get course ID
+    const course = await queryOne<Course>`
+      SELECT id
+      FROM courses
+      WHERE community_id = ${community.id}
+        AND slug = ${params.courseSlug}
+    `;
+
+    if (!course) {
+      return new NextResponse("Course not found", { status: 404 });
+    }
+
+    // Update the chapter
+    try {
+      await sql`
+        UPDATE chapters
+        SET title = ${title}, updated_at = NOW()
+        WHERE id = ${params.chapterId}
+          AND course_id = ${course.id}
+      `;
+    } catch (updateError) {
+      console.error("[CHAPTER_UPDATE]", updateError);
+      return new NextResponse("Failed to update chapter", { status: 500 });
+    }
+
+    return NextResponse.json({ message: "Chapter updated successfully" });
+  } catch (error) {
+    console.error("[CHAPTER_UPDATE]", error);
+    return new NextResponse("Internal Error", { status: 500 });
+  }
+}
+
 export async function DELETE(
   req: Request,
   props: {

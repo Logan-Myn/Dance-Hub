@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type ReactElement } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -939,7 +939,7 @@ export default function CourseDetailClient({
     }
   };
 
-  const renderLessonContent = (): JSX.Element => {
+  const renderLessonContent = (): ReactElement => {
     if (!selectedLesson) {
       return (
         <div className="flex flex-col items-center justify-center h-[400px] text-center">

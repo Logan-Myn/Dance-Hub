@@ -288,7 +288,7 @@ export async function POST(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { communitySlug: string } }
+  _props: { params: Promise<{ communitySlug: string }> }
 ) {
   try {
     // Get the current user from Better Auth session
