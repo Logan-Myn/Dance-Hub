@@ -244,21 +244,40 @@ function DecodedBand() {
         }}
       >
         {MUX_PRODUCT_TOUR_PLAYBACK_ID ? (
-          <MuxPlayer
-            streamType="on-demand"
-            playbackId={MUX_PRODUCT_TOUR_PLAYBACK_ID}
-            poster="/landing-video-poster.jpg"
-            accentColor={LT.primary}
-            preload="metadata"
-            metadata={{ video_title: "Dance-Hub product tour" }}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              display: "block",
-            }}
-          />
+          <>
+            {/* Static poster underneath MuxPlayer so the image is visible the
+                instant the HTML lands, not gated on the mux-player JS bundle.
+                Also fills the rounded wrapper edge-to-edge, covering any
+                internal padding the player itself might have. */}
+            <img
+              src="/landing-video-poster.jpg"
+              alt=""
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                display: "block",
+              }}
+            />
+            <MuxPlayer
+              streamType="on-demand"
+              playbackId={MUX_PRODUCT_TOUR_PLAYBACK_ID}
+              poster="/landing-video-poster.jpg"
+              accentColor={LT.primary}
+              preload="metadata"
+              metadata={{ video_title: "Dance-Hub product tour" }}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                display: "block",
+              }}
+            />
+          </>
         ) : (
           <>
             <div
