@@ -333,16 +333,13 @@ function DecodedBand() {
             accentColor={LT.primary}
             preload="metadata"
             metadata={{ video_title: "Dance-Hub product tour" }}
-            style={
-              {
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                display: "block",
-                "--media-object-fit": "cover",
-              } as CSSProperties
-            }
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              display: "block",
+            }}
           />
         ) : (
           <>
