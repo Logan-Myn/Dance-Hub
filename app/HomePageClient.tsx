@@ -257,6 +257,7 @@ function DecodedBand() {
               width: "100%",
               height: "100%",
               display: "block",
+              "--media-object-fit": "cover",
             }}
           />
         ) : (

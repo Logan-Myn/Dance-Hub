@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { preload } from "react-dom";
 import Navbar from "@/app/components/Navbar";
 import { getSession } from "@/lib/auth-session";
 import { getProfileForUser } from "@/lib/community-data";
@@ -9,6 +10,10 @@ export const dynamic = "force-dynamic";
 const VIOLET = "#7c3aed"; // violet-600
 
 export default async function LandingPage() {
+  // Hero video poster: kick off the fetch before MuxPlayer hydrates so the
+  // image isn't gated behind the JS bundle.
+  preload("/landing-video-poster.jpg", { as: "image" });
+
   const session = await getSession();
   const profile = session ? await getProfileForUser(session.user.id) : null;
 
