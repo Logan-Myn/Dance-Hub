@@ -20,8 +20,9 @@ interface Membership {
 
 export async function GET(
   request: Request,
-  { params }: { params: { communitySlug: string; userId: string } }
+  props: { params: Promise<{ communitySlug: string; userId: string }> }
 ) {
+  const params = await props.params;
   try {
     const { communitySlug, userId } = params;
 

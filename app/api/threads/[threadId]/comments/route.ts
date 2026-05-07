@@ -28,10 +28,8 @@ interface CommentRow {
   likes_count: number;
 }
 
-export async function GET(
-  _request: Request,
-  { params }: { params: { threadId: string } }
-) {
+export async function GET(_request: Request, props: { params: Promise<{ threadId: string }> }) {
+  const params = await props.params;
   try {
     const { threadId } = params;
 
@@ -67,10 +65,8 @@ export async function GET(
   }
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: { threadId: string } }
-) {
+export async function POST(request: Request, props: { params: Promise<{ threadId: string }> }) {
+  const params = await props.params;
   try {
     const session = await getSession();
     if (!session) {

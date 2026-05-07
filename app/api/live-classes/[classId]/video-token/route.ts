@@ -25,10 +25,8 @@ interface Membership {
   status: string;
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { classId: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ classId: string }> }) {
+  const params = await props.params;
   try {
     const session = await getSession();
     if (!session) {

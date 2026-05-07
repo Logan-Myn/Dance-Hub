@@ -13,12 +13,11 @@ interface Course {
 
 export async function DELETE(
   req: Request,
-  {
-    params,
-  }: {
-    params: { communitySlug: string; courseSlug: string; chapterId: string };
+  props: {
+    params: Promise<{ communitySlug: string; courseSlug: string; chapterId: string }>;
   }
 ) {
+  const params = await props.params;
   try {
     // Verify the session and get user
     const session = await getSession();

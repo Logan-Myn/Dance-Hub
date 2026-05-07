@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import { CheckCircle } from 'lucide-react';
 
-export default function UnsubscribeSuccess({
-  searchParams,
-}: {
-  searchParams: { community?: string };
-}) {
+export default async function UnsubscribeSuccess(
+  props: {
+    searchParams: Promise<{ community?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const communityName = searchParams.community?.trim();
 
   return (

@@ -24,8 +24,9 @@ interface HighestPosition {
 
 export async function POST(
   request: Request,
-  { params }: { params: { communitySlug: string; courseSlug: string } }
+  props: { params: Promise<{ communitySlug: string; courseSlug: string }> }
 ) {
+  const params = await props.params;
   try {
     const { communitySlug, courseSlug } = params;
     const { title } = await request.json();
@@ -111,12 +112,11 @@ export async function POST(
 
 export async function PUT(
   request: Request,
-  {
-    params,
-  }: {
-    params: { communitySlug: string; courseSlug: string; chapterId: string };
+  props: {
+    params: Promise<{ communitySlug: string; courseSlug: string; chapterId: string }>;
   }
 ) {
+  const params = await props.params;
   try {
     const { communitySlug, courseSlug, chapterId } = params;
     const { title } = await request.json();
@@ -175,12 +175,11 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  {
-    params,
-  }: {
-    params: { communitySlug: string; courseSlug: string; chapterId: string };
+  props: {
+    params: Promise<{ communitySlug: string; courseSlug: string; chapterId: string }>;
   }
 ) {
+  const params = await props.params;
   try {
     const { communitySlug, courseSlug, chapterId } = params;
 

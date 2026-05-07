@@ -14,10 +14,8 @@ interface UpdatedThread {
   pinned: boolean;
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: { threadId: string } }
-) {
+export async function POST(request: Request, props: { params: Promise<{ threadId: string }> }) {
+  const params = await props.params;
   try {
     const { threadId } = params;
 

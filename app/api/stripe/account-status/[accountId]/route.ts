@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 
-export async function GET(
-  request: Request,
-  { params }: { params: { accountId: string } }
-) {
+export async function GET(request: Request, props: { params: Promise<{ accountId: string }> }) {
+  const params = await props.params;
   try {
     const { accountId } = params;
     console.log('Fetching Stripe account status for:', accountId);

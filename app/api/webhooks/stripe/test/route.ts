@@ -6,9 +6,9 @@ export async function POST(request: Request) {
     console.log('🧪 TEST WEBHOOK ENDPOINT HIT - TIMESTAMP:', new Date().toISOString());
     
     const body = await request.text();
-    const signature = headers().get('stripe-signature');
-    const userAgent = headers().get('user-agent');
-    const contentType = headers().get('content-type');
+    const signature = (await headers()).get('stripe-signature');
+    const userAgent = (await headers()).get('user-agent');
+    const contentType = (await headers()).get('content-type');
     
     console.log('📊 Request Details:', {
       bodyLength: body.length,

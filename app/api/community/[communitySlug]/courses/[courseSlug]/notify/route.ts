@@ -17,8 +17,9 @@ interface Course {
 
 export async function POST(
   req: Request,
-  { params }: { params: { communitySlug: string; courseSlug: string } }
+  props: { params: Promise<{ communitySlug: string; courseSlug: string }> }
 ) {
+  const params = await props.params;
   try {
     const community = await queryOne<Community>`
       SELECT id, name FROM communities WHERE slug = ${params.communitySlug}

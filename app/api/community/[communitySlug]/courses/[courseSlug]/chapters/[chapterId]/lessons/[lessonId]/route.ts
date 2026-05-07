@@ -30,17 +30,16 @@ interface Lesson {
 
 export async function PUT(
   request: Request,
-  {
-    params,
-  }: {
-    params: {
+  props: {
+    params: Promise<{
       communitySlug: string;
       courseSlug: string;
       chapterId: string;
       lessonId: string;
-    };
+    }>;
   }
 ) {
+  const params = await props.params;
   try {
     const body = await request.json();
     const { title, content, videoAssetId, playbackId } = body;
@@ -121,17 +120,16 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  {
-    params,
-  }: {
-    params: {
+  props: {
+    params: Promise<{
       communitySlug: string;
       courseSlug: string;
       chapterId: string;
       lessonId: string;
-    };
+    }>;
   }
 ) {
+  const params = await props.params;
   try {
     // Verify auth session
     const session = await getSession();

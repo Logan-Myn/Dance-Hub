@@ -22,8 +22,9 @@ interface Chapter {
 
 export async function PUT(
   req: Request,
-  { params }: { params: { communitySlug: string; courseSlug: string } }
+  props: { params: Promise<{ communitySlug: string; courseSlug: string }> }
 ) {
+  const params = await props.params;
   try {
     const { chapters } = await req.json();
 

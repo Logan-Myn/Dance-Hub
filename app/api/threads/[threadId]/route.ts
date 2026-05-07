@@ -22,10 +22,8 @@ async function authorizeThreadMutation(threadId: string, userId: string) {
   return { ok: true as const };
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { threadId: string } }
-) {
+export async function PATCH(request: Request, props: { params: Promise<{ threadId: string }> }) {
+  const params = await props.params;
   try {
     const session = await getSession();
     if (!session) {
@@ -59,10 +57,8 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: { threadId: string } }
-) {
+export async function DELETE(_request: Request, props: { params: Promise<{ threadId: string }> }) {
+  const params = await props.params;
   try {
     const session = await getSession();
     if (!session) {

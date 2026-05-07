@@ -11,10 +11,8 @@ interface Community {
   id: string;
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { communityId: string } }
-) {
+export async function DELETE(request: Request, props: { params: Promise<{ communityId: string }> }) {
+  const params = await props.params;
   try {
     const { communityId } = params;
 
@@ -50,10 +48,8 @@ export async function DELETE(
   }
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { communityId: string } }
-) {
+export async function PATCH(request: Request, props: { params: Promise<{ communityId: string }> }) {
+  const params = await props.params;
   try {
     const { communityId } = params;
 

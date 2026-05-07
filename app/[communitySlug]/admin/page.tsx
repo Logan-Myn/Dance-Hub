@@ -24,11 +24,12 @@ type JoinEvent = { user_id: string; display_name: string | null; avatar_url: str
 type CancelEvent = { user_id: string; display_name: string | null; avatar_url: string | null; cancelled_at: Date };
 type PostEvent = { id: string; user_id: string; author_name: string | null; author_image: string | null; category_name: string | null; created_at: Date };
 
-export default async function AdminDashboardPage({
-  params,
-}: {
-  params: { communitySlug: string };
-}) {
+export default async function AdminDashboardPage(
+  props: {
+    params: Promise<{ communitySlug: string }>;
+  }
+) {
+  const params = await props.params;
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 

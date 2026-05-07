@@ -10,11 +10,12 @@ import AboutClient from './AboutClient';
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-export default async function AboutPage({
-  params,
-}: {
-  params: { communitySlug: string };
-}) {
+export default async function AboutPage(
+  props: {
+    params: Promise<{ communitySlug: string }>;
+  }
+) {
+  const params = await props.params;
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) notFound();
 

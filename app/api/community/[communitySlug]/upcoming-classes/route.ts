@@ -23,8 +23,9 @@ interface UpcomingClass {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { communitySlug: string } }
+  props: { params: Promise<{ communitySlug: string }> }
 ) {
+  const params = await props.params;
   try {
     const community = await queryOne<Community>`
       SELECT id FROM communities WHERE slug = ${params.communitySlug}

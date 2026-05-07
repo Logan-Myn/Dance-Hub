@@ -2,10 +2,8 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-session';
 import { sql } from '@/lib/db';
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function PUT(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     // Verify authentication
     const session = await getSession();

@@ -40,8 +40,9 @@ interface LiveClass {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { communitySlug: string } }
+  props: { params: Promise<{ communitySlug: string }> }
 ) {
+  const params = await props.params;
   try {
     const { searchParams } = new URL(request.url);
     const start = searchParams.get('start');
@@ -94,8 +95,9 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { communitySlug: string } }
+  props: { params: Promise<{ communitySlug: string }> }
 ) {
+  const params = await props.params;
   try {
     // Get the current user session
     const session = await getSession();

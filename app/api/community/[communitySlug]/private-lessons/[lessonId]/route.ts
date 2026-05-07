@@ -30,8 +30,9 @@ interface Booking {
 
 export async function GET(
   request: Request,
-  { params }: { params: { communitySlug: string; lessonId: string } }
+  props: { params: Promise<{ communitySlug: string; lessonId: string }> }
 ) {
+  const params = await props.params;
   try {
     const { communitySlug, lessonId } = params;
 
@@ -76,8 +77,9 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { communitySlug: string; lessonId: string } }
+  props: { params: Promise<{ communitySlug: string; lessonId: string }> }
 ) {
+  const params = await props.params;
   try {
     const { communitySlug, lessonId } = params;
     const updateData: Partial<CreatePrivateLessonData> & { is_active?: boolean } = await request.json();
@@ -156,8 +158,9 @@ export async function PUT(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { communitySlug: string; lessonId: string } }
+  props: { params: Promise<{ communitySlug: string; lessonId: string }> }
 ) {
+  const params = await props.params;
   try {
     const { communitySlug, lessonId } = params;
     const { is_active } = await request.json();
@@ -214,8 +217,9 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { communitySlug: string; lessonId: string } }
+  props: { params: Promise<{ communitySlug: string; lessonId: string }> }
 ) {
+  const params = await props.params;
   try {
     const { communitySlug, lessonId } = params;
 

@@ -3,10 +3,8 @@ import { stripe } from '@/lib/stripe';
 import Stripe from 'stripe';
 
 // GET endpoint to fetch bank account details
-export async function GET(
-  request: Request,
-  { params }: { params: { accountId: string } }
-) {
+export async function GET(request: Request, props: { params: Promise<{ accountId: string }> }) {
+  const params = await props.params;
   try {
     const { accountId } = params;
     
@@ -39,10 +37,8 @@ export async function GET(
 }
 
 // PUT endpoint to create a login link for bank account management
-export async function PUT(
-  request: Request,
-  { params }: { params: { accountId: string } }
-) {
+export async function PUT(request: Request, props: { params: Promise<{ accountId: string }> }) {
+  const params = await props.params;
   try {
     const { accountId } = params;
 

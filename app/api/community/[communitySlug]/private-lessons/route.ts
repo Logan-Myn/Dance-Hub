@@ -22,10 +22,8 @@ interface PrivateLesson {
   updated_at: string;
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function GET(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const { communitySlug } = params;
     const { searchParams } = new URL(request.url);
@@ -79,10 +77,8 @@ export async function GET(
   }
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const { communitySlug } = params;
     const lessonData: CreatePrivateLessonData = await request.json();

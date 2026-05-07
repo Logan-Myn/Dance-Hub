@@ -21,11 +21,12 @@ interface CommunityRow {
   can_change_opening_date: boolean | null;
 }
 
-export default async function GeneralSettingsPage({
-  params,
-}: {
-  params: { communitySlug: string };
-}) {
+export default async function GeneralSettingsPage(
+  props: {
+    params: Promise<{ communitySlug: string }>;
+  }
+) {
+  const params = await props.params;
   const community = await queryOne<CommunityRow>`
     SELECT id, name, description, image_url, image_focal_x, image_focal_y, image_zoom,
            custom_links, slug, status, opening_date, can_change_opening_date

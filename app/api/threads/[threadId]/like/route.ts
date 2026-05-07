@@ -7,10 +7,8 @@ interface LikeResult {
   liked: boolean;
 }
 
-export async function POST(
-  _request: Request,
-  { params }: { params: { threadId: string } }
-) {
+export async function POST(_request: Request, props: { params: Promise<{ threadId: string }> }) {
+  const params = await props.params;
   try {
     const session = await getSession();
     if (!session) {

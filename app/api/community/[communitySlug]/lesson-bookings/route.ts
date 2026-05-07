@@ -14,10 +14,8 @@ interface LessonBooking {
   [key: string]: any;
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function GET(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const { communitySlug } = params;
 

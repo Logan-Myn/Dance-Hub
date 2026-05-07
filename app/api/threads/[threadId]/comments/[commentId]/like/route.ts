@@ -10,8 +10,9 @@ interface LikeResult {
 
 export async function POST(
   _request: Request,
-  { params }: { params: { threadId: string; commentId: string } }
+  props: { params: Promise<{ threadId: string; commentId: string }> }
 ) {
+  const params = await props.params;
   try {
     const session = await getSession();
     if (!session) {

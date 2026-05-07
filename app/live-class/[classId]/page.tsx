@@ -3,9 +3,9 @@ import { sql } from "@/lib/db";
 import LiveClassVideoPage from "@/components/LiveClassVideoPage";
 
 interface LiveClassPageProps {
-  params: {
+  params: Promise<{
     classId: string;
-  };
+  }>;
 }
 
 interface LiveClass {
@@ -24,7 +24,8 @@ interface LiveClass {
   is_starting_soon: boolean;
 }
 
-export default async function LiveClassPage({ params }: LiveClassPageProps) {
+export default async function LiveClassPage(props: LiveClassPageProps) {
+  const params = await props.params;
   const { classId } = params;
 
   // Fetch live class details from the view

@@ -25,8 +25,9 @@ interface Membership {
 
 export async function POST(
   request: Request,
-  { params }: { params: { communitySlug: string; lessonId: string } }
+  props: { params: Promise<{ communitySlug: string; lessonId: string }> }
 ) {
+  const params = await props.params;
   try {
     const { communitySlug, lessonId } = params;
     const bookingData: CreateLessonBookingData = await request.json();

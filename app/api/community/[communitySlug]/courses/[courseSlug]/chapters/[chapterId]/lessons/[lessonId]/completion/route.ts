@@ -9,10 +9,8 @@ interface LessonCompletion {
   completed_at: string;
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: { lessonId: string } }
-) {
+export async function POST(request: Request, props: { params: Promise<{ lessonId: string }> }) {
+  const params = await props.params;
   try {
     // Get the current session
     const session = await getSession();
@@ -58,10 +56,8 @@ export async function POST(
   }
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: { lessonId: string } }
-) {
+export async function GET(request: Request, props: { params: Promise<{ lessonId: string }> }) {
+  const params = await props.params;
   try {
     // Get the current session
     const session = await getSession();

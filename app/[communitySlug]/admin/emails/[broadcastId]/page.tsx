@@ -33,11 +33,12 @@ const STATUS_DOT: Record<BroadcastRow['status'], string> = {
   failed: 'bg-rose-500',
 };
 
-export default async function BroadcastDetailPage({
-  params,
-}: {
-  params: { communitySlug: string; broadcastId: string };
-}) {
+export default async function BroadcastDetailPage(
+  props: {
+    params: Promise<{ communitySlug: string; broadcastId: string }>;
+  }
+) {
+  const params = await props.params;
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 

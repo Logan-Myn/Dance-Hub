@@ -49,8 +49,9 @@ interface LessonCompletion {
 
 export async function GET(
   request: Request,
-  { params }: { params: { communitySlug: string; courseSlug: string } }
+  props: { params: Promise<{ communitySlug: string; courseSlug: string }> }
 ) {
+  const params = await props.params;
   try {
     console.log("GET Course request params:", {
       communitySlug: params.communitySlug,
@@ -178,10 +179,8 @@ export async function GET(
   }
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const { communitySlug } = params;
 
@@ -280,8 +279,9 @@ export const dynamic = "force-dynamic";
 
 export async function PUT(
   request: Request,
-  { params }: { params: { communitySlug: string; courseSlug: string } }
+  props: { params: Promise<{ communitySlug: string; courseSlug: string }> }
 ) {
+  const params = await props.params;
   try {
     // Get community
     const community = await queryOne<Community>`

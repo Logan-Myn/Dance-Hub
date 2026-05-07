@@ -7,11 +7,12 @@ import { MembersTable, MemberRow } from '@/components/admin/MembersTable';
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-export default async function MembersPage({
-  params,
-}: {
-  params: { communitySlug: string };
-}) {
+export default async function MembersPage(
+  props: {
+    params: Promise<{ communitySlug: string }>;
+  }
+) {
+  const params = await props.params;
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 

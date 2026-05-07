@@ -51,10 +51,8 @@ interface BankAccountInfo {
   skipped?: boolean;
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { accountId: string } }
-) {
+export async function PUT(request: Request, props: { params: Promise<{ accountId: string }> }) {
+  const params = await props.params;
   try {
     const { accountId } = params;
     const {

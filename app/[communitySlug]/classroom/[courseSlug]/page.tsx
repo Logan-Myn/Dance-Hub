@@ -11,11 +11,12 @@ import CourseDetailClient from './CourseDetailClient';
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-export default async function CourseDetailPage({
-  params,
-}: {
-  params: { communitySlug: string; courseSlug: string };
-}) {
+export default async function CourseDetailPage(
+  props: {
+    params: Promise<{ communitySlug: string; courseSlug: string }>;
+  }
+) {
+  const params = await props.params;
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) notFound();
 
