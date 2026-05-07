@@ -1110,12 +1110,22 @@ export default function HomePageClient() {
           __html: `
         .lp-h1 { font-size: 76px; }
         .lp-h2 { font-size: 48px; }
-        /* Mux player has a black host background by default — neutralize it
-           and force the poster/video to fill any internal display area so
-           the rounded wrapper corners don't show black artifacts. */
+        /* Mux's lazy player wrapper paints three layers that cause dark
+           artifacts at the rounded wrapper corners:
+           1. mux-player bg-color defaults to #000 via --media-background-color
+           2. placeholder bg-image is sized via --media-object-fit (default
+              'contain', causes subpixel letterbox bars)
+           3. an overlay div on top of the placeholder uses
+              --controls-backdrop-color (defaults to rgba(0,0,0,0.6)),
+              dimming the whole image so any natural edge fall-off in the
+              photo turns into visibly black corners.
+           Override all three so the placeholder shows clean, edge-to-edge. */
         mux-player {
+          --media-background-color: transparent;
+          --media-object-fit: cover;
+        }
+        mux-player [data-mux-player-react-lazy-placeholder-overlay] {
           background-color: transparent !important;
-          --media-object-size: cover;
         }
         .lp-hero-cta {
           transition: transform 200ms ease, box-shadow 200ms ease, filter 200ms ease;
