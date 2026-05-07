@@ -171,7 +171,9 @@ function Hero({ onCtaSignup }: { onCtaSignup: () => void }) {
           margin: "0 auto 36px",
         }}
       >
-        Build a paid community from the audience you already have. Courses, live classes, and 1-on-1 lessons in one place.
+        Build a paid community from the audience you already have.
+        <br />
+        Courses, live classes, and 1-on-1 lessons in one place.
       </p>
       <ProductTourVideo />
       <div
