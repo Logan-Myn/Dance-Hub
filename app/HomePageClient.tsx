@@ -198,97 +198,14 @@ function Hero({ onCtaSignup }: { onCtaSignup: () => void }) {
           <ArrowRight size={20} />
         </button>
       </div>
-      <div style={{ fontSize: 13, color: LT.muted, marginBottom: 50 }}>
+      <div style={{ fontSize: 13, color: LT.muted }}>
         0% platform fees for the first 30 days. Live in 5 minutes.
       </div>
-
-      <HeroImage />
     </section>
   );
 }
 
-// ── Hero product mockup ──
-function HeroImage() {
-  return (
-    <div style={{ position: "relative", maxWidth: 1180, margin: "0 auto" }} className="lp-hero-img">
-      <svg
-        viewBox="0 0 1200 80"
-        style={{
-          position: "absolute",
-          top: -36,
-          left: 0,
-          width: "100%",
-          height: 60,
-          opacity: 0.45,
-        }}
-        aria-hidden
-      >
-        <path
-          d="M0 40 Q 150 0 300 40 T 600 40 T 900 40 T 1200 40"
-          stroke={LT.primary}
-          strokeWidth="3"
-          fill="none"
-        />
-        <path
-          d="M0 50 Q 150 10 300 50 T 600 50 T 900 50 T 1200 50"
-          stroke={LT.accent}
-          strokeWidth="2"
-          fill="none"
-          opacity="0.6"
-        />
-      </svg>
-
-      <div
-        style={{
-          borderRadius: 22,
-          overflow: "hidden",
-          position: "relative",
-          background: LT.card,
-          border: `1px solid ${LT.border}`,
-          boxShadow:
-            "0 40px 80px -30px rgba(60,30,100,0.35), 0 8px 16px -4px rgba(60,30,100,0.08)",
-        }}
-      >
-        <div
-          style={{
-            padding: "12px 18px",
-            borderBottom: `1px solid ${LT.rule}`,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: LT.bg,
-          }}
-        >
-          <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#ff5f57" }} />
-          <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#febc2e" }} />
-          <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#28c840" }} />
-          <span
-            style={{
-              marginLeft: 16,
-              fontSize: 12,
-              color: LT.muted,
-              fontFamily: FONT_MONO,
-            }}
-          >
-            dance-hub.io/bachataflow
-          </span>
-        </div>
-
-        <img
-          src="/hero-community.png"
-          alt="BachataFlow community on Dance-Hub"
-          style={{
-            display: "block",
-            width: "100%",
-            height: "auto",
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ── 4. "Decoded" video band ──
+// ── 4. Product tour video band ──
 function DecodedBand() {
   return (
     <section
