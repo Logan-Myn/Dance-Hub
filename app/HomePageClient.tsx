@@ -239,7 +239,7 @@ function DecodedBand() {
           borderRadius: 18,
           overflow: "hidden",
           aspectRatio: "16/9",
-          background: `linear-gradient(135deg, hsl(270, 30%, 18%), hsl(265, 50%, 28%))`,
+          background: LT.bg,
           boxShadow: "0 30px 60px -20px rgba(60,30,100,0.4)",
         }}
       >
@@ -257,7 +257,6 @@ function DecodedBand() {
               width: "100%",
               height: "100%",
               display: "block",
-              "--media-object-fit": "cover",
             }}
           />
         ) : (
