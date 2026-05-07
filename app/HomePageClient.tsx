@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { CSSProperties } from "react";
+import MuxPlayer from "@mux/mux-player-react";
 import {
   ArrowRight,
   MessagesSquare,
@@ -12,6 +13,10 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAuthModal } from "@/contexts/AuthModalContext";
+
+// Paste the Mux playback ID here once the product tour finishes rendering and
+// uploading. Until then, the section renders the static placeholder below.
+const MUX_PRODUCT_TOUR_PLAYBACK_ID = "ez2DwxtXRgWYHWYE2XP00YOqUyybmltscc2pljLw3LX00";
 
 // Lavender token chassis from V4 design.
 const LT = {
@@ -307,7 +312,7 @@ function DecodedBand() {
           maxWidth: 820,
         }}
       >
-        Built ground-up for dance teachers.
+        Why your followers don&apos;t become students.
       </h2>
       <div
         style={{
@@ -321,63 +326,85 @@ function DecodedBand() {
           boxShadow: "0 30px 60px -20px rgba(60,30,100,0.4)",
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            opacity: 0.18,
-            background: `repeating-linear-gradient(135deg, transparent 0 18px, white 18px 19px)`,
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            bottom: 22,
-            left: 26,
-            color: "white",
-            fontFamily: FONT_MONO,
-            fontSize: 12,
-            letterSpacing: 1.5,
-            textTransform: "uppercase",
-            opacity: 0.8,
-          }}
-        >
-          02:14 · Product tour
-        </div>
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div
-            style={{
-              width: 84,
-              height: 84,
-              borderRadius: "50%",
-              background: "white",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 14px 30px rgba(0,0,0,0.3)",
-              cursor: "pointer",
-            }}
-          >
+        {MUX_PRODUCT_TOUR_PLAYBACK_ID ? (
+          <MuxPlayer
+            streamType="on-demand"
+            playbackId={MUX_PRODUCT_TOUR_PLAYBACK_ID}
+            accentColor={LT.primary}
+            preload="metadata"
+            metadata={{ video_title: "Dance-Hub product tour" }}
+            style={
+              {
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                display: "block",
+                "--media-object-fit": "cover",
+              } as CSSProperties
+            }
+          />
+        ) : (
+          <>
             <div
               style={{
-                width: 0,
-                height: 0,
-                marginLeft: 6,
-                borderLeft: `22px solid ${LT.primary}`,
-                borderTop: "14px solid transparent",
-                borderBottom: "14px solid transparent",
+                position: "absolute",
+                inset: 0,
+                opacity: 0.18,
+                background: `repeating-linear-gradient(135deg, transparent 0 18px, white 18px 19px)`,
               }}
             />
-          </div>
-        </div>
+            <div
+              style={{
+                position: "absolute",
+                bottom: 22,
+                left: 26,
+                color: "white",
+                fontFamily: FONT_MONO,
+                fontSize: 12,
+                letterSpacing: 1.5,
+                textTransform: "uppercase",
+                opacity: 0.8,
+              }}
+            >
+              02:14 · Product tour
+            </div>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <div
+                style={{
+                  width: 84,
+                  height: 84,
+                  borderRadius: "50%",
+                  background: "white",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 14px 30px rgba(0,0,0,0.3)",
+                  cursor: "pointer",
+                }}
+              >
+                <div
+                  style={{
+                    width: 0,
+                    height: 0,
+                    marginLeft: 6,
+                    borderLeft: `22px solid ${LT.primary}`,
+                    borderTop: "14px solid transparent",
+                    borderBottom: "14px solid transparent",
+                  }}
+                />
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </section>
   );
