@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { CSSProperties } from "react";
-import MuxPlayer from "@mux/mux-player-react";
+import MuxPlayer from "@mux/mux-player-react/lazy";
 import {
   ArrowRight,
   MessagesSquare,
@@ -244,40 +244,23 @@ function DecodedBand() {
         }}
       >
         {MUX_PRODUCT_TOUR_PLAYBACK_ID ? (
-          <>
-            {/* Static poster underneath MuxPlayer so the image is visible the
-                instant the HTML lands, not gated on the mux-player JS bundle.
-                Also fills the rounded wrapper edge-to-edge, covering any
-                internal padding the player itself might have. */}
-            <img
-              src="/landing-video-poster.jpg"
-              alt=""
-              aria-hidden
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                display: "block",
-              }}
-            />
-            <MuxPlayer
-              streamType="on-demand"
-              playbackId={MUX_PRODUCT_TOUR_PLAYBACK_ID}
-              poster="/landing-video-poster.jpg"
-              accentColor={LT.primary}
-              preload="metadata"
-              metadata={{ video_title: "Dance-Hub product tour" }}
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                display: "block",
-              }}
-            />
-          </>
+          <MuxPlayer
+            streamType="on-demand"
+            playbackId={MUX_PRODUCT_TOUR_PLAYBACK_ID}
+            poster="/landing-video-poster.jpg"
+            placeholder="data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAgQCAAAD//gAQTGF2YzYxLjE5LjEwMQD/2wBDAAgoKC8oLzc3Nzc3N0E8QUNDQ0FBQUFDQ0NISEhVVVVISEhDQ0hIUFBVVVxfXFdXVVdfX2RkZHh4c3OMjJGsrM//xABXAAADAQEBAAAAAAAAAAAAAAAABgUDBAcBAQEBAQAAAAAAAAAAAAAAAAACAQMQAQADAQEAAAAAAAAAAAAAAAADAgExEREBAAAAAAAAAAAAAAAAAAAAAP/AABEIABIAIAMBEgACEgADEgD/2gAMAwEAAhEDEQA/APdnPo1aXBfUS9kqdEK9N9Ro7DVINjF0YxI0a5iggSdEnWgNIuiLrQDsFiB//9k="
+            loading="page"
+            accentColor={LT.primary}
+            preload="metadata"
+            metadata={{ video_title: "Dance-Hub product tour" }}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              display: "block",
+            }}
+          />
         ) : (
           <>
             <div
