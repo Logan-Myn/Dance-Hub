@@ -1110,6 +1110,13 @@ export default function HomePageClient() {
           __html: `
         .lp-h1 { font-size: 76px; }
         .lp-h2 { font-size: 48px; }
+        /* Mux player has a black host background by default — neutralize it
+           and force the poster/video to fill any internal display area so
+           the rounded wrapper corners don't show black artifacts. */
+        mux-player {
+          background-color: transparent !important;
+          --media-object-size: cover;
+        }
         .lp-hero-cta {
           transition: transform 200ms ease, box-shadow 200ms ease, filter 200ms ease;
           box-shadow: 0 10px 26px -10px hsla(265, 65%, 55%, 0.55);
