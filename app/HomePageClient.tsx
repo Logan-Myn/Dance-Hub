@@ -173,6 +173,7 @@ function Hero({ onCtaSignup }: { onCtaSignup: () => void }) {
       >
         Build a paid community from the audience you already have. Courses, live classes, and 1-on-1 lessons in one place.
       </p>
+      <ProductTourVideo />
       <div
         className="lp-cta-row"
         style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: 22 }}
@@ -206,43 +207,20 @@ function Hero({ onCtaSignup }: { onCtaSignup: () => void }) {
 }
 
 // ── 4. Product tour video band ──
-function DecodedBand() {
+function ProductTourVideo() {
   return (
-    <section
+    <div
       style={{
-        maxWidth: 1240,
-        margin: "60px auto 20px",
-        padding: "0 32px",
-        textAlign: "center",
+        position: "relative",
+        maxWidth: 880,
+        margin: "0 auto 36px",
+        borderRadius: 18,
+        overflow: "hidden",
+        aspectRatio: "16/9",
+        background: LT.bg,
+        boxShadow: "0 30px 60px -20px rgba(60,30,100,0.4)",
       }}
-      className="lp-decoded"
     >
-      <h2
-        className="lp-h2"
-        style={{
-          fontFamily: FONT_DISPLAY,
-          fontSize: 38,
-          fontWeight: 600,
-          letterSpacing: -1.2,
-          lineHeight: 1.15,
-          margin: "0 auto 32px",
-          maxWidth: 820,
-        }}
-      >
-        Why your followers don&apos;t become students.
-      </h2>
-      <div
-        style={{
-          position: "relative",
-          maxWidth: 880,
-          margin: "0 auto",
-          borderRadius: 18,
-          overflow: "hidden",
-          aspectRatio: "16/9",
-          background: LT.bg,
-          boxShadow: "0 30px 60px -20px rgba(60,30,100,0.4)",
-        }}
-      >
         {MUX_PRODUCT_TOUR_PLAYBACK_ID ? (
           <MuxPlayer
             streamType="on-demand"
@@ -322,8 +300,7 @@ function DecodedBand() {
             </div>
           </>
         )}
-      </div>
-    </section>
+    </div>
   );
 }
 
@@ -1159,7 +1136,6 @@ export default function HomePageClient() {
           .lp-stats > div:nth-child(3) { border-left: none !important; }
           .lp-foot-grid { grid-template-columns: 1fr 1fr !important; }
           .lp-promo { font-size: 11px !important; padding: 8px 12px !important; }
-          .lp-decoded h2.lp-h2, .lp-decoded h2 { font-size: 26px !important; }
         }
         @media (max-width: 560px) {
           .lp-features-grid { grid-template-columns: 1fr !important; }
@@ -1169,7 +1145,6 @@ export default function HomePageClient() {
       />
 
       <Hero onCtaSignup={onCtaSignup} />
-      <DecodedBand />
       <FeatureRows />
       <StackComparison />
       <Pricing onCtaSignup={onCtaSignup} />
