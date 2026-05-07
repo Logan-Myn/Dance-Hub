@@ -25,7 +25,7 @@ describe('GET broadcasts/quota', () => {
       ok: false,
       response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }),
     });
-    const res = await GET(makeReq(), { params: { communitySlug: 'salsa' } });
+    const res = await GET(makeReq(), { params: Promise.resolve({ communitySlug: 'salsa' }) });
     expect(res.status).toBe(403);
   });
 
@@ -43,7 +43,7 @@ describe('GET broadcasts/quota', () => {
     });
     mockedQuota.mockResolvedValueOnce({ tier: 'free', used: 3, limit: 10 });
 
-    const res = await GET(makeReq(), { params: { communitySlug: 'salsa' } });
+    const res = await GET(makeReq(), { params: Promise.resolve({ communitySlug: 'salsa' }) });
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ tier: 'free', used: 3, limit: 10 });
     expect(mockedQuota).toHaveBeenCalledWith('c1');

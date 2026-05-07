@@ -68,7 +68,7 @@ describe('POST broadcasts', () => {
 
   it('returns auth response when access denied (e.g. 401/403/404)', async () => {
     denyAccess(403);
-    const res = await POST(makeReq(), { params: { communitySlug: 'salsa' } });
+    const res = await POST(makeReq(), { params: Promise.resolve({ communitySlug: 'salsa' }) });
     expect(res.status).toBe(403);
   });
 
@@ -79,7 +79,7 @@ describe('POST broadcasts', () => {
       reason: 'quota_exhausted',
       quota: { tier: 'free', used: 10, limit: 10 },
     });
-    const res = await POST(makeReq(), { params: { communitySlug: 'salsa' } });
+    const res = await POST(makeReq(), { params: Promise.resolve({ communitySlug: 'salsa' }) });
     expect(res.status).toBe(402);
   });
 
@@ -90,7 +90,7 @@ describe('POST broadcasts', () => {
       reason: 'soft_cap_reached',
       quota: { tier: 'paid', used: 200, limit: 200 },
     });
-    const res = await POST(makeReq(), { params: { communitySlug: 'salsa' } });
+    const res = await POST(makeReq(), { params: Promise.resolve({ communitySlug: 'salsa' }) });
     expect(res.status).toBe(429);
   });
 
@@ -101,7 +101,7 @@ describe('POST broadcasts', () => {
       .mockResolvedValueOnce({ id: 'profile-uuid' }) // sender profile lookup
       .mockResolvedValueOnce({ id: 'b-new' });        // INSERT … RETURNING id
     mockedRecipients.mockResolvedValueOnce([]);
-    const res = await POST(makeReq(), { params: { communitySlug: 'salsa' } });
+    const res = await POST(makeReq(), { params: Promise.resolve({ communitySlug: 'salsa' }) });
     expect(res.status).toBe(422);
   });
 
@@ -121,7 +121,7 @@ describe('POST broadcasts', () => {
       failedCount: 0,
     });
 
-    const res = await POST(makeReq(), { params: { communitySlug: 'salsa' } });
+    const res = await POST(makeReq(), { params: Promise.resolve({ communitySlug: 'salsa' }) });
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json).toEqual(
@@ -145,7 +145,7 @@ describe('POST broadcasts', () => {
     ]);
     mockedRun.mockRejectedValueOnce(new Error('resend down'));
 
-    const res = await POST(makeReq(), { params: { communitySlug: 'salsa' } });
+    const res = await POST(makeReq(), { params: Promise.resolve({ communitySlug: 'salsa' }) });
     expect(res.status).toBe(500);
     // last sql call should be the cleanup UPDATE marking the row failed
     const lastCall = mockedSql.mock.calls[mockedSql.mock.calls.length - 1];
@@ -161,7 +161,7 @@ describe('GET broadcasts', () => {
   it('returns auth response when access denied', async () => {
     denyAccess(401);
     const res = await GET(new Request('http://localhost/x'), {
-      params: { communitySlug: 'salsa' },
+      params: Promise.resolve({ communitySlug: 'salsa' }),
     });
     expect(res.status).toBe(401);
   });
@@ -179,7 +179,7 @@ describe('GET broadcasts', () => {
       },
     ]);
     const res = await GET(new Request('http://localhost/x'), {
-      params: { communitySlug: 'salsa' },
+      params: Promise.resolve({ communitySlug: 'salsa' }),
     });
     expect(res.status).toBe(200);
     const json = await res.json();
