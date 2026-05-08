@@ -66,6 +66,7 @@ function PaymentForm({ clientSecret, communitySlug, price, onSuccess, onClose }:
         confirmParams: {
           return_url: `${window.location.origin}/${communitySlug}?success=true`,
         },
+        redirect: 'if_required',
       });
 
       if (error) {
