@@ -822,6 +822,7 @@ export default function FeedClient({
           setIsMember(true);
           setShowPaymentModal(false);
           toast.success("Successfully joined the community!");
+          router.refresh();
         }}
         communitySlug={communitySlug}
       />
