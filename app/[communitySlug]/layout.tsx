@@ -14,13 +14,18 @@ import MobileNav from '@/components/MobileNav';
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-export default async function CommunityLayout({
-  children,
-  params,
-}: {
-  children: React.ReactNode;
-  params: { communitySlug: string };
-}) {
+export default async function CommunityLayout(
+  props: {
+    children: React.ReactNode;
+    params: Promise<{ communitySlug: string }>;
+  }
+) {
+  const params = await props.params;
+
+  const {
+    children
+  } = props;
+
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) notFound();
 

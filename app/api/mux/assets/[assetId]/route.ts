@@ -2,10 +2,8 @@ import { NextResponse } from 'next/server';
 import { getMuxAsset } from '@/lib/mux';
 import { getSession } from '@/lib/auth-session';
 
-export async function GET(
-  req: Request,
-  { params }: { params: { assetId: string } }
-) {
+export async function GET(req: Request, props: { params: Promise<{ assetId: string }> }) {
+  const params = await props.params;
   try {
     // Verify authentication using Better Auth session
     const session = await getSession();

@@ -14,10 +14,8 @@ interface BookingWithLesson {
   community_created_by: string;
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: { bookingId: string } }
-) {
+export async function GET(request: Request, props: { params: Promise<{ bookingId: string }> }) {
+  const params = await props.params;
   try {
     const { bookingId } = params;
 

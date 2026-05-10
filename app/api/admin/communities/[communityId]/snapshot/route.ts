@@ -5,10 +5,8 @@ import { getCommunitySnapshot } from '@/lib/admin-platform/community-snapshot';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(
-  _request: Request,
-  { params }: { params: { communityId: string } }
-) {
+export async function GET(_request: Request, props: { params: Promise<{ communityId: string }> }) {
+  const params = await props.params;
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -110,7 +110,7 @@ export async function POST(request: Request) {
   try {
     console.log('🎯🎯🎯 WEBHOOK ENDPOINT HIT - TIMESTAMP:', new Date().toISOString());
     const body = await request.text();
-    const signature = headers().get('stripe-signature')!;
+    const signature = (await headers()).get('stripe-signature')!;
     console.log('📝 Got signature:', signature ? 'Yes' : 'No');
     console.log('📝 Request body length:', body.length);
 

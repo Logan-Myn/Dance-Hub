@@ -9,10 +9,8 @@ interface BookingWithAccess {
   community_created_by: string;
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: { bookingId: string } }
-) {
+export async function POST(request: Request, props: { params: Promise<{ bookingId: string }> }) {
+  const params = await props.params;
   try {
     const { bookingId } = params;
     const { action, field } = await request.json();

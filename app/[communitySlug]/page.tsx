@@ -31,11 +31,12 @@ const reservedPaths = new Set([
   'sitemap.xml',
 ]);
 
-export default async function CommunityFeedPage({
-  params,
-}: {
-  params: { communitySlug: string };
-}) {
+export default async function CommunityFeedPage(
+  props: {
+    params: Promise<{ communitySlug: string }>;
+  }
+) {
+  const params = await props.params;
   if (reservedPaths.has(params.communitySlug)) notFound();
 
   const community = await getCommunityBySlug(params.communitySlug);

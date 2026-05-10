@@ -28,10 +28,8 @@ interface Course {
   updated_at: string;
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { courseId: string } }
-) {
+export async function DELETE(request: Request, props: { params: Promise<{ courseId: string }> }) {
+  const params = await props.params;
   try {
     // Check if user is authenticated
     const session = await getSession();
@@ -125,10 +123,8 @@ export async function DELETE(
   }
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { courseId: string } }
-) {
+export async function PATCH(request: Request, props: { params: Promise<{ courseId: string }> }) {
+  const params = await props.params;
   try {
     // Check if user is authenticated
     const session = await getSession();

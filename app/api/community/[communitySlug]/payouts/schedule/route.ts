@@ -48,10 +48,8 @@ async function loadCommunityForOwner(
   return { row };
 }
 
-export async function GET(
-  _request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function GET(_request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const session = await getSession();
     if (!session) {
@@ -78,10 +76,8 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function PUT(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const session = await getSession();
     if (!session) {

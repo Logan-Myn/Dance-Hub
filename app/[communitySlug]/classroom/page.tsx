@@ -11,11 +11,12 @@ import ClassroomPageClient from './ClassroomPageClient';
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-export default async function ClassroomPage({
-  params,
-}: {
-  params: { communitySlug: string };
-}) {
+export default async function ClassroomPage(
+  props: {
+    params: Promise<{ communitySlug: string }>;
+  }
+) {
+  const params = await props.params;
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) notFound();
 

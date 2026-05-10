@@ -14,10 +14,8 @@ interface Member {
   stripe_subscription_id: string | null;
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const { userId } = await request.json();
 

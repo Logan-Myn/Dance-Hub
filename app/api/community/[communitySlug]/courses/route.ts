@@ -19,10 +19,8 @@ interface CommunityId {
   id: string;
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function GET(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const { communitySlug } = params;
 
@@ -56,10 +54,8 @@ export async function GET(
   }
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const { communitySlug } = params;
 

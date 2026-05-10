@@ -6,10 +6,8 @@ interface CommunityCreator {
   created_by: string;
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function GET(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     // Verify the session and get user using Better Auth
     const session = await getSession();

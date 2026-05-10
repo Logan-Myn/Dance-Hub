@@ -16,11 +16,12 @@ interface SubscriptionsRow {
   membership_price: number | null;
 }
 
-export default async function SubscriptionsPage({
-  params,
-}: {
-  params: { communitySlug: string };
-}) {
+export default async function SubscriptionsPage(
+  props: {
+    params: Promise<{ communitySlug: string }>;
+  }
+) {
+  const params = await props.params;
   const community = await queryOne<SubscriptionsRow>`
     SELECT id, stripe_account_id, membership_enabled, membership_price
     FROM communities

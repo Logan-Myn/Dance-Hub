@@ -19,10 +19,8 @@ interface MemberWithProfile {
   user_id: string;
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function GET(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     // Get community ID first
     const community = await queryOne<CommunityId>`
@@ -75,10 +73,8 @@ export async function GET(
 }
 
 // DELETE: Remove a member from the community
-export async function DELETE(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function DELETE(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const session = await getSession();
     if (!session) {

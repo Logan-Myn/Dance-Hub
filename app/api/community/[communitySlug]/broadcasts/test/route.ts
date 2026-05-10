@@ -20,10 +20,8 @@ async function ensureUnsubscribeToken(email: string): Promise<string | null> {
   return existing?.unsubscribe_token ?? null;
 }
 
-export async function POST(
-  req: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function POST(req: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   const authz = await authorizeBroadcastAccess(params.communitySlug);
   if (!authz.ok) return authz.response;
   const { session, community } = authz;

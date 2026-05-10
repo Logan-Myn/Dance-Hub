@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { threadId: string } }
-) {
+export async function DELETE(request: Request, props: { params: Promise<{ threadId: string }> }) {
+  const params = await props.params;
   try {
     const { threadId } = params;
 

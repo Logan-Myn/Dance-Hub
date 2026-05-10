@@ -16,10 +16,8 @@ interface OnboardingProgress {
   documents: any[] | null;
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: { accountId: string } }
-) {
+export async function POST(request: Request, props: { params: Promise<{ accountId: string }> }) {
+  const params = await props.params;
   try {
     const { accountId } = params;
     const formData = await request.formData();

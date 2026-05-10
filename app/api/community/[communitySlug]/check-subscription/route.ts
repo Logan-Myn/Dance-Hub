@@ -12,10 +12,8 @@ interface MemberStatus {
 }
 
 // GET handler for check-subscription (via query params)
-export async function GET(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function GET(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
@@ -83,10 +81,8 @@ export async function GET(
   }
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const { userId } = await request.json();
     const { communitySlug } = params;

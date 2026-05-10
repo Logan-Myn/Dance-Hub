@@ -14,10 +14,8 @@ interface BroadcastListRow {
   created_at: string;
 }
 
-export async function POST(
-  req: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function POST(req: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   const authz = await authorizeBroadcastAccess(params.communitySlug);
   if (!authz.ok) return authz.response;
   const { session, community } = authz;
@@ -139,10 +137,8 @@ export async function POST(
   }
 }
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function GET(_req: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   const authz = await authorizeBroadcastAccess(params.communitySlug);
   if (!authz.ok) return authz.response;
   const { community } = authz;

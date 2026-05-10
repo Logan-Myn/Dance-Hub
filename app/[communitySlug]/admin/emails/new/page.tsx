@@ -7,11 +7,12 @@ import { EmailComposer } from '@/components/emails/EmailComposer';
 
 export const dynamic = 'force-dynamic';
 
-export default async function NewEmailPage({
-  params,
-}: {
-  params: { communitySlug: string };
-}) {
+export default async function NewEmailPage(
+  props: {
+    params: Promise<{ communitySlug: string }>;
+  }
+) {
+  const params = await props.params;
   const session = await getSession();
   if (!session) return null;
 

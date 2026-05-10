@@ -22,12 +22,11 @@ interface Lesson {
 
 export async function PUT(
   req: Request,
-  {
-    params,
-  }: {
-    params: { communitySlug: string; courseSlug: string; chapterId: string };
+  props: {
+    params: Promise<{ communitySlug: string; courseSlug: string; chapterId: string }>;
   }
 ) {
+  const params = await props.params;
   try {
     const { lessons } = await req.json();
 

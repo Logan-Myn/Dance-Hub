@@ -4,8 +4,9 @@ import { authorizeBroadcastAccess } from '@/lib/broadcasts/auth';
 
 export async function GET(
   _req: Request,
-  { params }: { params: { communitySlug: string; broadcastId: string } }
+  props: { params: Promise<{ communitySlug: string; broadcastId: string }> }
 ) {
+  const params = await props.params;
   const authz = await authorizeBroadcastAccess(params.communitySlug);
   if (!authz.ok) return authz.response;
   const { community } = authz;

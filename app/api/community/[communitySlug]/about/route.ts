@@ -15,10 +15,8 @@ interface AboutPage {
   } | null;
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function PUT(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const { communitySlug } = params;
     const { aboutPage } = await request.json();
@@ -61,10 +59,8 @@ export async function PUT(
   }
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function GET(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const { communitySlug } = params;
 

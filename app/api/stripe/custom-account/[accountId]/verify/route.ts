@@ -2,10 +2,8 @@ import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { sql } from '@/lib/db';
 
-export async function POST(
-  request: Request,
-  { params }: { params: { accountId: string } }
-) {
+export async function POST(request: Request, props: { params: Promise<{ accountId: string }> }) {
+  const params = await props.params;
   try {
     const { accountId } = params;
 

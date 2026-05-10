@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function PUT(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const { categories } = await request.json();
     const { communitySlug } = params;

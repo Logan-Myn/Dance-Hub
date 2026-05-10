@@ -3,13 +3,18 @@ import { getSession } from '@/lib/auth-session';
 import { getCommunityBySlug, getUserIsAdmin } from '@/lib/community-data';
 import { AdminNav } from '@/components/admin/AdminNav';
 
-export default async function AdminLayout({
-  children,
-  params,
-}: {
-  children: React.ReactNode;
-  params: { communitySlug: string };
-}) {
+export default async function AdminLayout(
+  props: {
+    children: React.ReactNode;
+    params: Promise<{ communitySlug: string }>;
+  }
+) {
+  const params = await props.params;
+
+  const {
+    children
+  } = props;
+
   const session = await getSession();
   if (!session) redirect('/auth/login');
 

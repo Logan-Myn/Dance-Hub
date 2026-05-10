@@ -14,10 +14,8 @@ interface UpdatedCommunity {
   slug: string;
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { communitySlug: string } }
-) {
+export async function PUT(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+  const params = await props.params;
   try {
     const { communitySlug } = params;
     const updates = await request.json();

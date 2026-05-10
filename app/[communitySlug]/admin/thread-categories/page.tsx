@@ -13,11 +13,12 @@ interface CommunityRow {
   thread_categories: unknown;
 }
 
-export default async function ThreadCategoriesPage({
-  params,
-}: {
-  params: { communitySlug: string };
-}) {
+export default async function ThreadCategoriesPage(
+  props: {
+    params: Promise<{ communitySlug: string }>;
+  }
+) {
+  const params = await props.params;
   // `thread_categories` is a JSONB column on the communities table storing the
   // full ordered array of ThreadCategory objects (see supabase/migrations/001
   // and app/api/community/[communitySlug]/categories/route.ts, which PUTs the
