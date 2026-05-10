@@ -1,51 +1,78 @@
 import {
-  createBroadcastCheckoutSession,
+  createBroadcastSubscriptionIntent,
   upsertBroadcastSubscription,
   markBroadcastSubscriptionStatus,
 } from '@/lib/broadcasts/billing';
 
-const mockCreateCheckout = jest.fn();
+const mockCustomersCreate = jest.fn();
+const mockSubscriptionsCreate = jest.fn();
+const mockPaymentIntentsList = jest.fn();
 jest.mock('@/lib/stripe', () => ({
-  stripe: { checkout: { sessions: { create: (...a: unknown[]) => mockCreateCheckout(...a) } } },
+  stripe: {
+    customers: { create: (...a: unknown[]) => mockCustomersCreate(...a) },
+    subscriptions: { create: (...a: unknown[]) => mockSubscriptionsCreate(...a) },
+    paymentIntents: { list: (...a: unknown[]) => mockPaymentIntentsList(...a) },
+  },
 }));
 
 const mockSql = jest.fn();
+const mockQueryOne = jest.fn();
 jest.mock('@/lib/db', () => ({
   sql: (...args: unknown[]) => mockSql(...args),
-  queryOne: jest.fn(),
+  queryOne: (...args: unknown[]) => mockQueryOne(...args),
 }));
 
-describe('createBroadcastCheckoutSession', () => {
+describe('createBroadcastSubscriptionIntent', () => {
   beforeEach(() => {
-    mockCreateCheckout.mockReset();
+    mockCustomersCreate.mockReset();
+    mockSubscriptionsCreate.mockReset();
+    mockPaymentIntentsList.mockReset();
+    mockSql.mockReset();
+    mockQueryOne.mockReset();
     process.env.STRIPE_BROADCAST_PRICE_ID = 'price_test_123';
   });
 
-  it('creates a Stripe Checkout session with community metadata', async () => {
-    mockCreateCheckout.mockResolvedValueOnce({ url: 'https://checkout.stripe.com/test', id: 'cs_1' });
+  it('creates a Stripe Subscription with PaymentIntent client_secret and upserts the DB row', async () => {
+    mockQueryOne.mockResolvedValueOnce(null); // no existing subscription -> create new customer
+    mockCustomersCreate.mockResolvedValueOnce({ id: 'cus_1' });
+    mockSubscriptionsCreate.mockResolvedValueOnce({
+      id: 'sub_1',
+      current_period_end: 1735689600, // 2025-01-01
+    });
+    mockPaymentIntentsList.mockResolvedValueOnce({
+      data: [{ client_secret: 'pi_secret_abc' }],
+    });
+    mockSql.mockResolvedValueOnce([]);
 
-    const result = await createBroadcastCheckoutSession({
+    const result = await createBroadcastSubscriptionIntent({
       communityId: 'c1',
-      communitySlug: 'salsa',
       ownerEmail: 'owner@example.com',
-      returnUrl: 'https://app/admin/emails',
     });
 
-    expect(result).toEqual({ checkoutUrl: 'https://checkout.stripe.com/test', sessionId: 'cs_1' });
-    expect(mockCreateCheckout).toHaveBeenCalledWith(expect.objectContaining({
-      mode: 'subscription',
-      line_items: [{ price: 'price_test_123', quantity: 1 }],
-      customer_email: 'owner@example.com',
+    expect(result).toEqual({ clientSecret: 'pi_secret_abc', subscriptionId: 'sub_1' });
+    expect(mockCustomersCreate).toHaveBeenCalledWith(expect.objectContaining({
+      email: 'owner@example.com',
       metadata: expect.objectContaining({ communityId: 'c1', purpose: 'broadcast_subscription' }),
-      success_url: expect.stringContaining('salsa'),
-      cancel_url: expect.stringContaining('salsa'),
     }));
+    expect(mockSubscriptionsCreate).toHaveBeenCalledWith(expect.objectContaining({
+      customer: 'cus_1',
+      items: [{ price: 'price_test_123' }],
+      payment_behavior: 'default_incomplete',
+      metadata: expect.objectContaining({ communityId: 'c1', purpose: 'broadcast_subscription' }),
+    }));
+    expect(mockPaymentIntentsList).toHaveBeenCalledWith(expect.objectContaining({
+      customer: 'cus_1',
+    }));
+    // The DB upsert is invoked as part of the intent creation
+    expect(mockSql).toHaveBeenCalled();
+    const sqlText = mockSql.mock.calls[0][0].join('?');
+    expect(sqlText).toMatch(/INSERT INTO community_broadcast_subscriptions/);
   });
 
   it('throws when STRIPE_BROADCAST_PRICE_ID is missing', async () => {
     delete process.env.STRIPE_BROADCAST_PRICE_ID;
-    await expect(createBroadcastCheckoutSession({
-      communityId: 'c1', communitySlug: 'salsa', ownerEmail: 'o@o.com', returnUrl: '',
+    await expect(createBroadcastSubscriptionIntent({
+      communityId: 'c1', ownerEmail: 'o@o.com',
     })).rejects.toThrow(/STRIPE_BROADCAST_PRICE_ID/);
   });
 });
