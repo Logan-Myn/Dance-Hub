@@ -60,7 +60,7 @@ export function useJoinCommunity(
   const onPreRegSuccess = () => {
     closePreReg();
     toast.success('Pre-registration confirmed!');
-    if (community) router.push(`/${community.slug}`);
+    window.location.reload();
   };
 
   const join = async () => {

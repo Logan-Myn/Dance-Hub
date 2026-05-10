@@ -840,6 +840,7 @@ export default function FeedClient({
           setIsPreRegistered(true);
           setShowPreRegistrationModal(false);
           toast.success("Pre-registration successful! You'll be charged on the opening date.");
+          window.location.reload();
         }}
       />
 
