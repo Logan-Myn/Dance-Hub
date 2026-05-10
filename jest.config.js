@@ -5,6 +5,10 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/$1',
   },
   setupFiles: ['dotenv/config'],
+  // Integration suites under __tests__/api hit the same Neon test branch and
+  // share seed slugs/emails. Serializing avoids races on that DB; the unit
+  // suites are fast enough that single-worker doesn't hurt much.
+  maxWorkers: 1,
   projects: [
     {
       displayName: 'api',

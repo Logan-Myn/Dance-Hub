@@ -59,6 +59,9 @@ describe('Database Views & Functions Tests - Neon Migration', () => {
 
   describe('2. community_members_with_profiles View', () => {
     it('should return member with profile data', async () => {
+      // The view exposes cm.* plus p.full_name, p.display_name, p.avatar_url,
+      // p.email — no `formatted_display_name` (that helper lives on the
+      // get_display_name function instead).
       const result = await testQueryOne<{
         id: string;
         user_id: string;
@@ -66,7 +69,6 @@ describe('Database Views & Functions Tests - Neon Migration', () => {
         role: string;
         full_name: string | null;
         display_name: string | null;
-        formatted_display_name: string;
       }>`
         SELECT * FROM community_members_with_profiles
         WHERE id = ${TEST_IDS.memberId}
@@ -74,10 +76,9 @@ describe('Database Views & Functions Tests - Neon Migration', () => {
 
       expect(result).not.toBeNull();
       expect(result?.community_id).toBe(TEST_IDS.communityId);
-      expect(result?.user_id).toBe(TEST_IDS.secondProfileId);
+      // After Better-Auth migration, community_members.user_id is the TEXT user id.
+      expect(result?.user_id).toBe(TEST_IDS.secondUserId);
       expect(result?.role).toBe('member');
-      // formatted_display_name should fallback if display_name is null
-      expect(result?.formatted_display_name).toBeDefined();
     });
 
     it('should join profile fields correctly', async () => {
@@ -96,20 +97,23 @@ describe('Database Views & Functions Tests - Neon Migration', () => {
     });
 
     it('should include subscription fields', async () => {
+      // The view exposes subscription_status, stripe_customer_id, and
+      // stripe_subscription_id (no separate `subscription_id` column).
       const result = await testQueryOne<{
-        subscription_id: string | null;
         subscription_status: string | null;
         stripe_customer_id: string | null;
+        stripe_subscription_id: string | null;
       }>`
-        SELECT subscription_id, subscription_status, stripe_customer_id
+        SELECT subscription_status, stripe_customer_id, stripe_subscription_id
         FROM community_members_with_profiles
         WHERE id = ${TEST_IDS.memberId}
       `;
 
       expect(result).not.toBeNull();
       // Fields should exist even if null
-      expect('subscription_id' in result!).toBe(true);
       expect('subscription_status' in result!).toBe(true);
+      expect('stripe_customer_id' in result!).toBe(true);
+      expect('stripe_subscription_id' in result!).toBe(true);
     });
   });
 
@@ -144,7 +148,7 @@ describe('Database Views & Functions Tests - Neon Migration', () => {
         VALUES (
           gen_random_uuid(),
           ${TEST_IDS.communityId},
-          ${TEST_IDS.profileId},
+          ${TEST_IDS.userId},
           'Currently Active Class',
           NOW() - INTERVAL '5 minutes',
           60,
@@ -171,7 +175,7 @@ describe('Database Views & Functions Tests - Neon Migration', () => {
         VALUES (
           gen_random_uuid(),
           ${TEST_IDS.communityId},
-          ${TEST_IDS.profileId},
+          ${TEST_IDS.userId},
           'Starting Soon Class',
           NOW() + INTERVAL '10 minutes',
           60,
@@ -295,21 +299,24 @@ describe('Database Views & Functions Tests - Neon Migration', () => {
       expect(result?.exists).toBe(true);
     });
 
-    it('should auto-update updated_at on profile change', async () => {
+    it('should auto-update updated_at via trigger on communities change', async () => {
+      // The update_updated_at_column trigger is wired to communities (and a few
+      // other tables) but NOT to profiles. Use communities to verify the
+      // trigger function actually fires.
       const before = await testQueryOne<{ updated_at: string }>`
-        SELECT updated_at FROM profiles WHERE id = ${TEST_IDS.profileId}
+        SELECT updated_at FROM communities WHERE id = ${TEST_IDS.communityId}
       `;
 
       // Longer delay to ensure timestamp difference (Postgres timestamp precision)
       await new Promise(resolve => setTimeout(resolve, 1100));
 
       await testSql`
-        UPDATE profiles SET full_name = 'Trigger Test Name'
-        WHERE id = ${TEST_IDS.profileId}
+        UPDATE communities SET description = 'Trigger Test Description'
+        WHERE id = ${TEST_IDS.communityId}
       `;
 
       const after = await testQueryOne<{ updated_at: string }>`
-        SELECT updated_at FROM profiles WHERE id = ${TEST_IDS.profileId}
+        SELECT updated_at FROM communities WHERE id = ${TEST_IDS.communityId}
       `;
 
       // Check that updated_at changed (>= because trigger may have same second precision)
@@ -319,8 +326,8 @@ describe('Database Views & Functions Tests - Neon Migration', () => {
 
       // Reset
       await testSql`
-        UPDATE profiles SET full_name = 'Test Creator User'
-        WHERE id = ${TEST_IDS.profileId}
+        UPDATE communities SET description = 'A test community for integration tests'
+        WHERE id = ${TEST_IDS.communityId}
       `;
     });
   });
@@ -349,10 +356,10 @@ describe('Database Views & Functions Tests - Neon Migration', () => {
     });
 
     it('should get lessons in correct order', async () => {
-      // Create a second lesson
+      // Create a second lesson. lessons.created_by is TEXT (Better-Auth user id).
       const lesson2 = await testQueryOne<{ id: string }>`
         INSERT INTO lessons (id, title, lesson_position, chapter_id, created_by)
-        VALUES (gen_random_uuid(), 'Second Lesson', 2, ${TEST_IDS.chapterId}, ${TEST_IDS.profileId})
+        VALUES (gen_random_uuid(), 'Second Lesson', 2, ${TEST_IDS.chapterId}, ${TEST_IDS.userId})
         RETURNING id
       `;
 
