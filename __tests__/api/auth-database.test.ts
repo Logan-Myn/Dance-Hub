@@ -13,8 +13,14 @@
  * - Better Auth "user" table uses camelCase: emailVerified, createdAt, updatedAt
  * - profiles table uses snake_case: auth_user_id, created_at, updated_at
  * - auth_user_id is TEXT type (matching Better Auth user.id)
+ *
+ * Isolation notes:
+ * - Each test that needs persistent data creates its own user/profile pair
+ *   via `makeAuthUser()` and tracks them in `createdUserIds` / `createdProfileIds`.
+ *   `afterAll` cleans them up. No module-level shared mutable state.
  */
 
+import crypto from 'crypto';
 import {
   testQuery,
   testQueryOne,
@@ -43,75 +49,69 @@ interface BetterAuthUser {
   updatedAt: string;       // camelCase
 }
 
-// Test data IDs for auth tests
-const AUTH_TEST_IDS = {
-  profileId: '',
-  authUserId: '',
-  secondProfileId: '',
-  secondAuthUserId: '',
-};
-
 describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
-  // Generate unique identifiers for this test run
-  const uniqueSuffix = Date.now().toString(36);
+  // Track every user/profile we create so afterAll can clean up.
+  const createdUserIds: string[] = [];
+  const createdProfileIds: string[] = [];
 
-  beforeAll(async () => {
-    // Create a test Better Auth user first
-    // Note: Better Auth uses camelCase column names and TEXT id
-    const authUser = await testQueryOne<{ id: string }>`
+  /**
+   * Insert a fresh Better-Auth user row, track its id, and return it.
+   *
+   * The DB has an `on_user_created` AFTER INSERT trigger that auto-inserts a
+   * matching `profiles` row from the user's email/name. We rely on that here
+   * — never insert a second profile for the same auth_user_id, or queries
+   * like `WHERE auth_user_id = X` will return multiple rows and break
+   * UPDATE...RETURNING.
+   */
+  async function makeAuthUser(label: string = 'user'): Promise<{ id: string; email: string }> {
+    const id = `auth-test-${label}-${crypto.randomUUID()}`;
+    const email = `${id}@test.com`;
+    await testSql`
       INSERT INTO "user" (id, email, name, "emailVerified", "createdAt", "updatedAt")
-      VALUES (
-        ${'auth-test-' + uniqueSuffix},
-        ${'auth-test-user-' + uniqueSuffix + '@test.com'},
-        'Test Auth User',
-        false,
-        NOW(),
-        NOW()
-      )
-      RETURNING id
+      VALUES (${id}, ${email}, ${`Test User ${label}`}, false, NOW(), NOW())
     `;
+    createdUserIds.push(id);
+    return { id, email };
+  }
 
-    if (!authUser) throw new Error('Failed to create test auth user');
-    AUTH_TEST_IDS.authUserId = authUser.id;
+  /**
+   * Look up the profile auto-created by the `on_user_created` trigger,
+   * optionally rewriting full_name/display_name. We do NOT insert a new
+   * profile row — the trigger already created one with auth_user_id set.
+   */
+  async function makeProfile(
+    authUserId: string,
+    overrides: Partial<{ full_name: string | null; display_name: string | null }> = {},
+  ): Promise<Profile> {
+    const fullName = overrides.full_name === undefined ? 'Test Profile User' : overrides.full_name;
+    const displayName = overrides.display_name === undefined
+      ? (fullName?.split(' ')[0] ?? null)
+      : overrides.display_name;
 
-    // Create a second auth user for additional tests
-    const secondAuthUser = await testQueryOne<{ id: string }>`
-      INSERT INTO "user" (id, email, name, "emailVerified", "createdAt", "updatedAt")
-      VALUES (
-        ${'auth-test2-' + uniqueSuffix},
-        ${'auth-test-user2-' + uniqueSuffix + '@test.com'},
-        'Test Auth User 2',
-        false,
-        NOW(),
-        NOW()
-      )
-      RETURNING id
+    const profile = await testQueryOne<Profile>`
+      UPDATE profiles
+      SET full_name = ${fullName}, display_name = ${displayName}, updated_at = NOW()
+      WHERE auth_user_id = ${authUserId}
+      RETURNING *
     `;
-
-    if (!secondAuthUser) throw new Error('Failed to create second test auth user');
-    AUTH_TEST_IDS.secondAuthUserId = secondAuthUser.id;
-  });
+    if (!profile) {
+      throw new Error(
+        `Expected on_user_created trigger to have inserted profile for ${authUserId}`,
+      );
+    }
+    return profile;
+  }
 
   afterAll(async () => {
-    // Clean up test data in reverse order (profiles first due to FK)
-    if (AUTH_TEST_IDS.profileId) {
-      await testSql`DELETE FROM profiles WHERE id = ${AUTH_TEST_IDS.profileId}`;
+    // Profiles first (FK auth_user_id -> "user".id), then users.
+    for (const id of createdProfileIds) {
+      await testSql`DELETE FROM profiles WHERE id = ${id}`;
     }
-    if (AUTH_TEST_IDS.secondProfileId) {
-      await testSql`DELETE FROM profiles WHERE id = ${AUTH_TEST_IDS.secondProfileId}`;
+    for (const id of createdUserIds) {
+      await testSql`DELETE FROM "user" WHERE id = ${id}`;
     }
-    if (AUTH_TEST_IDS.authUserId) {
-      await testSql`DELETE FROM "user" WHERE id = ${AUTH_TEST_IDS.authUserId}`;
-    }
-    if (AUTH_TEST_IDS.secondAuthUserId) {
-      await testSql`DELETE FROM "user" WHERE id = ${AUTH_TEST_IDS.secondAuthUserId}`;
-    }
-
-    // Reset IDs
-    AUTH_TEST_IDS.profileId = '';
-    AUTH_TEST_IDS.authUserId = '';
-    AUTH_TEST_IDS.secondProfileId = '';
-    AUTH_TEST_IDS.secondAuthUserId = '';
+    createdProfileIds.length = 0;
+    createdUserIds.length = 0;
   });
 
   describe('1. Database Connection', () => {
@@ -144,10 +144,10 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
 
   describe('2. Signup Profile Creation (app/api/auth/signup/route.ts pattern)', () => {
     it('should create profile with full_name and auto-generate display_name', async () => {
-      const email = `signup-test-${uniqueSuffix}@test.com`;
+      const authUser = await makeAuthUser('signup-fullname');
+      const email = `signup-test-${crypto.randomUUID()}@test.com`;
       const fullName = 'John Doe';
 
-      // Pattern from signup route: INSERT with all fields
       const profile = await testQueryOne<Profile>`
         INSERT INTO profiles (id, email, full_name, display_name, created_at, updated_at, auth_user_id)
         VALUES (
@@ -157,7 +157,7 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
           ${fullName.split(' ')[0]},
           NOW(),
           NOW(),
-          ${AUTH_TEST_IDS.authUserId}
+          ${authUser.id}
         )
         RETURNING *
       `;
@@ -166,17 +166,17 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
       expect(profile?.email).toBe(email);
       expect(profile?.full_name).toBe(fullName);
       expect(profile?.display_name).toBe('John');
-      expect(profile?.auth_user_id).toBe(AUTH_TEST_IDS.authUserId);
+      expect(profile?.auth_user_id).toBe(authUser.id);
 
-      AUTH_TEST_IDS.profileId = profile!.id;
+      createdProfileIds.push(profile!.id);
     });
 
     it('should create profile with NULL full_name and display_name', async () => {
-      const email = `signup-test-null-${uniqueSuffix}@test.com`;
+      const authUser = await makeAuthUser('signup-null');
+      const email = `signup-test-null-${crypto.randomUUID()}@test.com`;
       const fullName = null as string | null;
       const displayName = fullName?.split(' ')[0] || null;
 
-      // Pattern from signup route: INSERT with NULL values
       const profile = await testQueryOne<Profile>`
         INSERT INTO profiles (id, email, full_name, display_name, created_at, updated_at, auth_user_id)
         VALUES (
@@ -186,7 +186,7 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
           ${displayName},
           NOW(),
           NOW(),
-          ${AUTH_TEST_IDS.secondAuthUserId}
+          ${authUser.id}
         )
         RETURNING *
       `;
@@ -195,58 +195,45 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
       expect(profile?.email).toBe(email);
       expect(profile?.full_name).toBeNull();
       expect(profile?.display_name).toBeNull();
-      expect(profile?.auth_user_id).toBe(AUTH_TEST_IDS.secondAuthUserId);
+      expect(profile?.auth_user_id).toBe(authUser.id);
 
-      AUTH_TEST_IDS.secondProfileId = profile!.id;
+      createdProfileIds.push(profile!.id);
     });
 
     it('should handle ON CONFLICT (email) upsert pattern from signup route', async () => {
-      // First, get the existing profile
-      const existingProfile = await testQueryOne<Profile>`
-        SELECT * FROM profiles WHERE id = ${AUTH_TEST_IDS.profileId}
-      `;
-      expect(existingProfile).not.toBeNull();
+      const authUser = await makeAuthUser('signup-conflict');
+      const profile = await makeProfile(authUser.id, { full_name: 'Original Name' });
 
-      const newAuthUserId = AUTH_TEST_IDS.authUserId;
-
-      // Pattern from signup route: ON CONFLICT (email) updates auth_user_id
-      // This works because profiles.email has a unique constraint
+      // ON CONFLICT (email) should update auth_user_id and updated_at, leaving
+      // other columns alone.
       const updatedProfile = await testQueryOne<Profile>`
         INSERT INTO profiles (id, email, full_name, display_name, created_at, updated_at, auth_user_id)
         VALUES (
           gen_random_uuid(),
-          ${existingProfile!.email},
+          ${profile.email},
           ${'Updated Name'},
           ${'Updated'},
           NOW(),
           NOW(),
-          ${newAuthUserId}
+          ${authUser.id}
         )
         ON CONFLICT (email) DO UPDATE SET
-          auth_user_id = ${newAuthUserId},
+          auth_user_id = ${authUser.id},
           updated_at = NOW()
         RETURNING *
       `;
 
       expect(updatedProfile).not.toBeNull();
-      // Should keep the same ID (upsert on existing row)
-      expect(updatedProfile?.id).toBe(existingProfile!.id);
-      // auth_user_id should be updated
-      expect(updatedProfile?.auth_user_id).toBe(newAuthUserId);
-      // original fields should NOT change (only auth_user_id and updated_at)
-      expect(updatedProfile?.full_name).toBe(existingProfile!.full_name);
+      expect(updatedProfile?.id).toBe(profile.id);
+      expect(updatedProfile?.auth_user_id).toBe(authUser.id);
+      // Original full_name should NOT change (only auth_user_id and updated_at do)
+      expect(updatedProfile?.full_name).toBe('Original Name');
     });
 
     it('should handle display_name extraction from multi-word full_name', async () => {
       const fullName = 'Maria Garcia Lopez';
-      const email = `multi-word-test-${uniqueSuffix}@test.com`;
-
-      // Create a temp auth user for this test (Better Auth uses TEXT id)
-      const tempAuthUser = await testQueryOne<{ id: string }>`
-        INSERT INTO "user" (id, email, name, "emailVerified", "createdAt", "updatedAt")
-        VALUES (${'temp-auth-' + uniqueSuffix}, ${email}, ${fullName}, false, NOW(), NOW())
-        RETURNING id
-      `;
+      const authUser = await makeAuthUser('signup-multiword');
+      const email = `multi-word-test-${crypto.randomUUID()}@test.com`;
 
       const profile = await testQueryOne<Profile>`
         INSERT INTO profiles (id, email, full_name, display_name, created_at, updated_at, auth_user_id)
@@ -257,67 +244,67 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
           ${fullName.split(' ')[0]},
           NOW(),
           NOW(),
-          ${tempAuthUser!.id}
+          ${authUser.id}
         )
         RETURNING *
       `;
 
       expect(profile?.display_name).toBe('Maria');
       expect(profile?.full_name).toBe('Maria Garcia Lopez');
-
-      // Cleanup
-      await testSql`DELETE FROM profiles WHERE id = ${profile!.id}`;
-      await testSql`DELETE FROM "user" WHERE id = ${tempAuthUser!.id}`;
+      createdProfileIds.push(profile!.id);
     });
   });
 
   describe('3. Email Verification Sync (app/api/auth/verify-email/route.ts pattern)', () => {
     it('should update profile email by auth_user_id', async () => {
-      const newEmail = `verified-${uniqueSuffix}@test.com`;
+      const authUser = await makeAuthUser('verify');
+      await makeProfile(authUser.id);
 
-      // Pattern from verify-email route: UPDATE by auth_user_id
+      const newEmail = `verified-${crypto.randomUUID()}@test.com`;
+
       const updatedProfile = await testQueryOne<Profile>`
         UPDATE profiles
         SET email = ${newEmail}, updated_at = NOW()
-        WHERE auth_user_id = ${AUTH_TEST_IDS.authUserId}
+        WHERE auth_user_id = ${authUser.id}
         RETURNING *
       `;
 
       expect(updatedProfile).not.toBeNull();
       expect(updatedProfile?.email).toBe(newEmail);
-      expect(updatedProfile?.auth_user_id).toBe(AUTH_TEST_IDS.authUserId);
+      expect(updatedProfile?.auth_user_id).toBe(authUser.id);
     });
 
     it('should update updated_at timestamp on email change', async () => {
-      // Get current timestamp
+      const authUser = await makeAuthUser('verify-updated-at');
+      await makeProfile(authUser.id);
+
       const before = await testQueryOne<Profile>`
-        SELECT * FROM profiles WHERE auth_user_id = ${AUTH_TEST_IDS.authUserId}
+        SELECT * FROM profiles WHERE auth_user_id = ${authUser.id}
       `;
       expect(before).not.toBeNull();
 
       // Small delay to ensure timestamp difference
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
-      const newEmail = `verified2-${uniqueSuffix}@test.com`;
+      const newEmail = `verified2-${crypto.randomUUID()}@test.com`;
 
       const after = await testQueryOne<Profile>`
         UPDATE profiles
         SET email = ${newEmail}, updated_at = NOW()
-        WHERE auth_user_id = ${AUTH_TEST_IDS.authUserId}
+        WHERE auth_user_id = ${authUser.id}
         RETURNING *
       `;
 
       expect(after).not.toBeNull();
       expect(new Date(after!.updated_at).getTime()).toBeGreaterThan(
-        new Date(before!.updated_at).getTime()
+        new Date(before!.updated_at).getTime(),
       );
     });
 
     it('should handle update when profile does not exist (no-op)', async () => {
-      const nonExistentAuthUserId = 'non-existent-auth-user-id';
+      const nonExistentAuthUserId = `non-existent-${crypto.randomUUID()}`;
       const newEmail = 'should-not-update@test.com';
 
-      // This should return null (no rows updated)
       const result = await testQueryOne<Profile>`
         UPDATE profiles
         SET email = ${newEmail}, updated_at = NOW()
@@ -331,13 +318,15 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
 
   describe('4. Email Change Sync (app/api/auth/verify-email-change/route.ts pattern)', () => {
     it('should update email on change verification', async () => {
-      const changedEmail = `changed-email-${uniqueSuffix}@test.com`;
+      const authUser = await makeAuthUser('change');
+      await makeProfile(authUser.id);
 
-      // Pattern from verify-email-change route (same as verify-email)
+      const changedEmail = `changed-email-${crypto.randomUUID()}@test.com`;
+
       const updatedProfile = await testQueryOne<Profile>`
         UPDATE profiles
         SET email = ${changedEmail}, updated_at = NOW()
-        WHERE auth_user_id = ${AUTH_TEST_IDS.authUserId}
+        WHERE auth_user_id = ${authUser.id}
         RETURNING *
       `;
 
@@ -346,24 +335,26 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
     });
 
     it('should handle sequential email updates', async () => {
-      // Simulate two updates in sequence
-      const email1 = `sequential1-${uniqueSuffix}@test.com`;
-      const email2 = `sequential2-${uniqueSuffix}@test.com`;
+      const authUser = await makeAuthUser('sequential');
+      await makeProfile(authUser.id);
+
+      const email1 = `sequential1-${crypto.randomUUID()}@test.com`;
+      const email2 = `sequential2-${crypto.randomUUID()}@test.com`;
 
       await testSql`
         UPDATE profiles
         SET email = ${email1}, updated_at = NOW()
-        WHERE auth_user_id = ${AUTH_TEST_IDS.authUserId}
+        WHERE auth_user_id = ${authUser.id}
       `;
 
       await testSql`
         UPDATE profiles
         SET email = ${email2}, updated_at = NOW()
-        WHERE auth_user_id = ${AUTH_TEST_IDS.authUserId}
+        WHERE auth_user_id = ${authUser.id}
       `;
 
       const result = await testQueryOne<Profile>`
-        SELECT * FROM profiles WHERE auth_user_id = ${AUTH_TEST_IDS.authUserId}
+        SELECT * FROM profiles WHERE auth_user_id = ${authUser.id}
       `;
 
       // Last update should win
@@ -373,12 +364,13 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
 
   describe('5. Better Auth User Table Tests', () => {
     it('should query Better Auth user by id', async () => {
+      const authUser = await makeAuthUser('lookup');
       const user = await testQueryOne<BetterAuthUser>`
-        SELECT * FROM "user" WHERE id = ${AUTH_TEST_IDS.authUserId}
+        SELECT * FROM "user" WHERE id = ${authUser.id}
       `;
 
       expect(user).not.toBeNull();
-      expect(user?.email).toContain('auth-test-user');
+      expect(user?.email).toBe(authUser.email);
     });
 
     it('should have session table', async () => {
@@ -414,6 +406,9 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
 
   describe('6. Profile-User Relationship Tests', () => {
     it('should join profiles with Better Auth user table', async () => {
+      const authUser = await makeAuthUser('join');
+      const profile = await makeProfile(authUser.id);
+
       const result = await testQueryOne<{
         profile_id: string;
         profile_email: string;
@@ -429,25 +424,27 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
           u.name as auth_name
         FROM profiles p
         JOIN "user" u ON p.auth_user_id = u.id
-        WHERE p.id = ${AUTH_TEST_IDS.profileId}
+        WHERE p.id = ${profile.id}
       `;
 
       expect(result).not.toBeNull();
-      expect(result?.auth_user_id).toBe(AUTH_TEST_IDS.authUserId);
+      expect(result?.auth_user_id).toBe(authUser.id);
     });
 
     it('should find profile by auth_user_id', async () => {
-      const profile = await testQueryOne<Profile>`
-        SELECT * FROM profiles WHERE auth_user_id = ${AUTH_TEST_IDS.authUserId}
+      const authUser = await makeAuthUser('lookup-by-auth');
+      const profile = await makeProfile(authUser.id);
+
+      const found = await testQueryOne<Profile>`
+        SELECT * FROM profiles WHERE auth_user_id = ${authUser.id}
       `;
 
-      expect(profile).not.toBeNull();
-      expect(profile?.id).toBe(AUTH_TEST_IDS.profileId);
+      expect(found).not.toBeNull();
+      expect(found?.id).toBe(profile.id);
     });
 
     it('should allow NULL auth_user_id for legacy profiles', async () => {
-      // Create a profile without auth_user_id (legacy migration case)
-      const legacyEmail = `legacy-profile-${uniqueSuffix}@test.com`;
+      const legacyEmail = `legacy-profile-${crypto.randomUUID()}@test.com`;
 
       const legacyProfile = await testQueryOne<Profile>`
         INSERT INTO profiles (id, email, full_name, display_name, created_at, updated_at, auth_user_id)
@@ -465,45 +462,34 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
 
       expect(legacyProfile).not.toBeNull();
       expect(legacyProfile?.auth_user_id).toBeNull();
-
-      // Cleanup
-      await testSql`DELETE FROM profiles WHERE id = ${legacyProfile!.id}`;
+      createdProfileIds.push(legacyProfile!.id);
     });
   });
 
   describe('7. Constraint Tests', () => {
     it('should enforce unique email constraint on profiles', async () => {
-      const existingProfile = await testQueryOne<Profile>`
-        SELECT * FROM profiles WHERE id = ${AUTH_TEST_IDS.profileId}
-      `;
+      const authUser = await makeAuthUser('unique-1');
+      const profile = await makeProfile(authUser.id);
 
-      // Create a temp auth user for the duplicate email test
-      const tempAuthUser = await testQueryOne<{ id: string }>`
-        INSERT INTO "user" (id, email, name, "emailVerified", "createdAt", "updatedAt")
-        VALUES (${'temp-dup-' + Date.now()}, ${'temp-dup-' + Date.now() + '@test.com'}, 'Temp', false, NOW(), NOW())
-        RETURNING id
-      `;
+      const otherUser = await makeAuthUser('unique-2');
 
       // Try to insert duplicate email without ON CONFLICT - should fail
       let errorThrown = false;
       try {
         await testSql`
           INSERT INTO profiles (id, email, created_at, updated_at, auth_user_id)
-          VALUES (gen_random_uuid(), ${existingProfile!.email}, NOW(), NOW(), ${tempAuthUser!.id})
+          VALUES (gen_random_uuid(), ${profile.email}, NOW(), NOW(), ${otherUser.id})
         `;
       } catch (error) {
         errorThrown = true;
         expect(String(error)).toContain('profiles_email_key');
       }
       expect(errorThrown).toBe(true);
-
-      // Cleanup
-      await testSql`DELETE FROM "user" WHERE id = ${tempAuthUser!.id}`;
     });
 
     it('should allow multiple NULL display_names', async () => {
-      const email1 = `null-display1-${uniqueSuffix}@test.com`;
-      const email2 = `null-display2-${uniqueSuffix}@test.com`;
+      const email1 = `null-display1-${crypto.randomUUID()}@test.com`;
+      const email2 = `null-display2-${crypto.randomUUID()}@test.com`;
 
       const profile1 = await testQueryOne<Profile>`
         INSERT INTO profiles (id, email, display_name, created_at, updated_at)
@@ -519,17 +505,13 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
 
       expect(profile1?.display_name).toBeNull();
       expect(profile2?.display_name).toBeNull();
-
-      // Cleanup
-      await testSql`DELETE FROM profiles WHERE id = ${profile1!.id}`;
-      await testSql`DELETE FROM profiles WHERE id = ${profile2!.id}`;
+      createdProfileIds.push(profile1!.id, profile2!.id);
     });
 
     it('should enforce foreign key from profiles.auth_user_id to user.id', async () => {
-      const fakeAuthUserId = 'this-user-does-not-exist';
-      const email = `fk-test-${uniqueSuffix}@test.com`;
+      const fakeAuthUserId = `this-user-does-not-exist-${crypto.randomUUID()}`;
+      const email = `fk-test-${crypto.randomUUID()}@test.com`;
 
-      // Try to insert profile with non-existent auth_user_id - should fail
       let errorThrown = false;
       try {
         await testSql`
@@ -553,9 +535,8 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
         ORDER BY ordinal_position
       `;
 
-      const columnNames = columns.map(c => c.column_name);
+      const columnNames = columns.map((c) => c.column_name);
 
-      // Required Better Auth columns (camelCase)
       expect(columnNames).toContain('id');
       expect(columnNames).toContain('email');
       expect(columnNames).toContain('name');
@@ -572,9 +553,8 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
         ORDER BY ordinal_position
       `;
 
-      const columnNames = columns.map(c => c.column_name);
+      const columnNames = columns.map((c) => c.column_name);
 
-      // Custom fields added in auth-server.ts
       expect(columnNames).toContain('displayName');
       expect(columnNames).toContain('fullName');
       expect(columnNames).toContain('avatarUrl');
@@ -590,7 +570,7 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
         ORDER BY ordinal_position
       `;
 
-      const columnNames = columns.map(c => c.column_name);
+      const columnNames = columns.map((c) => c.column_name);
 
       expect(columnNames).toContain('id');
       expect(columnNames).toContain('userId');
@@ -606,7 +586,7 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
         ORDER BY ordinal_position
       `;
 
-      const columnNames = columns.map(c => c.column_name);
+      const columnNames = columns.map((c) => c.column_name);
 
       expect(columnNames).toContain('id');
       expect(columnNames).toContain('userId');

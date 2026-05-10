@@ -244,10 +244,12 @@ describe('Wave 5 Integration Tests - Neon Database Layer', () => {
       `;
       expect(lesson).not.toBeNull();
 
+      // private_lessons.teacher_id is the Better-Auth user id (TEXT), so we
+      // join profiles via auth_user_id rather than profiles.id.
       const teacher = await testQueryOne<Profile>`
         SELECT id, display_name, full_name, avatar_url
         FROM profiles
-        WHERE id = ${lesson!.teacher_id}
+        WHERE auth_user_id = ${lesson!.teacher_id}
       `;
       expect(teacher).not.toBeNull();
     });

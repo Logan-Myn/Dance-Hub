@@ -1,18 +1,24 @@
 /**
  * Test database utilities for Neon integration tests
- * Provides direct database access for testing API route migrations
+ *
+ * Connects to a dedicated test Neon branch via TEST_DATABASE_URL.
+ * Never falls back to DATABASE_URL — running tests against prod would
+ * delete real rows in cleanupTestData().
  */
 import { neon } from '@neondatabase/serverless';
 import { config } from 'dotenv';
 import { resolve } from 'path';
+import crypto from 'crypto';
 
 // Load environment variables from .env.local
 config({ path: resolve(process.cwd(), '.env.local') });
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = process.env.TEST_DATABASE_URL;
 
 if (!databaseUrl) {
-  throw new Error('DATABASE_URL environment variable is required for tests');
+  throw new Error(
+    'TEST_DATABASE_URL is required for tests. Never run tests against prod DB.',
+  );
 }
 
 export const testSql = neon(databaseUrl);
@@ -39,8 +45,23 @@ export async function testQueryOne<T>(
 }
 
 // Test data IDs - will be populated during setup
+//
+// Note on the Better-Auth migration:
+// - `profiles.id` is still UUID
+// - `profiles.auth_user_id` is TEXT and references `"user".id`
+// - All FK columns that used to point at `profiles.id` (communities.created_by,
+//   community_members.user_id, threads.user_id, lessons.created_by,
+//   private_lessons.teacher_id, live_classes.teacher_id, ...) now reference
+//   the Better-Auth user TEXT id, NOT profiles.id.
+//
+// `userId` / `secondUserId` are the TEXT Better-Auth ids and the values that
+// belong in those FK columns. `profileId` / `secondProfileId` are kept around
+// for tests that still need to assert on the profiles row directly.
 export const TEST_IDS = {
+  userId: '',
+  secondUserId: '',
   profileId: '',
+  secondProfileId: '',
   communityId: '',
   communitySlug: '',
   courseId: '',
@@ -51,53 +72,83 @@ export const TEST_IDS = {
   liveClassId: '',
   threadId: '',
   memberId: '',
-  secondProfileId: '',
 };
 
 /**
  * Create test data for integration tests
  */
 export async function setupTestData(): Promise<typeof TEST_IDS> {
-  // Generate unique identifiers for this test run
-  const uniqueSuffix = Date.now().toString(36);
+  // crypto.randomUUID() collision-free across re-runs and parallel workers
+  const uniqueSuffix = crypto.randomUUID();
   const testEmail = `test-wave-${uniqueSuffix}@dancehub-test.com`;
   const secondTestEmail = `test-wave-member-${uniqueSuffix}@dancehub-test.com`;
-  const communitySlug = `test-community-${uniqueSuffix}`;
-  const courseSlug = `test-course-${uniqueSuffix}`;
+  const communitySlug = `test-community-${uniqueSuffix}`.slice(0, 60);
+  const courseSlug = `test-course-${uniqueSuffix}`.slice(0, 60);
+  const userId = `test-user-${uniqueSuffix}`;
+  const secondUserId = `test-user-member-${uniqueSuffix}`;
 
-  // Create a test profile (community creator)
-  const profile = await testQueryOne<{ id: string }>`
-    INSERT INTO profiles (id, email, display_name, full_name, is_admin)
+  // Create the Better-Auth user rows FIRST. Downstream FKs point here.
+  // The DB has an `on_user_created` trigger on "user" that auto-inserts a
+  // matching profile row (via create_profile_for_user). So we DO NOT insert
+  // profiles manually here — we look up the auto-created ones after.
+  await testSql`
+    INSERT INTO "user" (id, email, name, "emailVerified", "createdAt", "updatedAt")
     VALUES (
-      gen_random_uuid(),
+      ${userId},
       ${testEmail},
-      ${'test_creator_' + uniqueSuffix},
       'Test Creator User',
-      false
+      false,
+      NOW(),
+      NOW()
     )
-    RETURNING id
   `;
+  TEST_IDS.userId = userId;
 
-  if (!profile) throw new Error('Failed to create test profile');
+  await testSql`
+    INSERT INTO "user" (id, email, name, "emailVerified", "createdAt", "updatedAt")
+    VALUES (
+      ${secondUserId},
+      ${secondTestEmail},
+      'Test Member User',
+      false,
+      NOW(),
+      NOW()
+    )
+  `;
+  TEST_IDS.secondUserId = secondUserId;
+
+  // Look up the trigger-created profiles.
+  const profile = await testQueryOne<{ id: string }>`
+    SELECT id FROM profiles WHERE auth_user_id = ${userId}
+  `;
+  if (!profile) {
+    throw new Error('Expected on_user_created trigger to have inserted profile for creator');
+  }
   TEST_IDS.profileId = profile.id;
 
-  // Create a second test profile (community member)
   const secondProfile = await testQueryOne<{ id: string }>`
-    INSERT INTO profiles (id, email, display_name, full_name, is_admin)
-    VALUES (
-      gen_random_uuid(),
-      ${secondTestEmail},
-      ${'test_member_' + uniqueSuffix},
-      'Test Member User',
-      false
-    )
-    RETURNING id
+    SELECT id FROM profiles WHERE auth_user_id = ${secondUserId}
   `;
-
-  if (!secondProfile) throw new Error('Failed to create second test profile');
+  if (!secondProfile) {
+    throw new Error('Expected on_user_created trigger to have inserted profile for member');
+  }
   TEST_IDS.secondProfileId = secondProfile.id;
 
-  // Create a test community
+  // Backfill the display_name / full_name overrides used by the views tests.
+  await testSql`
+    UPDATE profiles
+    SET display_name = ${'test_creator_' + uniqueSuffix.slice(0, 8)},
+        full_name = 'Test Creator User'
+    WHERE id = ${TEST_IDS.profileId}
+  `;
+  await testSql`
+    UPDATE profiles
+    SET display_name = ${'test_member_' + uniqueSuffix.slice(0, 8)},
+        full_name = 'Test Member User'
+    WHERE id = ${TEST_IDS.secondProfileId}
+  `;
+
+  // Communities — created_by references "user".id (TEXT)
   const community = await testQueryOne<{ id: string }>`
     INSERT INTO communities (id, name, slug, description, created_by, status, membership_enabled, membership_price)
     VALUES (
@@ -105,7 +156,7 @@ export async function setupTestData(): Promise<typeof TEST_IDS> {
       'Test Integration Community',
       ${communitySlug},
       'A test community for integration tests',
-      ${TEST_IDS.profileId},
+      ${userId},
       'active',
       true,
       10.00
@@ -117,12 +168,12 @@ export async function setupTestData(): Promise<typeof TEST_IDS> {
   TEST_IDS.communityId = community.id;
   TEST_IDS.communitySlug = communitySlug;
 
-  // Create a community member
+  // community_members.user_id is TEXT (Better-Auth user id)
   const member = await testQueryOne<{ id: string }>`
     INSERT INTO community_members (id, user_id, community_id, role, status)
     VALUES (
       gen_random_uuid(),
-      ${TEST_IDS.secondProfileId},
+      ${secondUserId},
       ${TEST_IDS.communityId},
       'member',
       'active'
@@ -133,7 +184,7 @@ export async function setupTestData(): Promise<typeof TEST_IDS> {
   if (!member) throw new Error('Failed to create test member');
   TEST_IDS.memberId = member.id;
 
-  // Create a test course
+  // courses.created_by is TEXT (Better-Auth user id)
   const course = await testQueryOne<{ id: string }>`
     INSERT INTO courses (id, title, slug, description, community_id, created_by, is_public)
     VALUES (
@@ -142,7 +193,7 @@ export async function setupTestData(): Promise<typeof TEST_IDS> {
       ${courseSlug},
       'A test course for integration tests',
       ${TEST_IDS.communityId},
-      ${TEST_IDS.profileId},
+      ${userId},
       true
     )
     RETURNING id
@@ -152,7 +203,6 @@ export async function setupTestData(): Promise<typeof TEST_IDS> {
   TEST_IDS.courseId = course.id;
   TEST_IDS.courseSlug = courseSlug;
 
-  // Create a test chapter
   const chapter = await testQueryOne<{ id: string }>`
     INSERT INTO chapters (id, title, chapter_position, course_id)
     VALUES (
@@ -167,7 +217,7 @@ export async function setupTestData(): Promise<typeof TEST_IDS> {
   if (!chapter) throw new Error('Failed to create test chapter');
   TEST_IDS.chapterId = chapter.id;
 
-  // Create a test lesson
+  // lessons.created_by is TEXT (Better-Auth user id)
   const lesson = await testQueryOne<{ id: string }>`
     INSERT INTO lessons (id, title, content, lesson_position, chapter_id, created_by)
     VALUES (
@@ -176,7 +226,7 @@ export async function setupTestData(): Promise<typeof TEST_IDS> {
       'Test lesson content for integration tests',
       1,
       ${TEST_IDS.chapterId},
-      ${TEST_IDS.profileId}
+      ${userId}
     )
     RETURNING id
   `;
@@ -184,13 +234,13 @@ export async function setupTestData(): Promise<typeof TEST_IDS> {
   if (!lesson) throw new Error('Failed to create test lesson');
   TEST_IDS.lessonId = lesson.id;
 
-  // Create a test private lesson
+  // private_lessons.teacher_id is TEXT (Better-Auth user id)
   const privateLesson = await testQueryOne<{ id: string }>`
     INSERT INTO private_lessons (id, community_id, teacher_id, title, description, duration_minutes, regular_price, is_active)
     VALUES (
       gen_random_uuid(),
       ${TEST_IDS.communityId},
-      ${TEST_IDS.profileId},
+      ${userId},
       'Test Integration Private Lesson',
       'A test private lesson for integration tests',
       60,
@@ -203,13 +253,13 @@ export async function setupTestData(): Promise<typeof TEST_IDS> {
   if (!privateLesson) throw new Error('Failed to create test private lesson');
   TEST_IDS.privateLessonId = privateLesson.id;
 
-  // Create a test live class
+  // live_classes.teacher_id is TEXT (Better-Auth user id)
   const liveClass = await testQueryOne<{ id: string }>`
     INSERT INTO live_classes (id, community_id, teacher_id, title, description, scheduled_start_time, duration_minutes, status)
     VALUES (
       gen_random_uuid(),
       ${TEST_IDS.communityId},
-      ${TEST_IDS.profileId},
+      ${userId},
       'Test Integration Live Class',
       'A test live class for integration tests',
       NOW() + INTERVAL '1 day',
@@ -222,16 +272,16 @@ export async function setupTestData(): Promise<typeof TEST_IDS> {
   if (!liveClass) throw new Error('Failed to create test live class');
   TEST_IDS.liveClassId = liveClass.id;
 
-  // Create a test thread
+  // threads.user_id and threads.created_by are TEXT (Better-Auth user id)
   const thread = await testQueryOne<{ id: string }>`
     INSERT INTO threads (id, title, content, user_id, community_id, created_by, author_name)
     VALUES (
       gen_random_uuid(),
       'Test Integration Thread',
       'Test thread content for integration tests',
-      ${TEST_IDS.profileId},
+      ${userId},
       ${TEST_IDS.communityId},
-      ${TEST_IDS.profileId},
+      ${userId},
       'Test Creator User'
     )
     RETURNING id
@@ -278,9 +328,19 @@ export async function cleanupTestData(): Promise<void> {
   if (TEST_IDS.profileId) {
     await testSql`DELETE FROM profiles WHERE id = ${TEST_IDS.profileId}`;
   }
+  // "user" rows last — profiles FK back to them via auth_user_id.
+  if (TEST_IDS.secondUserId) {
+    await testSql`DELETE FROM "user" WHERE id = ${TEST_IDS.secondUserId}`;
+  }
+  if (TEST_IDS.userId) {
+    await testSql`DELETE FROM "user" WHERE id = ${TEST_IDS.userId}`;
+  }
 
   // Reset IDs
+  TEST_IDS.userId = '';
+  TEST_IDS.secondUserId = '';
   TEST_IDS.profileId = '';
+  TEST_IDS.secondProfileId = '';
   TEST_IDS.communityId = '';
   TEST_IDS.communitySlug = '';
   TEST_IDS.courseId = '';
@@ -291,5 +351,4 @@ export async function cleanupTestData(): Promise<void> {
   TEST_IDS.liveClassId = '';
   TEST_IDS.threadId = '';
   TEST_IDS.memberId = '';
-  TEST_IDS.secondProfileId = '';
 }

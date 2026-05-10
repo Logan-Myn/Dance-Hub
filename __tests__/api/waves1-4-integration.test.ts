@@ -172,7 +172,7 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
         const members = await testQuery<CommunityMember & { display_name: string | null }>`
           SELECT cm.*, p.display_name
           FROM community_members cm
-          JOIN profiles p ON p.id = cm.user_id
+          JOIN profiles p ON p.auth_user_id = cm.user_id
           WHERE cm.community_id = ${TEST_IDS.communityId}
         `;
         expect(members.length).toBeGreaterThan(0);
@@ -238,22 +238,23 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
 
     describe('threads/[threadId]/like/route.ts', () => {
       it('should add like to thread', async () => {
-        // Add a like using array_append
+        // threads.likes is TEXT[] post Better-Auth migration; entries are
+        // Better-Auth user ids, no ::uuid cast.
         await testSql`
           UPDATE threads
-          SET likes = array_append(COALESCE(likes, '{}'), ${TEST_IDS.secondProfileId}::uuid)
+          SET likes = array_append(COALESCE(likes, '{}'), ${TEST_IDS.secondUserId})
           WHERE id = ${TEST_IDS.threadId}
         `;
 
         const thread = await testQueryOne<{ likes: string[] }>`
           SELECT likes FROM threads WHERE id = ${TEST_IDS.threadId}
         `;
-        expect(thread?.likes).toContain(TEST_IDS.secondProfileId);
+        expect(thread?.likes).toContain(TEST_IDS.secondUserId);
 
         // Remove the like
         await testSql`
           UPDATE threads
-          SET likes = array_remove(likes, ${TEST_IDS.secondProfileId}::uuid)
+          SET likes = array_remove(likes, ${TEST_IDS.secondUserId})
           WHERE id = ${TEST_IDS.threadId}
         `;
       });
@@ -264,7 +265,7 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
         const members = await testQuery<CommunityMember & Profile>`
           SELECT cm.*, p.full_name, p.avatar_url, p.display_name
           FROM community_members cm
-          JOIN profiles p ON p.id = cm.user_id
+          JOIN profiles p ON p.auth_user_id = cm.user_id
           WHERE cm.community_id = ${TEST_IDS.communityId}
           AND cm.status = 'active'
         `;
@@ -290,7 +291,8 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
           FROM communities
           WHERE slug = ${TEST_IDS.communitySlug}
         `;
-        expect(community?.created_by).toBe(TEST_IDS.profileId);
+        // communities.created_by is TEXT (Better-Auth user id) post-migration.
+        expect(community?.created_by).toBe(TEST_IDS.userId);
       });
     });
 
@@ -340,7 +342,7 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
             'Test Create Community',
             ${testSlug},
             'Created for testing',
-            ${TEST_IDS.profileId},
+            ${TEST_IDS.userId},
             'active'
           )
           RETURNING *
@@ -377,9 +379,9 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
           VALUES (
             'New Test Thread',
             'New test thread content',
-            ${TEST_IDS.profileId},
+            ${TEST_IDS.userId},
             ${TEST_IDS.communityId},
-            ${TEST_IDS.profileId},
+            ${TEST_IDS.userId},
             'Test Creator User'
           )
           RETURNING *
@@ -467,7 +469,7 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
         const membership = await testQueryOne<CommunityMember>`
           SELECT * FROM community_members
           WHERE community_id = ${TEST_IDS.communityId}
-          AND user_id = ${TEST_IDS.secondProfileId}
+          AND user_id = ${TEST_IDS.secondUserId}
         `;
         expect(membership).not.toBeNull();
         expect(membership?.status).toBe('active');
@@ -516,7 +518,7 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
       it('should query teacher availability slots', async () => {
         const slots = await testQuery<{ id: string }>`
           SELECT * FROM teacher_availability_slots
-          WHERE teacher_id = ${TEST_IDS.profileId}
+          WHERE teacher_id = ${TEST_IDS.userId}
           LIMIT 10
         `;
         // May be empty but query should work
@@ -526,10 +528,10 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
 
     describe('community/[communitySlug]/leave/route.ts', () => {
       it('should handle member leaving community', async () => {
-        // Create a temporary member to leave
+        // Create a temporary member to leave. community_members.user_id is TEXT.
         const tempMember = await testQueryOne<{ id: string }>`
           INSERT INTO community_members (user_id, community_id, role, status)
-          VALUES (${TEST_IDS.profileId}, ${TEST_IDS.communityId}, 'member', 'active')
+          VALUES (${TEST_IDS.userId}, ${TEST_IDS.communityId}, 'member', 'active')
           ON CONFLICT (user_id, community_id) DO NOTHING
           RETURNING id
         `;
@@ -551,10 +553,10 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
 
     describe('community/[communitySlug]/join/route.ts', () => {
       it('should handle joining community', async () => {
-        // Check if already a member
+        // Check if already a member. community_members.user_id is TEXT.
         const existingMember = await testQueryOne<{ id: string }>`
           SELECT id FROM community_members
-          WHERE user_id = ${TEST_IDS.profileId}
+          WHERE user_id = ${TEST_IDS.userId}
           AND community_id = ${TEST_IDS.communityId}
         `;
 
@@ -562,7 +564,7 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
           // Join the community
           const newMember = await testQueryOne<CommunityMember>`
             INSERT INTO community_members (user_id, community_id, role, status)
-            VALUES (${TEST_IDS.profileId}, ${TEST_IDS.communityId}, 'member', 'active')
+            VALUES (${TEST_IDS.userId}, ${TEST_IDS.communityId}, 'member', 'active')
             RETURNING *
           `;
           expect(newMember).not.toBeNull();
@@ -661,7 +663,7 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
             'New lesson content',
             ${(maxPos?.max || 0) + 1},
             ${TEST_IDS.chapterId},
-            ${TEST_IDS.profileId}
+            ${TEST_IDS.userId}
           )
           RETURNING *
         `;
@@ -728,7 +730,7 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
       const membersWithProfiles = await testQuery<CommunityMember & { full_name: string }>`
         SELECT cm.*, p.full_name
         FROM community_members cm
-        INNER JOIN profiles p ON p.id = cm.user_id
+        INNER JOIN profiles p ON p.auth_user_id = cm.user_id
         WHERE cm.community_id = ${TEST_IDS.communityId}
       `;
       expect(membersWithProfiles.length).toBeGreaterThan(0);
@@ -744,36 +746,37 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
     });
 
     it('should handle array operations (array_append/array_remove)', async () => {
-      // Add to array
+      // threads.likes is TEXT[] now (Better-Auth migration), no uuid cast.
       await testSql`
         UPDATE threads
-        SET likes = array_append(COALESCE(likes, '{}'), ${TEST_IDS.profileId}::uuid)
+        SET likes = array_append(COALESCE(likes, '{}'), ${TEST_IDS.userId})
         WHERE id = ${TEST_IDS.threadId}
       `;
 
       let thread = await testQueryOne<{ likes: string[] }>`
         SELECT likes FROM threads WHERE id = ${TEST_IDS.threadId}
       `;
-      expect(thread?.likes).toContain(TEST_IDS.profileId);
+      expect(thread?.likes).toContain(TEST_IDS.userId);
 
       // Remove from array
       await testSql`
         UPDATE threads
-        SET likes = array_remove(likes, ${TEST_IDS.profileId}::uuid)
+        SET likes = array_remove(likes, ${TEST_IDS.userId})
         WHERE id = ${TEST_IDS.threadId}
       `;
 
       thread = await testQueryOne<{ likes: string[] }>`
         SELECT likes FROM threads WHERE id = ${TEST_IDS.threadId}
       `;
-      expect(thread?.likes).not.toContain(TEST_IDS.profileId);
+      expect(thread?.likes).not.toContain(TEST_IDS.userId);
     });
 
     it('should handle ON CONFLICT (upsert)', async () => {
-      // This tests the upsert pattern - will either insert or do nothing
+      // This tests the upsert pattern - will either insert or do nothing.
+      // community_members.user_id is TEXT (Better-Auth user id).
       const result = await testQuery<{ id: string }>`
         INSERT INTO community_members (user_id, community_id, role, status)
-        VALUES (${TEST_IDS.secondProfileId}, ${TEST_IDS.communityId}, 'member', 'active')
+        VALUES (${TEST_IDS.secondUserId}, ${TEST_IDS.communityId}, 'member', 'active')
         ON CONFLICT (user_id, community_id) DO NOTHING
         RETURNING id
       `;
