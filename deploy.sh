@@ -43,10 +43,10 @@ cmd_code() {
   git pull origin main
 
   echo "==> Installing dependencies..."
-  npm install
+  bun install
 
   echo "==> Building..."
-  npm run build
+  bun run build
 
   echo "==> Reloading app..."
   pm2 restart "$APP_NAME" 2>/dev/null || pm2 start npm --name "$APP_NAME" -- start -- -p $APP_PORT
