@@ -21,16 +21,15 @@ bun install              # Install all dependencies
 
 ## Project Architecture
 
-**Tech Stack**: Next.js 14 (App Router), TypeScript, Tailwind CSS, Supabase, Stripe Connect, Daily.co
+**Tech Stack**: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS, Neon Postgres + better-auth, Stripe Connect, LiveKit (via Stream-Hub)
 
 ### Core Architecture Patterns
 
-- **App Router Structure**: Uses Next.js 14 App Router with dynamic routes like `[communitySlug]`
-- **Authentication**: Supabase Auth with middleware protection for admin routes
-- **Database**: PostgreSQL via Supabase with Row Level Security policies
-- **Video Integration**: Daily.co for private lesson video sessions
-- **Payments**: Stripe Connect for community payouts and lesson payments
-- **MCP**: Supabase
+- **App Router Structure**: Uses Next.js 16 App Router with dynamic routes like `[communitySlug]`. Async dynamic APIs (cookies/headers/params/searchParams).
+- **Authentication**: better-auth with sessions stored in Neon; OAuth providers (Google) wired via `app/api/auth/[...all]`
+- **Database**: Neon Postgres accessed via `@neondatabase/serverless` and `lib/db.ts` tagged-template `sql\`...\``
+- **Video Integration (client-facing)**: LiveKit + Stream-Hub. Client mounts `LiveKitVideoCall`; tokens via `/api/bookings/[bookingId]/video-token`. NOTE: legacy Daily.co booking-room creation still runs server-side (see `project_daily_co_half_migration` memory) — pending follow-up PR.
+- **Payments**: Stripe Connect (Express) for community payouts and lesson payments. Subscription flow uses PaymentElement + `redirect: 'if_required'` polling pattern.
 
 ### Key Directories
 
@@ -50,14 +49,14 @@ bun install              # Install all dependencies
 
 **Video Session Lifecycle**: Private lessons follow this flow:
 1. Student books lesson via Stripe payment
-2. Daily.co room created automatically (`lib/daily.ts`)
+2. Stream-Hub LiveKit room created lazily on first `/video-token` request
 3. Video tokens generated for secure access (`/api/bookings/[bookingId]/video-token/`)
-4. In-app video session using Daily React components
+4. In-app video session using `@livekit/components-react`
 
 **Authentication & Authorization**:
-- Middleware protects admin routes (`middleware.ts`)
-- Supabase RLS policies control data access
-- User profiles linked to communities via members table
+- Server-side auth checks in admin layouts and route handlers (no middleware/proxy file at present)
+- Better-auth session resolved via `getSession()` from `lib/auth-session`
+- Permission checks done in route handlers; community-scoped operations gated by `community.created_by` checks
 
 ### Database Schema Key Tables
 
