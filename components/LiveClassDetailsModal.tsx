@@ -95,7 +95,10 @@ export default function LiveClassDetailsModal({
     return <Badge variant="outline">Scheduled</Badge>;
   };
 
-  const canJoin = liveClass.is_currently_active || liveClass.is_starting_soon;
+  const canJoin =
+    liveClass.status !== 'ended' &&
+    liveClass.status !== 'cancelled' &&
+    (liveClass.is_currently_active || liveClass.is_starting_soon);
   // Mutations allowed only for future / upcoming classes. Past, ended, and
   // cancelled classes are read-only.
   const canMutate =
