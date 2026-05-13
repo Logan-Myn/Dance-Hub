@@ -4,9 +4,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { loadStripe, StripeElementsOptions } from "@stripe/stripe-js";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 import { Loader2 } from "lucide-react";
+import { formatPrice } from "@/lib/utils";
 
 interface PrivateLessonPaymentFormProps {
   clientSecret: string;
@@ -26,13 +27,6 @@ function PrivateLessonPaymentForm({
   const stripe = useStripe();
   const elements = useElements();
   const [isLoading, setIsLoading] = useState(false);
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-EU', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(price);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,11 +113,17 @@ export default function PrivateLessonPaymentModal({
   lessonTitle,
   onSuccess 
 }: PrivateLessonPaymentModalProps) {
-  if (!clientSecret || !stripeAccountId) return null;
+  const stripePromise = useMemo(
+    () =>
+      stripeAccountId
+        ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!, {
+            stripeAccount: stripeAccountId,
+          })
+        : null,
+    [stripeAccountId]
+  );
 
-  const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!, {
-    stripeAccount: stripeAccountId,
-  });
+  if (!clientSecret || !stripeAccountId || !stripePromise) return null;
 
   const options: StripeElementsOptions = {
     clientSecret,

@@ -38,11 +38,8 @@ export async function GET(request: Request, props: { params: Promise<{ accountId
 
 // PUT endpoint to create a login link for bank account management
 export async function PUT(request: Request, props: { params: Promise<{ accountId: string }> }) {
-  const params = await props.params;
+  const { accountId } = await props.params;
   try {
-    const { accountId } = params;
-
-    // First, check the account status and type
     const account = await stripe.accounts.retrieve(accountId);
     
     // Check if the account has completed onboarding
@@ -93,13 +90,13 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
     if (error.message?.includes('does not have access to the Express Dashboard')) {
       try {
         // Retrieve account to check its type
-        const account = await stripe.accounts.retrieve(params.accountId);
+        const account = await stripe.accounts.retrieve(accountId);
         
         if (account.type === 'custom') {
           // For Custom accounts, redirect to main Stripe Dashboard
           return NextResponse.json({
             success: true,
-            url: `https://dashboard.stripe.com/${params.accountId}/balance/overview`,
+            url: `https://dashboard.stripe.com/${accountId}/balance/overview`,
             requiresOnboarding: false,
             accountType: 'custom',
             message: 'Redirecting to Stripe Dashboard to manage bank account'
@@ -107,7 +104,7 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
         } else {
           // For Express accounts that need more setup
           const accountLink = await stripe.accountLinks.create({
-            account: params.accountId,
+            account: accountId,
             refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/community/settings?setup=incomplete`,
             return_url: `${process.env.NEXT_PUBLIC_APP_URL}/community/settings?setup=complete`,
             type: 'account_onboarding',

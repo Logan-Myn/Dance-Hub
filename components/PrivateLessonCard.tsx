@@ -3,8 +3,9 @@
 import { PrivateLesson } from "@/types/private-lessons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Clock, MapPin, Users, Percent, Video, Building, Globe, EyeOff } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Clock, Users, Percent, EyeOff } from "lucide-react";
+import { cn, formatPrice } from "@/lib/utils";
+import { getLocationIcon, getLocationText } from "@/lib/private-lessons-display";
 
 interface PrivateLessonCardProps {
   lesson: PrivateLesson;
@@ -21,39 +22,6 @@ export default function PrivateLessonCard({
 }: PrivateLessonCardProps) {
   const displayPrice = isMember && lesson.member_price ? lesson.member_price : lesson.regular_price;
   const hasDiscount = isMember && lesson.member_price && lesson.member_price < lesson.regular_price;
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-EU', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(price);
-  };
-
-  const getLocationIcon = () => {
-    switch (lesson.location_type) {
-      case 'online':
-        return <Video className="w-4 h-4" />;
-      case 'in_person':
-        return <Building className="w-4 h-4" />;
-      case 'both':
-        return <Globe className="w-4 h-4" />;
-      default:
-        return <MapPin className="w-4 h-4" />;
-    }
-  };
-
-  const getLocationText = () => {
-    switch (lesson.location_type) {
-      case 'online':
-        return 'Online';
-      case 'in_person':
-        return 'In Person';
-      case 'both':
-        return 'Online or In Person';
-      default:
-        return 'Location TBD';
-    }
-  };
 
   return (
     <div
@@ -105,8 +73,8 @@ export default function PrivateLessonCard({
             <span>{lesson.duration_minutes} min</span>
           </div>
           <div className="flex items-center gap-1.5 bg-muted px-3 py-1.5 rounded-full">
-            {getLocationIcon()}
-            <span>{getLocationText()}</span>
+            {getLocationIcon(lesson.location_type)}
+            <span>{getLocationText(lesson.location_type)}</span>
           </div>
         </div>
 

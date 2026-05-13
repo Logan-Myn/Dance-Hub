@@ -20,7 +20,9 @@ import CreatePrivateLessonModal from './CreatePrivateLessonModal';
 import { Loader2, Edit, BookOpen, Users, Calendar, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { cn } from "@/lib/utils";
+import { cn, formatPrice } from "@/lib/utils";
+import { PAYMENT_STATUS_BADGE } from "@/lib/private-lessons-display";
+import type { PrivateLesson, LessonBookingWithDetails } from "@/types/private-lessons";
 
 interface PrivateLessonManagementModalProps {
   isOpen: boolean;
@@ -45,36 +47,20 @@ export default function PrivateLessonManagementModal({
   const [activeTab, setActiveTab] = useState<TabType>('details');
   const { user, session } = useAuth();
 
-  // Private lessons state
-  const [privateLessons, setPrivateLessons] = useState<any[]>([]);
+  const [privateLessons, setPrivateLessons] = useState<PrivateLesson[]>([]);
   const [isLoadingLessons, setIsLoadingLessons] = useState(false);
 
-  // Lesson bookings state
-  const [lessonBookings, setLessonBookings] = useState<any[]>([]);
+  const [lessonBookings, setLessonBookings] = useState<LessonBookingWithDetails[]>([]);
   const [isLoadingBookings, setIsLoadingBookings] = useState(false);
 
-  // Teacher availability state
   const [teacherAvailability, setTeacherAvailability] = useState<{date: string, slots: any[]}[]>([]);
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
 
-  // Edit modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingLesson, setEditingLesson] = useState<any>(null);
+  const [editingLesson, setEditingLesson] = useState<PrivateLesson | null>(null);
 
-  // Delete confirmation state — replaces the native confirm() dialog so the
-  // delete prompt matches the AlertDialog used elsewhere in the app.
-  const [lessonToDelete, setLessonToDelete] = useState<any>(null);
+  const [lessonToDelete, setLessonToDelete] = useState<PrivateLesson | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  // Utility functions
-  // Match PrivateLessonCard / LessonBookingModal: prices are stored as
-  // dollars in DECIMAL(10,2), formatted as EUR currency without dividing.
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-EU', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(price);
-  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -210,8 +196,7 @@ export default function PrivateLessonManagementModal({
     }
   };
 
-  // Handle video session join
-  const handleJoinVideoSession = async (booking: any) => {
+  const handleJoinVideoSession = async (booking: LessonBookingWithDetails) => {
     try {
       if (!session) {
         throw new Error('Authentication required');
@@ -226,7 +211,7 @@ export default function PrivateLessonManagementModal({
 
       if (!response.ok) throw new Error('Failed to get video token');
 
-      const { token, room_url } = await response.json();
+      const { token } = await response.json();
       window.open(`/video-session/${booking.id}?token=${token}`, '_blank');
     } catch (error) {
       console.error('Error joining video session:', error);
@@ -234,8 +219,7 @@ export default function PrivateLessonManagementModal({
     }
   };
 
-  // Handle edit lesson
-  const handleEditLesson = (lesson: any) => {
+  const handleEditLesson = (lesson: PrivateLesson) => {
     setEditingLesson(lesson);
     setIsEditModalOpen(true);
   };
@@ -275,7 +259,7 @@ export default function PrivateLessonManagementModal({
               <BookOpen className="h-4 w-4 text-primary" />
             </div>
           </div>
-          <p className="font-display text-3xl font-bold text-foreground">{Array.isArray(privateLessons) ? privateLessons.length : 0}</p>
+          <p className="font-display text-3xl font-bold text-foreground">{privateLessons.length}</p>
         </div>
 
         <div className="bg-card rounded-2xl p-5 border border-border/50">
@@ -286,7 +270,7 @@ export default function PrivateLessonManagementModal({
             </div>
           </div>
           <p className="font-display text-3xl font-bold text-foreground">
-            {(Array.isArray(privateLessons) ? privateLessons.filter(lesson => lesson.is_active) : []).length}
+            {privateLessons.filter(lesson => lesson.is_active).length}
           </p>
         </div>
 
@@ -297,7 +281,7 @@ export default function PrivateLessonManagementModal({
               <Users className="h-4 w-4 text-secondary-foreground" />
             </div>
           </div>
-          <p className="font-display text-3xl font-bold text-foreground">{Array.isArray(lessonBookings) ? lessonBookings.length : 0}</p>
+          <p className="font-display text-3xl font-bold text-foreground">{lessonBookings.length}</p>
         </div>
       </div>
 
@@ -312,7 +296,7 @@ export default function PrivateLessonManagementModal({
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="mt-3 text-sm text-muted-foreground">Loading lessons...</p>
           </div>
-        ) : !Array.isArray(privateLessons) || privateLessons.length === 0 ? (
+        ) : privateLessons.length === 0 ? (
           <div className="text-center py-12 bg-muted/30 rounded-2xl border border-border/50">
             <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
               <BookOpen className="h-6 w-6 text-primary" />
@@ -324,7 +308,7 @@ export default function PrivateLessonManagementModal({
           </div>
         ) : (
           <div className="space-y-4">
-            {Array.isArray(privateLessons) ? privateLessons.map((lesson) => (
+            {privateLessons.map((lesson) => (
               <div key={lesson.id} className="bg-card rounded-2xl p-4 sm:p-6 border border-border/50 hover:border-primary/20 transition-all duration-200">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -403,7 +387,7 @@ export default function PrivateLessonManagementModal({
                   </div>
                 </div>
               </div>
-            )) : []}
+            ))}
           </div>
         )}
       </div>
@@ -417,7 +401,7 @@ export default function PrivateLessonManagementModal({
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="mt-3 text-sm text-muted-foreground">Loading bookings...</p>
           </div>
-        ) : !Array.isArray(lessonBookings) || lessonBookings.length === 0 ? (
+        ) : lessonBookings.length === 0 ? (
           <div className="text-center py-12 bg-muted/30 rounded-2xl border border-border/50">
             <div className="w-12 h-12 rounded-2xl bg-secondary/20 flex items-center justify-center mx-auto mb-3">
               <Users className="h-6 w-6 text-muted-foreground" />
@@ -429,21 +413,14 @@ export default function PrivateLessonManagementModal({
           </div>
         ) : (
           <div className="space-y-4">
-            {Array.isArray(lessonBookings) ? lessonBookings.map((booking) => (
+            {lessonBookings.map((booking) => (
               <div key={booking.id} className="bg-card rounded-2xl p-4 sm:p-6 border border-border/50 hover:border-primary/20 transition-all duration-200">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-3">
                       <h4 className="font-display font-semibold text-lg text-foreground">{booking.lesson_title}</h4>
                       <Badge
-                        className={cn(
-                          "rounded-full border-0",
-                          booking.payment_status === 'succeeded'
-                            ? "bg-emerald-100 text-emerald-700"
-                            : booking.payment_status === 'pending'
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-destructive/10 text-destructive"
-                        )}
+                        className={cn("rounded-full border-0", PAYMENT_STATUS_BADGE[booking.payment_status])}
                       >
                         {booking.payment_status}
                       </Badge>
@@ -510,7 +487,7 @@ export default function PrivateLessonManagementModal({
                   </div>
                 </div>
               </div>
-            )) : []}
+            ))}
           </div>
         )}
       </div>

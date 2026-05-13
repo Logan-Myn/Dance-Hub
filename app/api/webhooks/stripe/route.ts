@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { stripe } from '@/lib/stripe';
+import { stripe, STRIPE_API_VERSION } from '@/lib/stripe';
 import { query, queryOne, sql } from '@/lib/db';
 import { videoRoomService } from '@/lib/video-room-service';
 import { getEmailService } from '@/lib/resend/email-service';
@@ -160,13 +160,12 @@ export async function POST(request: Request) {
 
     console.log('Received webhook event:', event.type);
 
-    // For Connect account events, create a new Stripe instance with the account
-    const connectedStripe = event.account ?
-      new Stripe(process.env.STRIPE_SECRET_KEY!, {
-        apiVersion: '2025-12-15.clover' as Stripe.LatestApiVersion,
-        stripeAccount: event.account
-      }) :
-      stripe;
+    const connectedStripe = event.account
+      ? new Stripe(process.env.STRIPE_SECRET_KEY!, {
+          apiVersion: STRIPE_API_VERSION,
+          stripeAccount: event.account,
+        })
+      : stripe;
 
     const { stripe_account_id } = (event.data.object as any).metadata || {};
 
@@ -321,7 +320,6 @@ export async function POST(request: Request) {
               // The video room can be created later if needed
             }
 
-            // Send booking confirmation email to student
             try {
               const emailService = getEmailService();
               const scheduledDate = metadata.scheduled_at ? new Date(metadata.scheduled_at) : new Date();
@@ -339,73 +337,79 @@ export async function POST(request: Request) {
 
               const teacherName = teacherProfile?.display_name || teacherProfile?.full_name || 'Teacher';
               const teacherEmail = teacherProfile?.email;
+              const pricePaid = parseFloat(metadata.price_paid);
+              const lessonTitle = lessonDetails?.title || 'Private Lesson';
 
-              await emailService.sendNotificationEmail(
-                metadata.student_email,
-                `Booking Confirmed: ${lessonDetails?.title || 'Private Lesson'}`,
-                React.createElement(BookingConfirmationEmail, {
-                  studentName: metadata.student_name || 'Student',
-                  teacherName: teacherName,
-                  lessonTitle: lessonDetails?.title || 'Private Lesson',
-                  lessonDate: formattedDate,
-                  lessonTime: formattedTime,
-                  duration: lessonDetails?.duration || 60,
-                  price: parseFloat(metadata.price_paid),
-                  videoRoomUrl: videoRoomUrl,
-                  bookingId: newBooking.id,
-                  paymentMethod: 'Card',
-                })
-              );
-              console.log('✅ Booking confirmation email sent to student');
-
-              // Send payment receipt email
-              await emailService.sendNotificationEmail(
-                metadata.student_email,
-                `Payment Receipt #${paymentIntent.id.slice(-8).toUpperCase()}`,
-                React.createElement(PaymentReceiptEmail, {
-                  recipientName: metadata.student_name || 'Student',
-                  receiptNumber: paymentIntent.id.slice(-8).toUpperCase(),
-                  paymentDate: new Date().toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  }),
-                  paymentMethod: 'Credit Card',
-                  items: [{
-                    description: `${lessonDetails?.title || 'Private Lesson'} with ${teacherName}`,
-                    quantity: 1,
-                    price: parseFloat(metadata.price_paid),
-                    total: parseFloat(metadata.price_paid),
-                  }],
-                  subtotal: parseFloat(metadata.price_paid),
-                  total: parseFloat(metadata.price_paid),
-                })
-              );
-              console.log('✅ Payment receipt email sent to student');
-
-              // Notify teacher about new booking
-              if (teacherEmail) {
-                await emailService.sendNotificationEmail(
-                  teacherEmail,
-                  `New Booking: ${metadata.student_name || 'Student'} booked your lesson`,
+              const emailJobs: Promise<unknown>[] = [
+                emailService.sendNotificationEmail(
+                  metadata.student_email,
+                  `Booking Confirmed: ${lessonTitle}`,
                   React.createElement(BookingConfirmationEmail, {
-                    studentName: teacherName,
-                    teacherName: metadata.student_name || 'Student',
-                    lessonTitle: lessonDetails?.title || 'Private Lesson',
+                    studentName: metadata.student_name || 'Student',
+                    teacherName,
+                    lessonTitle,
                     lessonDate: formattedDate,
                     lessonTime: formattedTime,
                     duration: lessonDetails?.duration || 60,
-                    price: parseFloat(metadata.price_paid),
-                    videoRoomUrl: videoRoomUrl,
+                    price: pricePaid,
+                    videoRoomUrl,
                     bookingId: newBooking.id,
                     paymentMethod: 'Card',
                   })
+                ),
+                emailService.sendNotificationEmail(
+                  metadata.student_email,
+                  `Payment Receipt #${paymentIntent.id.slice(-8).toUpperCase()}`,
+                  React.createElement(PaymentReceiptEmail, {
+                    recipientName: metadata.student_name || 'Student',
+                    receiptNumber: paymentIntent.id.slice(-8).toUpperCase(),
+                    paymentDate: new Date().toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    }),
+                    paymentMethod: 'Credit Card',
+                    items: [{
+                      description: `${lessonTitle} with ${teacherName}`,
+                      quantity: 1,
+                      price: pricePaid,
+                      total: pricePaid,
+                    }],
+                    subtotal: pricePaid,
+                    total: pricePaid,
+                  })
+                ),
+              ];
+
+              if (teacherEmail) {
+                emailJobs.push(
+                  emailService.sendNotificationEmail(
+                    teacherEmail,
+                    `New Booking: ${metadata.student_name || 'Student'} booked your lesson`,
+                    React.createElement(BookingConfirmationEmail, {
+                      studentName: teacherName,
+                      teacherName: metadata.student_name || 'Student',
+                      lessonTitle,
+                      lessonDate: formattedDate,
+                      lessonTime: formattedTime,
+                      duration: lessonDetails?.duration || 60,
+                      price: pricePaid,
+                      videoRoomUrl,
+                      bookingId: newBooking.id,
+                      paymentMethod: 'Card',
+                    })
+                  )
                 );
-                console.log('✅ Booking notification email sent to teacher');
               }
+
+              const results = await Promise.allSettled(emailJobs);
+              results.forEach((r, i) => {
+                if (r.status === 'rejected') {
+                  console.error(`❌ Booking email ${i} failed:`, r.reason);
+                }
+              });
             } catch (emailError) {
               console.error('❌ Error sending booking emails (non-critical):', emailError);
-              // Don't fail the webhook for email sending errors
             }
 
             return NextResponse.json({ received: true });

@@ -19,14 +19,11 @@ interface BookingWithDetails {
   daily_room_name: string | null;
   daily_room_url: string | null;
   daily_room_expires_at: string | null;
-  teacher_daily_token: string | null;
-  student_daily_token: string | null;
   session_started_at: string | null;
   session_ended_at: string | null;
   teacher_notes: string | null;
   created_at: string;
   updated_at: string;
-  // Joined fields
   lesson_title: string;
   lesson_description: string | null;
   duration_minutes: number;
@@ -35,7 +32,6 @@ interface BookingWithDetails {
   location_type: string;
   community_name: string;
   community_slug: string;
-  community_created_by: string;
 }
 
 // GET: Fetch all bookings for the current user (as student)
@@ -52,7 +48,6 @@ export async function GET() {
 
     const user = session.user;
 
-    // Get all bookings for the current user
     const bookings = await query<BookingWithDetails>`
       SELECT
         lb.id,
@@ -71,8 +66,6 @@ export async function GET() {
         lb.daily_room_name,
         lb.daily_room_url,
         lb.daily_room_expires_at,
-        lb.teacher_daily_token,
-        lb.student_daily_token,
         lb.session_started_at,
         lb.session_ended_at,
         lb.teacher_notes,
@@ -85,13 +78,13 @@ export async function GET() {
         pl.member_price,
         pl.location_type,
         c.name as community_name,
-        c.slug as community_slug,
-        c.created_by as community_created_by
+        c.slug as community_slug
       FROM lesson_bookings lb
       INNER JOIN private_lessons pl ON pl.id = lb.private_lesson_id
       INNER JOIN communities c ON c.id = pl.community_id
       WHERE lb.student_id = ${user.id}
       ORDER BY lb.created_at DESC
+      LIMIT 100
     `;
 
     return NextResponse.json(bookings || []);

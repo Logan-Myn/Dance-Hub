@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
+import { stripe, mapStripeRequirement, isStripeAccountFullyVerified } from '@/lib/stripe';
 import { queryOne } from '@/lib/db';
 
 interface OnboardingProgress {
@@ -34,67 +34,16 @@ export async function GET(request: Request, props: { params: Promise<{ accountId
       WHERE stripe_account_id = ${accountId}
     `;
 
-    // Map requirements to more user-friendly messages
-    const requirementMessages = {
-      'individual.verification.document': 'Government-issued photo ID required',
-      'individual.verification.additional_document': 'Additional identity document required',
-      'company.verification.document': 'Business verification document required',
-      'company.license': 'Business license required',
-      'company.tax_id': 'Business tax ID required',
-      'company.address': 'Business address verification required',
-      'individual.address': 'Personal address verification required',
-      'individual.dob': 'Date of birth required',
-      'individual.email': 'Email verification required',
-      'individual.first_name': 'First name required',
-      'individual.last_name': 'Last name required',
-      'individual.phone': 'Phone number required',
-      'individual.ssn_last_4': 'Last 4 digits of SSN required',
-      'company.name': 'Company name required',
-      'company.phone': 'Company phone number required',
-      'company.directors_provided': 'Company directors information required',
-      'company.executives_provided': 'Company executives information required',
-      'company.owners_provided': 'Company owners information required',
-      'external_account': 'Bank account information required',
-      'individual.id_number': 'ID number required',
-      'company.tax_id_registrar': 'Tax ID registrar required',
-    };
-
-    // Get detailed requirements information
     const requirements = {
-      currentlyDue: account.requirements?.currently_due?.map(req => ({
-        code: req,
-        message: requirementMessages[req as keyof typeof requirementMessages] || req,
-        category: req.startsWith('individual.') ? 'personal' :
-                 req.startsWith('company.') ? 'business' :
-                 req.includes('external_account') ? 'banking' : 'other'
-      })) || [],
-      pastDue: account.requirements?.past_due?.map(req => ({
-        code: req,
-        message: requirementMessages[req as keyof typeof requirementMessages] || req,
-        category: req.startsWith('individual.') ? 'personal' :
-                 req.startsWith('company.') ? 'business' :
-                 req.includes('external_account') ? 'banking' : 'other'
-      })) || [],
-      eventuallyDue: account.requirements?.eventually_due?.map(req => ({
-        code: req,
-        message: requirementMessages[req as keyof typeof requirementMessages] || req,
-        category: req.startsWith('individual.') ? 'personal' :
-                 req.startsWith('company.') ? 'business' :
-                 req.includes('external_account') ? 'banking' : 'other'
-      })) || [],
+      currentlyDue: (account.requirements?.currently_due ?? []).map(mapStripeRequirement),
+      pastDue: (account.requirements?.past_due ?? []).map(mapStripeRequirement),
+      eventuallyDue: (account.requirements?.eventually_due ?? []).map(mapStripeRequirement),
       currentDeadline: account.requirements?.current_deadline,
       disabledReason: account.requirements?.disabled_reason,
     };
 
-    // Determine onboarding completion status
-    const isFullyVerified = account.charges_enabled &&
-      account.payouts_enabled &&
-      account.details_submitted &&
-      !(account.requirements?.currently_due || []).length &&
-      !(account.requirements?.past_due || []).length;
-
-    const needsAttention = (account.requirements?.currently_due || []).length > 0 ||
-      (account.requirements?.past_due || []).length > 0;
+    const isFullyVerified = isStripeAccountFullyVerified(account);
+    const needsAttention = requirements.currentlyDue.length > 0 || requirements.pastDue.length > 0;
 
     // Calculate completion percentage based on steps completed
     let completionPercentage = 0;
