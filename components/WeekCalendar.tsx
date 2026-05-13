@@ -110,17 +110,14 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
     }
   };
 
-  // Poll every 20s when any class this week is live or starting soon,
-  // so status/color updates (e.g. teacher ends class early) are reflected quickly.
+  // Refresh when the teacher ends a class early from the video page.
   useEffect(() => {
-    const hasActiveOrSoon = liveClasses.some(
-      (c) => c.is_currently_active || c.is_starting_soon
-    );
-    if (!hasActiveOrSoon) return;
-
-    const interval = setInterval(() => fetchLiveClasses(true), 20_000);
-    return () => clearInterval(interval);
-  }, [liveClasses, currentWeek, communitySlug]);
+    const channel = new BroadcastChannel("live-class-updates");
+    channel.onmessage = (e) => {
+      if (e.data?.type === "class-ended") fetchLiveClasses(true);
+    };
+    return () => channel.close();
+  }, [currentWeek, communitySlug]);
 
   const navigateWeek = (direction: 'prev' | 'next') => {
     setCurrentWeek(prev => addDays(prev, direction === 'next' ? 7 : -7));
