@@ -89,9 +89,9 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
     fetchLiveClasses();
   }, [currentWeek, communityId]);
 
-  const fetchLiveClasses = async () => {
+  const fetchLiveClasses = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const weekStartISO = format(weekStart, 'yyyy-MM-dd');
       const weekEndISO = format(weekEnd, 'yyyy-MM-dd');
 
@@ -106,9 +106,21 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
     } catch (error) {
       console.error('Error fetching live classes:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
+
+  // Poll every 20s when any class this week is live or starting soon,
+  // so status/color updates (e.g. teacher ends class early) are reflected quickly.
+  useEffect(() => {
+    const hasActiveOrSoon = liveClasses.some(
+      (c) => c.is_currently_active || c.is_starting_soon
+    );
+    if (!hasActiveOrSoon) return;
+
+    const interval = setInterval(() => fetchLiveClasses(true), 20_000);
+    return () => clearInterval(interval);
+  }, [liveClasses, currentWeek, communitySlug]);
 
   const navigateWeek = (direction: 'prev' | 'next') => {
     setCurrentWeek(prev => addDays(prev, direction === 'next' ? 7 : -7));
