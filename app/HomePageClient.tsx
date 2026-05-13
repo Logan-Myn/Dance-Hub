@@ -221,6 +221,8 @@ function ProductTourVideo() {
         aspectRatio: "16/9",
         background: LT.bg,
         boxShadow: "0 30px 60px -20px rgba(60,30,100,0.4)",
+        ["--bottom-controls" as string]: "none",
+        cursor: "pointer",
       }}
     >
         {MUX_PRODUCT_TOUR_PLAYBACK_ID ? (
@@ -233,6 +235,7 @@ function ProductTourVideo() {
             accentColor={LT.primary}
             preload="metadata"
             metadata={{ video_title: "Dance-Hub product tour" }}
+            nohotkeys
             style={{
               position: "absolute",
               inset: 0,

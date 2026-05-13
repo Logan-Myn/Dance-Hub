@@ -276,35 +276,15 @@ export default function CreatePrivateLessonModal({
             </div>
           </div>
 
-          {/* Location */}
+          {/* Requirements */}
           <div className="space-y-4">
-            <h3 className="text-lg font-medium">Location</h3>
-            <div>
-              <Label htmlFor="location_type">Location Type</Label>
-              <Select
-                value={formData.location_type}
-                onValueChange={(value: "online" | "in_person" | "both") => 
-                  handleInputChange("location_type", value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="online">Online (Zoom, etc.)</SelectItem>
-                  <SelectItem value="in_person">In Person</SelectItem>
-                  <SelectItem value="both">Both Options Available</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             <div>
               <Label htmlFor="requirements">Requirements & Notes</Label>
               <Textarea
                 id="requirements"
                 value={formData.requirements}
                 onChange={(e) => handleInputChange("requirements", e.target.value)}
-                placeholder="What should students know or prepare? Any specific requirements or location details..."
+                placeholder="What should students know or prepare before the session?"
                 rows={3}
               />
             </div>
