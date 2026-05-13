@@ -34,9 +34,10 @@ export async function GET(
   try {
     const { userId } = await params;
 
-    // Get community IDs the user is a member of
+    // Get community IDs the user is an active member of
     const memberRows = await sql`
-      SELECT community_id FROM community_members WHERE user_id = ${userId}
+      SELECT community_id FROM community_members
+      WHERE user_id = ${userId} AND status IN ('active', 'pending')
     `;
 
     const communityIds = (memberRows as any[]).map((m: any) => m.community_id);
