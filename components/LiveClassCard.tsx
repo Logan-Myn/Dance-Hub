@@ -43,17 +43,17 @@ export default function LiveClassCard({ liveClass, communitySlug, onClick }: Liv
     endTime < new Date();
 
   const getBackgroundColor = () => {
-    if (liveClass.is_currently_active) {
-      return 'bg-red-500 hover:bg-red-600 text-white border-red-600';
-    }
-    if (liveClass.is_starting_soon) {
-      return 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600';
-    }
     if (liveClass.status === 'cancelled') {
       return 'bg-gray-300 hover:bg-gray-400 text-gray-700 border-gray-400 line-through';
     }
     if (isPast || liveClass.status === 'ended') {
       return 'bg-slate-200 hover:bg-slate-300 text-slate-600 border-slate-400';
+    }
+    if (liveClass.is_currently_active) {
+      return 'bg-red-500 hover:bg-red-600 text-white border-red-600';
+    }
+    if (liveClass.is_starting_soon) {
+      return 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600';
     }
     return 'bg-blue-500 hover:bg-blue-600 text-white border-blue-600';
   };

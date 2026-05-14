@@ -89,9 +89,9 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
     fetchLiveClasses();
   }, [currentWeek, communityId]);
 
-  const fetchLiveClasses = async () => {
+  const fetchLiveClasses = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const weekStartISO = format(weekStart, 'yyyy-MM-dd');
       const weekEndISO = format(weekEnd, 'yyyy-MM-dd');
 
@@ -106,9 +106,18 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
     } catch (error) {
       console.error('Error fetching live classes:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
+
+  // Refresh when the teacher ends a class early from the video page.
+  useEffect(() => {
+    const channel = new BroadcastChannel("live-class-updates");
+    channel.onmessage = (e) => {
+      if (e.data?.type === "class-ended") fetchLiveClasses(true);
+    };
+    return () => channel.close();
+  }, [currentWeek, communitySlug]);
 
   const navigateWeek = (direction: 'prev' | 'next') => {
     setCurrentWeek(prev => addDays(prev, direction === 'next' ? 7 : -7));

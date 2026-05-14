@@ -33,16 +33,15 @@ export async function POST(request: Request, props: { params: Promise<{ communit
 
     const stripeAccountId = community.stripe_account_id;
 
-    if (!stripeAccountId) {
-      return NextResponse.json(
-        { error: "Stripe account not connected" },
-        { status: 400 }
-      );
-    }
-
     // If membership is enabled and there's a price, create or update Stripe price
     let stripe_price_id = null;
     if (enabled && price > 0) {
+      if (!stripeAccountId) {
+        return NextResponse.json(
+          { error: "Stripe account not connected" },
+          { status: 400 }
+        );
+      }
       // First, create a product for the community if it doesn't exist
       let product_id = community.stripe_product_id;
 

@@ -608,13 +608,6 @@ export function SubscriptionsEditor({
                 Set the monthly price for your community membership
               </p>
             </div>
-
-            <Button
-              onClick={handlePriceUpdate}
-              className="w-full h-11 rounded-xl bg-primary hover:bg-primary/90 transition-all"
-            >
-              Update Membership Price
-            </Button>
           </div>
         )}
 
@@ -626,6 +619,13 @@ export function SubscriptionsEditor({
             </p>
           </div>
         )}
+
+        <Button
+          onClick={handlePriceUpdate}
+          className="w-full h-11 rounded-xl bg-primary hover:bg-primary/90 transition-all"
+        >
+          Save Membership Settings
+        </Button>
       </div>
 
       {/* Promotional Period Info - Fluid Movement style */}

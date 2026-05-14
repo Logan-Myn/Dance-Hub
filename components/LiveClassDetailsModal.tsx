@@ -77,17 +77,17 @@ export default function LiveClassDetailsModal({
   const [deleting, setDeleting] = useState(false);
 
   const getStatusBadge = () => {
-    if (liveClass.is_currently_active) {
-      return <Badge className="bg-red-500 hover:bg-red-600">🔴 LIVE NOW</Badge>;
-    }
-    if (liveClass.is_starting_soon) {
-      return <Badge className="bg-amber-500 hover:bg-amber-600">⏰ Starting Soon</Badge>;
-    }
     if (liveClass.status === 'ended') {
       return <Badge variant="secondary">Ended</Badge>;
     }
     if (liveClass.status === 'cancelled') {
       return <Badge variant="destructive">Cancelled</Badge>;
+    }
+    if (liveClass.is_currently_active) {
+      return <Badge className="bg-red-500 hover:bg-red-600">🔴 LIVE NOW</Badge>;
+    }
+    if (liveClass.is_starting_soon) {
+      return <Badge className="bg-amber-500 hover:bg-amber-600">⏰ Starting Soon</Badge>;
     }
     if (isPast) {
       return <Badge variant="secondary">Past</Badge>;
@@ -95,7 +95,10 @@ export default function LiveClassDetailsModal({
     return <Badge variant="outline">Scheduled</Badge>;
   };
 
-  const canJoin = liveClass.is_currently_active || liveClass.is_starting_soon;
+  const canJoin =
+    liveClass.status !== 'ended' &&
+    liveClass.status !== 'cancelled' &&
+    (liveClass.is_currently_active || liveClass.is_starting_soon);
   // Mutations allowed only for future / upcoming classes. Past, ended, and
   // cancelled classes are read-only.
   const canMutate =

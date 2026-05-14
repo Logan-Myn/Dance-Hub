@@ -99,6 +99,7 @@ export default function LiveClassVideoPage({ classId, liveClass }: LiveClassVide
         throw new Error("Failed to end class");
       }
       toast.success("Class ended successfully");
+      new BroadcastChannel("live-class-updates").postMessage({ type: "class-ended", classId });
       router.push(`/${liveClass.community_slug}`);
     } catch (err) {
       toast.error("Failed to end class");
