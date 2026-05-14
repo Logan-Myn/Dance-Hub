@@ -7,6 +7,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Loader2, Calendar, CreditCard } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "react-hot-toast";
 
 interface PreRegistrationPaymentModalProps {
   isOpen: boolean;
@@ -89,7 +90,7 @@ function PaymentForm({
       }
     } catch (err: any) {
       console.error('Pre-registration error:', err);
-      alert(err.message || 'Failed to save payment method');
+      toast.error(err.message || 'Failed to save payment method');
     } finally {
       setIsProcessing(false);
     }

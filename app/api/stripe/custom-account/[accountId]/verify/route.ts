@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
+import { stripe, STRIPE_REQUIREMENT_MESSAGES, isStripeAccountFullyVerified } from '@/lib/stripe';
 import { sql } from '@/lib/db';
 
 export async function POST(request: Request, props: { params: Promise<{ accountId: string }> }) {
@@ -25,14 +25,7 @@ export async function POST(request: Request, props: { params: Promise<{ accountI
       );
     }
 
-    // Check if account is already fully verified
-    const isFullyVerified = account.charges_enabled &&
-      account.payouts_enabled &&
-      account.details_submitted &&
-      !(account.requirements?.currently_due || []).length &&
-      !(account.requirements?.past_due || []).length;
-
-    if (isFullyVerified) {
+    if (isStripeAccountFullyVerified(account)) {
       // Update onboarding progress to completed
       await sql`
         UPDATE stripe_onboarding_progress
@@ -60,24 +53,8 @@ export async function POST(request: Request, props: { params: Promise<{ accountI
     const allRequirements = [...currentlyDue, ...pastDue];
 
     if (allRequirements.length > 0) {
-      // Map requirements to user-friendly messages
-      const requirementMessages = {
-        'individual.verification.document': 'Government-issued photo ID',
-        'individual.verification.additional_document': 'Additional identity document',
-        'company.verification.document': 'Business verification document',
-        'external_account': 'Bank account information',
-        'individual.dob': 'Date of birth',
-        'individual.first_name': 'First name',
-        'individual.last_name': 'Last name',
-        'individual.address': 'Personal address',
-        'individual.ssn_last_4': 'Last 4 digits of SSN',
-        'company.address': 'Business address',
-        'company.name': 'Company name',
-        'company.phone': 'Company phone number',
-      };
-
-      const missingRequirements = allRequirements.map(req =>
-        requirementMessages[req as keyof typeof requirementMessages] || req
+      const missingRequirements = allRequirements.map(
+        req => STRIPE_REQUIREMENT_MESSAGES[req] ?? req
       );
 
       return NextResponse.json({

@@ -114,7 +114,7 @@ export async function POST(request: Request) {
           ${communityId},
           ${account.id},
           1,
-          '[]'::jsonb,
+          '{}'::integer[],
           '{}'::jsonb,
           '{}'::jsonb,
           '{}'::jsonb,

@@ -12,6 +12,8 @@ import { Clock, MapPin, Percent, Calendar } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAuthModal } from "@/contexts/AuthModalContext";
+import { formatPrice, formatSlotTime } from "@/lib/utils";
+import { getLocationText } from "@/lib/private-lessons-display";
 import PrivateLessonPaymentModal from "./PrivateLessonPaymentModal";
 
 interface LessonBookingModalProps {
@@ -100,34 +102,6 @@ export default function LessonBookingModal({
       month: 'short', 
       day: 'numeric' 
     });
-  };
-
-  const formatTime = (time: string) => {
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-    const ampm = hour < 12 ? 'AM' : 'PM';
-    return `${displayHour}:${minutes} ${ampm}`;
-  };
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-EU', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(price);
-  };
-
-  const getLocationText = () => {
-    switch (lesson.location_type) {
-      case 'online':
-        return 'Online';
-      case 'in_person':
-        return 'In Person';
-      case 'both':
-        return 'Online or In Person';
-      default:
-        return 'Location TBD';
-    }
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -256,7 +230,7 @@ export default function LessonBookingModal({
             </div>
             <div className="flex items-center gap-1">
               <MapPin className="w-4 h-4" />
-              <span>{getLocationText()}</span>
+              <span>{getLocationText(lesson.location_type)}</span>
             </div>
           </div>
 
@@ -316,7 +290,7 @@ export default function LessonBookingModal({
                         {formatDate(slot.availability_date)}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
+                        {formatSlotTime(slot.start_time)} - {formatSlotTime(slot.end_time)}
                       </div>
                     </div>
                     {selectedSlot?.id === slot.id && (

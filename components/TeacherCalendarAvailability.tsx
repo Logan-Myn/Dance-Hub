@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Plus, Clock, X, Calendar } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatSlotTime } from '@/lib/utils';
 
 interface TimeSlot {
   id?: string;
@@ -71,14 +72,6 @@ export default function TeacherCalendarAvailability({
   const formatDateString = (dateString: string) => {
     const [year, month, day] = dateString.split('-').map(Number);
     return new Date(year, month - 1, day);
-  };
-
-  const formatTime = (time: string) => {
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-    const ampm = hour < 12 ? 'AM' : 'PM';
-    return `${displayHour}:${minutes} ${ampm}`;
   };
 
   const getDayAvailability = (date: Date): DayAvailability | undefined => {
@@ -293,7 +286,7 @@ export default function TeacherCalendarAvailability({
                       <div className="hidden sm:block mt-1 space-y-1">
                         {dayAvailability.slots.slice(0, 2).map((slot, slotIndex) => (
                           <div key={slotIndex} className="text-xs bg-green-100 text-green-800 px-1 py-0.5 rounded truncate">
-                            {formatTime(slot.start_time)}
+                            {formatSlotTime(slot.start_time)}
                           </div>
                         ))}
                         {dayAvailability.slots.length > 2 && (
@@ -367,7 +360,7 @@ export default function TeacherCalendarAvailability({
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-gray-500" />
                         <span className="text-sm">
-                          {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
+                          {formatSlotTime(slot.start_time)} - {formatSlotTime(slot.end_time)}
                         </span>
                       </div>
                       {slot.id && (

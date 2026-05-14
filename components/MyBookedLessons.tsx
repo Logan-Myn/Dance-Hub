@@ -20,6 +20,7 @@ import {
 import { toast } from "react-hot-toast";
 import { format } from "date-fns";
 import Link from "next/link";
+import { formatPrice } from "@/lib/utils";
 
 export default function MyBookedLessons() {
   const { user } = useAuth();
@@ -34,37 +35,16 @@ export default function MyBookedLessons() {
 
   const fetchBookings = async () => {
     try {
-      console.log('🔍 Fetching bookings for student:', user!.id);
-
       const response = await fetch('/api/bookings');
 
       if (!response.ok) {
-        console.error('❌ Error fetching bookings:', response.status);
+        console.error('Error fetching bookings:', response.status);
         toast.error('Failed to load your bookings');
         return;
       }
 
-      const bookingsData = await response.json();
-
-      console.log('✅ Student bookings fetched:', bookingsData?.length || 0, 'bookings');
-      if (bookingsData && bookingsData.length > 0) {
-        console.log('📝 Sample booking:', bookingsData[0]);
-      }
-
-      // Map API response to expected format
-      const formattedBookings: LessonBookingWithDetails[] = bookingsData.map((booking: any) => ({
-        ...booking,
-        // Fields are already flattened from the API
-        lesson_title: booking.lesson_title,
-        lesson_description: booking.lesson_description,
-        duration_minutes: booking.duration_minutes,
-        regular_price: booking.regular_price,
-        member_price: booking.member_price,
-        community_name: booking.community_name,
-        community_slug: booking.community_slug,
-      }));
-
-      setBookings(formattedBookings);
+      const bookingsData: LessonBookingWithDetails[] = await response.json();
+      setBookings(bookingsData);
     } catch (error) {
       console.error('Error fetching bookings:', error);
       toast.error('Failed to load your bookings');
@@ -240,7 +220,7 @@ export default function MyBookedLessons() {
               {/* Price */}
               <div className="text-sm">
                 <span className="font-medium text-gray-700 dark:text-gray-200">
-                  Paid: €{booking.price_paid.toFixed(2)}
+                  Paid: {formatPrice(booking.price_paid)}
                 </span>
                 {booking.is_community_member && (
                   <span className="ml-2 text-green-600 dark:text-green-400">

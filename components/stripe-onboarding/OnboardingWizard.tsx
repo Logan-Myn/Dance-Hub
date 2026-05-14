@@ -143,71 +143,34 @@ export function OnboardingWizard({ isOpen, onClose, communityId, communitySlug, 
 
   const { user, session } = useAuth();
 
-  // Check for existing Stripe account when wizard opens
   useEffect(() => {
+    if (!isOpen || !session) return;
+
+    let cancelled = false;
     const checkExistingAccount = async () => {
-      console.log("useEffect triggered", {
-        isOpen,
-        hasSession: !!session,
-        communitySlug
-      });
+      try {
+        const response = await fetch(`/api/community/${communitySlug}`);
+        if (!response.ok || cancelled) return;
+        const data = await response.json();
+        if (!data.stripe_account_id) return;
 
-      if (isOpen && session) {
-        console.log("Checking for existing Stripe account...", { 
-          communitySlug, 
-          hasSession: !!session, 
-          hasUser: !!user 
-        });
-        
-        try {
-          const response = await fetch(`/api/community/${communitySlug}`);
-
-          if (response.ok) {
-            const data = await response.json();
-            console.log("Community data:", data);
-            
-            if (data.stripe_account_id) {
-              console.log("Found existing Stripe account ID:", data.stripe_account_id);
-              
-              // Validate that the Stripe account still exists
-              try {
-                const statusResponse = await fetch(`/api/stripe/custom-account/${data.stripe_account_id}/status`);
-                if (statusResponse.ok) {
-                  console.log("Existing Stripe account is valid");
-                  setOnboardingData(prev => ({ 
-                    ...prev, 
-                    accountId: data.stripe_account_id 
-                  }));
-                  toast.success("Loaded existing Stripe account");
-                } else {
-                  console.log("Existing Stripe account is invalid, will create new one");
-                  toast("Previous Stripe account was invalid, you can create a new one");
-                }
-              } catch (statusError) {
-                console.log("Failed to validate existing Stripe account:", statusError);
-                toast("Previous Stripe account was invalid, you can create a new one");
-              }
-            } else {
-              console.log("No Stripe account found in community data");
-            }
-          } else {
-            console.error("Failed to fetch community data:", response.status);
-          }
-        } catch (error) {
-          console.error("Error checking existing Stripe account:", error);
+        const statusResponse = await fetch(`/api/stripe/custom-account/${data.stripe_account_id}/status`);
+        if (cancelled) return;
+        if (statusResponse.ok) {
+          setOnboardingData(prev => ({ ...prev, accountId: data.stripe_account_id }));
+          toast.success("Loaded existing Stripe account");
+        } else {
+          toast("Previous Stripe account was invalid, you can create a new one");
         }
-      } else {
-        console.log("Skipping account check:", {
-          isOpen,
-          hasSession: !!session
-        });
+      } catch (error) {
+        console.error("Error checking existing Stripe account:", error);
       }
     };
 
-    // Add a small delay to ensure session is properly loaded
-    const timeoutId = setTimeout(checkExistingAccount, 100);
-    
-    return () => clearTimeout(timeoutId);
+    checkExistingAccount();
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen, session, communitySlug]);
 
   useEffect(() => {
@@ -328,13 +291,7 @@ export function OnboardingWizard({ isOpen, onClose, communityId, communitySlug, 
       }
 
       const result = await response.json();
-      console.log("New account created:", result);
       setOnboardingData(prev => ({ ...prev, accountId: result.accountId }));
-      
-      // Immediately notify parent component to update community data
-      console.log("Calling onComplete to update community with new account ID:", result.accountId);
-      onComplete(result.accountId);
-      
       toast.success("Stripe account created successfully!");
       return result.accountId;
     } catch (error) {

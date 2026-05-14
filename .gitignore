@@ -28,6 +28,8 @@ yarn-error.log*
 # local env files
 .env*.local
 .env.docker
+.env.preprod
+.env.preprod.*
 docker-compose.yml
 docker-compose.*.yml
 

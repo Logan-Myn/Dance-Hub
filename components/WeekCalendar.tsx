@@ -133,11 +133,23 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
     setShowCreateModal(true);
   };
 
-  const getClassesForTimeSlot = (day: Date, hour: number) => {
-    return liveClasses.filter(liveClass => {
+  const classesByDayHour = useMemo(() => {
+    const map = new Map<string, typeof liveClasses>();
+    for (const liveClass of liveClasses) {
       const classDate = parseISO(liveClass.scheduled_start_time);
-      return isSameDay(classDate, day) && classDate.getHours() === hour;
-    });
+      const key = `${format(classDate, "yyyy-MM-dd")}-${classDate.getHours()}`;
+      const bucket = map.get(key);
+      if (bucket) {
+        bucket.push(liveClass);
+      } else {
+        map.set(key, [liveClass]);
+      }
+    }
+    return map;
+  }, [liveClasses]);
+
+  const getClassesForTimeSlot = (day: Date, hour: number) => {
+    return classesByDayHour.get(`${format(day, "yyyy-MM-dd")}-${hour}`) ?? [];
   };
 
   const handleClassCreated = () => {
