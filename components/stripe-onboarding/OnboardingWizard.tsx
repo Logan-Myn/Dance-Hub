@@ -291,13 +291,7 @@ export function OnboardingWizard({ isOpen, onClose, communityId, communitySlug, 
       }
 
       const result = await response.json();
-      console.log("New account created:", result);
       setOnboardingData(prev => ({ ...prev, accountId: result.accountId }));
-      
-      // Immediately notify parent component to update community data
-      console.log("Calling onComplete to update community with new account ID:", result.accountId);
-      onComplete(result.accountId);
-      
       toast.success("Stripe account created successfully!");
       return result.accountId;
     } catch (error) {
