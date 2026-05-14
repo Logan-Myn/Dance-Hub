@@ -231,14 +231,15 @@ export function PersonalInfoStep({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to update personal information");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to update personal information");
       }
 
       toast.success("Personal information saved successfully!");
       onNext();
     } catch (error) {
       console.error("Error updating personal info:", error);
-      toast.error("Failed to save personal information");
+      toast.error(error instanceof Error ? error.message : "Failed to save personal information");
     }
   };
 
