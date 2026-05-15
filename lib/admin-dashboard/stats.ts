@@ -1,6 +1,18 @@
 import { stripe } from '@/lib/stripe';
 import type Stripe from 'stripe';
 import type { RevenuePoint, GrowthPoint } from './types';
+import { unstable_cache } from 'next/cache';
+import { cache } from 'react';
+
+// Dedupes stripe.accounts.retrieve within a single request so the dashboard's
+// three Stripe-bound helpers don't each ping the platform separately.
+const getAccountOnce = cache(async (stripeAccountId: string) => {
+  try {
+    return await stripe.accounts.retrieve(stripeAccountId);
+  } catch {
+    return null;
+  }
+});
 
 /**
  * Calendar month range. start is inclusive (1st of month at 00:00 local),
@@ -53,34 +65,65 @@ async function sumSucceeded(
   );
 }
 
+// Historical (closed) months are immutable for our 'sum of succeeded charges'
+// calculation: refunds/disputes don't flip charge.status away from succeeded.
+// Cache for 24h per account+month so navigations within that window skip Stripe.
+function getHistoricalMonthRevenue(
+  stripeAccountId: string,
+  year: number,
+  month: number
+): Promise<number> {
+  const key = `${year}-${String(month + 1).padStart(2, '0')}`;
+  return unstable_cache(
+    async () => {
+      const start = new Date(year, month, 1);
+      const end = new Date(year, month + 1, 1);
+      return sumSucceeded(stripeAccountId, start, end);
+    },
+    ['admin-dashboard-historical-month-revenue', stripeAccountId, key],
+    { revalidate: 86400, tags: [`revenue:${stripeAccountId}`] }
+  )();
+}
+
+function isCurrentMonth(start: Date, now: Date): boolean {
+  return start.getFullYear() === now.getFullYear() && start.getMonth() === now.getMonth();
+}
+
+function formatYearMonth(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+async function getRevenueForMonth(
+  stripeAccountId: string,
+  monthStart: Date,
+  monthEnd: Date,
+  now: Date
+): Promise<number> {
+  return isCurrentMonth(monthStart, now)
+    ? sumSucceeded(stripeAccountId, monthStart, monthEnd)
+    : getHistoricalMonthRevenue(stripeAccountId, monthStart.getFullYear(), monthStart.getMonth());
+}
+
 export async function getMonthlyRevenue(
   stripeAccountId: string | null,
   now: Date = new Date()
 ): Promise<{ monthlyRevenue: number; revenueGrowth: number }> {
   if (!stripeAccountId) return { monthlyRevenue: 0, revenueGrowth: 0 };
 
-  try {
-    const account = await stripe.accounts.retrieve(stripeAccountId);
-    if (!account.charges_enabled) return { monthlyRevenue: 0, revenueGrowth: 0 };
-  } catch {
-    return { monthlyRevenue: 0, revenueGrowth: 0 };
-  }
+  const account = await getAccountOnce(stripeAccountId);
+  if (!account?.charges_enabled) return { monthlyRevenue: 0, revenueGrowth: 0 };
 
   const thisMonth = getCalendarMonthRange(now, 0);
   const lastMonth = getCalendarMonthRange(now, -1);
   const [thisMonthRevenue, lastMonthRevenue] = await Promise.all([
-    sumSucceeded(stripeAccountId, thisMonth.start, thisMonth.end),
-    sumSucceeded(stripeAccountId, lastMonth.start, lastMonth.end),
+    getRevenueForMonth(stripeAccountId, thisMonth.start, thisMonth.end, now),
+    getRevenueForMonth(stripeAccountId, lastMonth.start, lastMonth.end, now),
   ]);
 
   return {
     monthlyRevenue: thisMonthRevenue,
     revenueGrowth: computeMoMGrowth(thisMonthRevenue, lastMonthRevenue),
   };
-}
-
-function formatYearMonth(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 export async function getRevenueChart6Months(
@@ -91,21 +134,19 @@ export async function getRevenueChart6Months(
   const zeros: RevenuePoint[] = months.map((m) => ({ month: formatYearMonth(m.start), revenue: 0 }));
 
   if (!stripeAccountId) return zeros;
-  try {
-    const account = await stripe.accounts.retrieve(stripeAccountId);
-    if (!account.charges_enabled) return zeros;
-  } catch {
-    return zeros;
-  }
+  const account = await getAccountOnce(stripeAccountId);
+  if (!account?.charges_enabled) return zeros;
 
   const revenues = await Promise.all(
-    months.map(({ start, end }) => sumSucceeded(stripeAccountId, start, end))
+    months.map(({ start, end }) => getRevenueForMonth(stripeAccountId, start, end, now))
   );
   return months.map(({ start }, i) => ({
     month: formatYearMonth(start),
     revenue: revenues[i],
   }));
 }
+
+export { getAccountOnce };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

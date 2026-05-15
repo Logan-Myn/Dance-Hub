@@ -1,6 +1,8 @@
 import type { ActivityEvent } from './types';
 import { stripe } from '@/lib/stripe';
 import type Stripe from 'stripe';
+import { unstable_cache } from 'next/cache';
+import { getAccountOnce } from './stats';
 
 /**
  * Concatenate event lists, sort newest-first by `at`, slice to `limit`.
@@ -26,37 +28,44 @@ export function mergeActivityEvents(
 
 const THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60;
 
+// Failed payments are low-churn on the dashboard. Cache the listing for 5 min
+// per account so admins clicking between admin tabs don't re-fetch every time.
+function getCachedFailedPayments(stripeAccountId: string, sinceSec: number) {
+  return unstable_cache(
+    async (): Promise<ActivityEvent[]> => {
+      const charges = await stripe.charges
+        .list(
+          { created: { gte: sinceSec }, limit: 100 },
+          { stripeAccount: stripeAccountId }
+        )
+        .autoPagingToArray({ limit: 1000 });
+      return charges
+        .filter((c: Stripe.Charge) => c.status === 'failed')
+        .slice(0, 10)
+        .map((c: Stripe.Charge) => ({
+          type: 'failed_payment' as const,
+          at: new Date(c.created * 1000),
+          userId: (c.metadata?.user_id as string | undefined) ?? null,
+          displayName: c.billing_details?.name ?? 'Unknown',
+          amount: c.amount / 100,
+        }));
+    },
+    ['admin-dashboard-failed-payments', stripeAccountId, String(sinceSec)],
+    { revalidate: 300, tags: [`failed-payments:${stripeAccountId}`] }
+  )();
+}
+
 export async function getRecentFailedPayments(
   stripeAccountId: string | null,
   now: Date = new Date()
 ): Promise<ActivityEvent[]> {
   if (!stripeAccountId) return [];
-  try {
-    const account = await stripe.accounts.retrieve(stripeAccountId);
-    if (!account.charges_enabled) return [];
-  } catch {
-    return [];
-  }
+  const account = await getAccountOnce(stripeAccountId);
+  if (!account?.charges_enabled) return [];
 
+  // Round the cache key to the hour so we get hourly buckets instead of a new
+  // cache entry every second (which would defeat caching entirely).
   const sinceSec = Math.floor(now.getTime() / 1000) - THIRTY_DAYS_SECONDS;
-  // Stripe has no server-side status filter; auto-paginate up to 1000 charges
-  // so we don't miss older failures on busy paid communities, then keep the
-  // 10 most recent failed ones.
-  const charges = await stripe.charges
-    .list(
-      { created: { gte: sinceSec }, limit: 100 },
-      { stripeAccount: stripeAccountId }
-    )
-    .autoPagingToArray({ limit: 1000 });
-
-  return charges
-    .filter((c: Stripe.Charge) => c.status === 'failed')
-    .slice(0, 10)
-    .map((c: Stripe.Charge) => ({
-      type: 'failed_payment' as const,
-      at: new Date(c.created * 1000),
-      userId: (c.metadata?.user_id as string | undefined) ?? null,
-      displayName: c.billing_details?.name ?? 'Unknown',
-      amount: c.amount / 100,
-    }));
+  const sinceBucket = Math.floor(sinceSec / 3600) * 3600;
+  return getCachedFailedPayments(stripeAccountId, sinceBucket);
 }
