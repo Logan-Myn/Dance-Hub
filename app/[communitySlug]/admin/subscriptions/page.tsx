@@ -14,6 +14,7 @@ interface SubscriptionsRow {
   stripe_account_id: string | null;
   membership_enabled: boolean | null;
   membership_price: number | null;
+  created_at: string;
 }
 
 export default async function SubscriptionsPage(
@@ -23,7 +24,7 @@ export default async function SubscriptionsPage(
 ) {
   const params = await props.params;
   const community = await queryOne<SubscriptionsRow>`
-    SELECT id, stripe_account_id, membership_enabled, membership_price
+    SELECT id, stripe_account_id, membership_enabled, membership_price, created_at
     FROM communities
     WHERE slug = ${params.communitySlug}
   `;
@@ -43,6 +44,7 @@ export default async function SubscriptionsPage(
         initialStripeAccountId={community.stripe_account_id}
         initialMembershipEnabled={community.membership_enabled ?? false}
         initialMembershipPrice={community.membership_price ?? 0}
+        communityCreatedAt={community.created_at}
       />
     </div>
   );

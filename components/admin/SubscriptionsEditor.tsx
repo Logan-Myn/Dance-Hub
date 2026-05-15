@@ -73,6 +73,16 @@ interface SubscriptionsEditorProps {
   initialStripeAccountId: string | null;
   initialMembershipEnabled: boolean;
   initialMembershipPrice: number;
+  communityCreatedAt: string;
+}
+
+const PROMO_DURATION_DAYS = 30;
+
+function daysLeftInPromo(createdAt: string): number {
+  const created = new Date(createdAt).getTime();
+  const ends = created + PROMO_DURATION_DAYS * 24 * 60 * 60 * 1000;
+  const remainingMs = ends - Date.now();
+  return Math.max(0, Math.ceil(remainingMs / (24 * 60 * 60 * 1000)));
 }
 
 function formatCurrency(amount: number, currency: string) {
@@ -88,7 +98,10 @@ export function SubscriptionsEditor({
   initialStripeAccountId,
   initialMembershipEnabled,
   initialMembershipPrice,
+  communityCreatedAt,
 }: SubscriptionsEditorProps) {
+  const promoDaysLeft = daysLeftInPromo(communityCreatedAt);
+  const isInPromoPeriod = promoDaysLeft > 0;
   const router = useRouter();
   const { session } = useAuth();
 
@@ -628,26 +641,29 @@ export function SubscriptionsEditor({
         </Button>
       </div>
 
-      {/* Promotional Period Info - Fluid Movement style */}
-      <div className="bg-secondary/10 border border-secondary/20 rounded-2xl p-5">
-        <div className="flex gap-4">
-          <div className="flex-shrink-0">
-            <div className="h-10 w-10 rounded-xl bg-secondary/20 flex items-center justify-center">
-              <TrendingUp className="h-5 w-5 text-secondary" />
+      {/* Promotional Period Info - shown only during the first 30 days */}
+      {isInPromoPeriod && (
+        <div className="bg-secondary/10 border border-secondary/20 rounded-2xl p-5">
+          <div className="flex gap-4">
+            <div className="flex-shrink-0">
+              <div className="h-10 w-10 rounded-xl bg-secondary/20 flex items-center justify-center">
+                <TrendingUp className="h-5 w-5 text-secondary" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <h4 className="font-display text-base font-semibold text-foreground">
+                You have 0% platform fees for your first month
+              </h4>
+              <p className="text-sm text-muted-foreground mt-2">
+                {promoDaysLeft === 1
+                  ? "1 day left on your launch promo."
+                  : `${promoDaysLeft} days left on your launch promo.`}
+                {" "}After that, standard tiered pricing applies (8%, then 6%, then 4% as your member count grows).
+              </p>
             </div>
           </div>
-          <div className="flex-1">
-            <h4 className="font-display text-base font-semibold text-foreground">
-              First Month Free Promotion
-            </h4>
-            <p className="text-sm text-muted-foreground mt-2">
-              New communities get 0% platform fees for the first 30 days. After
-              that, standard tiered pricing applies (8% → 6% → 4% based on
-              member count).
-            </p>
-          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 
