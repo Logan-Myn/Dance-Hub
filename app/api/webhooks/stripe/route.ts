@@ -5,6 +5,7 @@ import { query, queryOne, sql } from '@/lib/db';
 import { videoRoomService } from '@/lib/video-room-service';
 import { getEmailService } from '@/lib/resend/email-service';
 import { BookingConfirmationEmail } from '@/lib/resend/templates/booking/booking-confirmation';
+import { TeacherBookingNotificationEmail } from '@/lib/resend/templates/booking/teacher-booking-notification';
 import { PaymentReceiptEmail } from '@/lib/resend/templates/booking/payment-receipt';
 import { MemberWelcomeEmail } from '@/lib/resend/templates/community/member-welcome';
 import { CommunityOpeningEmail } from '@/lib/resend/templates/community/community-opening';
@@ -385,18 +386,16 @@ export async function POST(request: Request) {
                 emailJobs.push(
                   emailService.sendNotificationEmail(
                     teacherEmail,
-                    `New Booking: ${metadata.student_name || 'Student'} booked your lesson`,
-                    React.createElement(BookingConfirmationEmail, {
-                      studentName: teacherName,
-                      teacherName: metadata.student_name || 'Student',
+                    `New booking: ${metadata.student_name || 'Student'} booked ${lessonTitle}`,
+                    React.createElement(TeacherBookingNotificationEmail, {
+                      teacherName,
+                      studentName: metadata.student_name || 'Student',
                       lessonTitle,
                       lessonDate: formattedDate,
                       lessonTime: formattedTime,
                       duration: lessonDetails?.duration || 60,
-                      price: pricePaid,
                       videoRoomUrl,
                       bookingId: newBooking.id,
-                      paymentMethod: 'Card',
                     })
                   )
                 );
