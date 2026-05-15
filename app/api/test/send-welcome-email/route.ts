@@ -96,12 +96,8 @@ export async function POST(request: Request) {
         React.createElement(MemberWelcomeEmail, {
           memberName,
           communityName: community.name,
-          communityDescription: community.description || undefined,
           communityLogo: community.image_url || undefined,
           communityUrl,
-          membershipTier: 'basic',
-          benefits: defaultBenefits,
-          nextSteps,
         })
       );
       console.log('✅ Test member welcome email sent to:', email);
