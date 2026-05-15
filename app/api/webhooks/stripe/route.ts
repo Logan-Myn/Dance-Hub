@@ -298,6 +298,22 @@ export async function POST(request: Request) {
               `;
             }
 
+            // Get student profile so the emails can greet them by their real
+            // name when the booking form's optional 'Full Name' field is blank.
+            let studentProfile: TeacherProfile | null = null;
+            if (metadata.student_id) {
+              studentProfile = await queryOne<TeacherProfile>`
+                SELECT display_name, full_name, email
+                FROM profiles
+                WHERE auth_user_id = ${metadata.student_id}
+              `;
+            }
+            const studentDisplayName =
+              metadata.student_name?.trim() ||
+              studentProfile?.display_name ||
+              studentProfile?.full_name ||
+              'Student';
+
             // Create video room after successful booking creation
             let videoRoomUrl: string | undefined;
             try {
@@ -346,7 +362,7 @@ export async function POST(request: Request) {
                   metadata.student_email,
                   `Booking Confirmed: ${lessonTitle}`,
                   React.createElement(BookingConfirmationEmail, {
-                    studentName: metadata.student_name || 'Student',
+                    studentName: studentDisplayName,
                     teacherName,
                     lessonTitle,
                     lessonDate: formattedDate,
@@ -362,7 +378,7 @@ export async function POST(request: Request) {
                   metadata.student_email,
                   `Payment Receipt #${paymentIntent.id.slice(-8).toUpperCase()}`,
                   React.createElement(PaymentReceiptEmail, {
-                    recipientName: metadata.student_name || 'Student',
+                    recipientName: studentDisplayName,
                     receiptNumber: paymentIntent.id.slice(-8).toUpperCase(),
                     paymentDate: new Date().toLocaleDateString('en-US', {
                       year: 'numeric',
@@ -386,10 +402,10 @@ export async function POST(request: Request) {
                 emailJobs.push(
                   emailService.sendNotificationEmail(
                     teacherEmail,
-                    `New booking: ${metadata.student_name || 'Student'} booked ${lessonTitle}`,
+                    `New booking: ${studentDisplayName} booked ${lessonTitle}`,
                     React.createElement(TeacherBookingNotificationEmail, {
                       teacherName,
-                      studentName: metadata.student_name || 'Student',
+                      studentName: studentDisplayName,
                       lessonTitle,
                       lessonDate: formattedDate,
                       lessonTime: formattedTime,
