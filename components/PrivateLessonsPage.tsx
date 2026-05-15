@@ -37,6 +37,7 @@ export default function PrivateLessonsPage({
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isManagementModalOpen, setIsManagementModalOpen] = useState(false);
+  const [editingLesson, setEditingLesson] = useState<PrivateLesson | null>(null);
   const skipInitialFetch = useRef(!!initialLessons);
 
   useEffect(() => {
@@ -74,6 +75,14 @@ export default function PrivateLessonsPage({
     if (lesson) {
       setSelectedLesson(lesson);
       setIsBookingModalOpen(true);
+    }
+  };
+
+  const handleEditLesson = (lessonId: string) => {
+    const lesson = lessons.find(l => l.id === lessonId);
+    if (lesson) {
+      setEditingLesson(lesson);
+      setIsCreateModalOpen(true);
     }
   };
 
@@ -193,7 +202,9 @@ export default function PrivateLessonsPage({
               lesson={lesson}
               communitySlug={communitySlug}
               isMember={isMember}
+              isTeacher={isCreator}
               onBook={handleBookLesson}
+              onEdit={handleEditLesson}
             />
           ))}
         </div>
@@ -214,12 +225,19 @@ export default function PrivateLessonsPage({
         />
       )}
 
-      {/* Create Lesson Modal */}
+      {/* Create / Edit Lesson Modal */}
       <CreatePrivateLessonModal
         isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setEditingLesson(null);
+        }}
         communitySlug={communitySlug}
-        onSuccess={handleCreateSuccess}
+        onSuccess={() => {
+          handleCreateSuccess();
+          setEditingLesson(null);
+        }}
+        editingLesson={editingLesson}
       />
 
       {/* Management Modal */}

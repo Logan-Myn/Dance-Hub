@@ -3,7 +3,7 @@
 import { PrivateLesson } from "@/types/private-lessons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Clock, Users, Percent, EyeOff } from "lucide-react";
+import { Clock, Users, Percent, EyeOff, Pencil } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
 import { getLocationIcon, getLocationText } from "@/lib/private-lessons-display";
 
@@ -11,14 +11,18 @@ interface PrivateLessonCardProps {
   lesson: PrivateLesson;
   communitySlug: string;
   isMember: boolean;
+  isTeacher?: boolean;
   onBook: (lessonId: string) => void;
+  onEdit?: (lessonId: string) => void;
 }
 
 export default function PrivateLessonCard({
   lesson,
   communitySlug,
   isMember,
+  isTeacher = false,
   onBook,
+  onEdit,
 }: PrivateLessonCardProps) {
   const displayPrice = isMember && lesson.member_price ? lesson.member_price : lesson.regular_price;
   const hasDiscount = isMember && lesson.member_price && lesson.member_price < lesson.regular_price;
@@ -133,7 +137,17 @@ export default function PrivateLessonCard({
             </div>
           </div>
 
-          {lesson.is_active ? (
+          {isTeacher ? (
+            <Button
+              onClick={() => onEdit?.(lesson.id)}
+              variant="outline"
+              className="w-full rounded-xl h-12 font-semibold border-primary/30 text-primary hover:bg-primary/5 hover:border-primary/50 transition-all duration-200"
+              size="lg"
+            >
+              <Pencil className="w-4 h-4 mr-2" />
+              Edit Lesson
+            </Button>
+          ) : lesson.is_active ? (
             <Button
               onClick={() => onBook(lesson.id)}
               className="w-full rounded-xl bg-primary hover:bg-primary/90 transition-all duration-200 h-12 font-semibold"
@@ -148,7 +162,7 @@ export default function PrivateLessonCard({
               className="w-full rounded-xl h-12 font-medium text-muted-foreground"
               size="lg"
             >
-              Not available — activate in Manage Lessons
+              Not available, activate in Manage Lessons
             </Button>
           )}
         </div>
