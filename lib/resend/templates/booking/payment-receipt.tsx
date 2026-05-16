@@ -1,5 +1,5 @@
 import React from 'react';
-import { Heading, Text, Section, Hr, Link } from '@react-email/components';
+import { Heading, Text, Section, Hr } from '@react-email/components';
 import { BaseLayout } from '../base-layout';
 import { EMAIL_STYLES, EMAIL_COLORS } from '../index';
 
@@ -39,16 +39,18 @@ export const PaymentReceiptEmail: React.FC<PaymentReceiptEmailProps> = ({
   subtotal,
   tax = 0,
   total,
-  currency = 'USD',
+  currency = 'EUR',
   billingAddress,
 }) => {
-  const preview = `Receipt #${receiptNumber} from DanceHub`;
-  
+  const preview = `Receipt #${receiptNumber} from Dance-Hub`;
+
+  // Amounts are passed in whole currency units (e.g. 50 for €50.00),
+  // matching how prices are stored across the app. Do not divide by 100.
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency,
-    }).format(amount / 100);
+    }).format(amount);
   };
   
   return (
@@ -213,8 +215,7 @@ export const PaymentReceiptEmail: React.FC<PaymentReceiptEmailProps> = ({
       )}
       
       <Text style={{ ...EMAIL_STYLES.paragraph, fontSize: '14px', color: EMAIL_COLORS.textLight, marginTop: '24px' }}>
-        This is an official receipt for your records. If you have any questions about this payment,
-        please <Link href="mailto:billing@dance-hub.io" style={EMAIL_STYLES.link}>contact our billing team</Link>.
+        Keep this email for your records.
       </Text>
     </BaseLayout>
   );

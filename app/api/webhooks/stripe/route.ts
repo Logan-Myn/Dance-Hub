@@ -394,6 +394,7 @@ export async function POST(request: Request) {
                     }],
                     subtotal: pricePaid,
                     total: pricePaid,
+                    currency: 'EUR',
                   })
                 ),
               ];
