@@ -120,7 +120,10 @@ export default function PrivateLessonManagementModal({
           }
 
           const data = await response.json();
-          setLessonBookings(data.bookings || []);
+          // /api/community/[slug]/lesson-bookings returns the array directly,
+          // not wrapped in { bookings: [...] }. Reading data.bookings here
+          // silently gave us [] even when the user had real bookings.
+          setLessonBookings(Array.isArray(data) ? data : []);
         } catch (error) {
           console.error("Error fetching lesson bookings:", error);
           toast.error("Failed to load lesson bookings");
