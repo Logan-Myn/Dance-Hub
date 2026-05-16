@@ -206,16 +206,17 @@ export default function VideoSessionPage() {
     const now = new Date();
     const scheduledTime = data.scheduled_at ? new Date(data.scheduled_at) : null;
 
-    // Can join if:
-    // 1. Payment is successful
-    // 2. Has LiveKit room name (tokens can be generated on-demand)
-    // 3. Within 15 minutes of scheduled time (or no scheduled time)
+    // Can join if payment succeeded and we're within the join window.
+    // The LiveKit room is created lazily by /api/bookings/[id]/video-token on
+    // first call, so we don't gate on livekit_room_name being pre-populated
+    // (that would be a chicken-and-egg: the room only exists once the token
+    // endpoint runs, but the page used to refuse to mount that endpoint until
+    // the room name was already there).
     const hasValidPayment = data.payment_status === 'succeeded';
-    const hasRoomInfo = data.livekit_room_name;
     const isWithinJoinWindow = !scheduledTime ||
       (now.getTime() >= scheduledTime.getTime() - 15 * 60 * 1000); // 15 minutes before
 
-    setCanJoin(hasValidPayment && hasRoomInfo && isWithinJoinWindow);
+    setCanJoin(hasValidPayment && isWithinJoinWindow);
   };
 
   const updateTimeUntilStart = (bookingData?: any) => {
@@ -355,7 +356,7 @@ export default function VideoSessionPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Video Call Section */}
           <div className="lg:col-span-2">
-            {canJoin && booking.livekit_room_name ? (
+            {canJoin ? (
               <VideoCallWithTokens
                 booking={booking}
                 bookingId={bookingId}
@@ -374,10 +375,6 @@ export default function VideoSessionPage() {
                     {booking.payment_status !== 'succeeded' ? (
                       <p className="text-gray-600 dark:text-gray-300">
                         Payment must be completed before joining the lesson.
-                      </p>
-                    ) : !booking.livekit_room_name ? (
-                      <p className="text-gray-600 dark:text-gray-300">
-                        Video room is being set up. Please refresh the page.
                       </p>
                     ) : (
                       <div>
