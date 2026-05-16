@@ -150,9 +150,22 @@ export default function DashboardPage() {
     return user?.email?.split('@')[0] || 'Dancer';
   };
 
-  // Get upcoming lessons (not completed or canceled)
+  // lesson_status only flips to 'completed' / 'canceled' on explicit action,
+  // so we also need to consider scheduled_at + duration to know if a lesson
+  // has already ended. Otherwise past lessons keep showing as 'Upcoming'.
+  const GRACE_MS = 15 * 60_000;
+  const isLessonOver = (booking: LessonBookingWithDetails) => {
+    if (['completed', 'canceled'].includes(booking.lesson_status)) return true;
+    if (!booking.scheduled_at) return false;
+    const startMs = new Date(booking.scheduled_at).getTime();
+    const endMs = startMs + (booking.duration_minutes ?? 60) * 60_000;
+    return Date.now() > endMs + GRACE_MS;
+  };
+
+  // Get upcoming lessons (paid, not completed/canceled, and still in the future
+  // or currently live within the grace window).
   const upcomingLessons = bookings
-    .filter(b => b.payment_status === 'succeeded' && !['completed', 'canceled'].includes(b.lesson_status))
+    .filter(b => b.payment_status === 'succeeded' && !isLessonOver(b))
     .sort((a, b) => {
       if (!a.scheduled_at) return 1;
       if (!b.scheduled_at) return -1;
@@ -164,19 +177,14 @@ export default function DashboardPage() {
   const canJoinVideo = (booking: LessonBookingWithDetails) => {
     if (booking.payment_status !== 'succeeded') return false;
     if (!booking.daily_room_name) return false;
+    if (isLessonOver(booking)) return false;
 
-    const now = new Date();
-    const expiresAt = booking.daily_room_expires_at ? new Date(booking.daily_room_expires_at) : null;
     const scheduledAt = booking.scheduled_at ? new Date(booking.scheduled_at) : null;
-
-    if (expiresAt && now.getTime() > expiresAt.getTime()) return false;
-
     if (scheduledAt) {
       const fifteenMinutesBefore = new Date(scheduledAt.getTime() - 15 * 60 * 1000);
-      return now.getTime() >= fifteenMinutesBefore.getTime();
+      return Date.now() >= fifteenMinutesBefore.getTime();
     }
-
-    return !expiresAt || now.getTime() < expiresAt.getTime();
+    return true;
   };
 
   const formatLessonDate = (dateString: string | undefined) => {
