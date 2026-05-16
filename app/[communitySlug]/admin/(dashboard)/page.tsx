@@ -6,6 +6,7 @@ import {
   getRevenueChart6Months,
   buildMemberGrowthSeries,
   computeMoMGrowth,
+  getLessonRevenue,
 } from '@/lib/admin-dashboard/stats';
 import {
   mergeActivityEvents,
@@ -44,6 +45,7 @@ export default async function AdminDashboardPage(
     commentsRow,
     revenue,
     revenueChart,
+    lessonRevenue,
     joinsLast90,
     cancelsLast90,
     recentJoinEvents,
@@ -99,6 +101,7 @@ export default async function AdminDashboardPage(
     `,
     getMonthlyRevenue(community.stripe_account_id ?? null, now),
     getRevenueChart6Months(community.stripe_account_id ?? null, now),
+    getLessonRevenue(community.id, now),
     query<{ joined_at: Date }>`
       SELECT joined_at
       FROM community_members
@@ -164,6 +167,9 @@ export default async function AdminDashboardPage(
     isPaid: community.membership_enabled ?? false,
     monthlyRevenue: revenue.monthlyRevenue,
     revenueGrowth: revenue.revenueGrowth,
+    lessonRevenueThisMonth: lessonRevenue.thisMonth,
+    lessonRevenueGrowth: lessonRevenue.growth,
+    lessonBookingsThisMonth: lessonRevenue.thisMonthCount,
     membersTotal,
     newMembersThisMonth,
     newMembersGrowth: computeMoMGrowth(newMembersThisMonth, newMembersLastMonth),

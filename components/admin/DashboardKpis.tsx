@@ -1,9 +1,12 @@
-import { Users, TrendingUp, TrendingDown, Minus, DollarSign, MessageSquare, UserMinus } from 'lucide-react';
+import { Users, TrendingUp, TrendingDown, Minus, DollarSign, MessageSquare, UserMinus, GraduationCap } from 'lucide-react';
 
 export interface DashboardStats {
   isPaid: boolean;
   monthlyRevenue: number;
   revenueGrowth: number;
+  lessonRevenueThisMonth: number;
+  lessonRevenueGrowth: number;
+  lessonBookingsThisMonth: number;
   membersTotal: number;
   newMembersThisMonth: number;
   newMembersGrowth: number;
@@ -26,6 +29,20 @@ export function DashboardKpis({ stats }: { stats: DashboardStats }) {
         sublineSuffix="vs last month"
         icon={<DollarSign className="h-5 w-5 text-secondary" />}
         iconBg="bg-secondary/20"
+      />
+    );
+  }
+
+  if (stats.lessonRevenueThisMonth > 0 || stats.lessonBookingsThisMonth > 0) {
+    tiles.push(
+      <Tile
+        key="lesson-revenue"
+        label="Private lessons this month"
+        value={`€${stats.lessonRevenueThisMonth.toFixed(2)}`}
+        sublineNumber={stats.lessonRevenueGrowth}
+        sublineSuffix="vs last month"
+        icon={<GraduationCap className="h-5 w-5 text-accent" />}
+        iconBg="bg-accent/20"
       />
     );
   }

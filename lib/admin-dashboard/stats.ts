@@ -3,6 +3,7 @@ import type Stripe from 'stripe';
 import type { RevenuePoint, GrowthPoint } from './types';
 import { unstable_cache } from 'next/cache';
 import { cache } from 'react';
+import { queryOne } from '@/lib/db';
 
 // Dedupes stripe.accounts.retrieve within a single request so the dashboard's
 // three Stripe-bound helpers don't each ping the platform separately.
@@ -147,6 +148,55 @@ export async function getRevenueChart6Months(
 }
 
 export { getAccountOnce };
+
+interface LessonRevenueRow {
+  this_month_revenue: string | null;
+  last_month_revenue: string | null;
+  this_month_count: number;
+}
+
+/**
+ * Private lesson revenue from our DB, not Stripe. We trust lesson_bookings as
+ * the source of truth (it's only written on payment success in the webhook).
+ * Includes both succeeded and the count of bookings so the dashboard can
+ * decide whether to render the tile at all.
+ */
+export async function getLessonRevenue(
+  communityId: string,
+  now: Date = new Date()
+): Promise<{ thisMonth: number; lastMonth: number; growth: number; thisMonthCount: number }> {
+  const thisMonth = getCalendarMonthRange(now, 0);
+  const lastMonth = getCalendarMonthRange(now, -1);
+
+  const row = await queryOne<LessonRevenueRow>`
+    SELECT
+      COALESCE(SUM(lb.price_paid) FILTER (
+        WHERE lb.created_at >= ${thisMonth.start.toISOString()}
+          AND lb.created_at < ${thisMonth.end.toISOString()}
+      ), 0)::text AS this_month_revenue,
+      COALESCE(SUM(lb.price_paid) FILTER (
+        WHERE lb.created_at >= ${lastMonth.start.toISOString()}
+          AND lb.created_at < ${lastMonth.end.toISOString()}
+      ), 0)::text AS last_month_revenue,
+      COUNT(*) FILTER (
+        WHERE lb.created_at >= ${thisMonth.start.toISOString()}
+          AND lb.created_at < ${thisMonth.end.toISOString()}
+      )::int AS this_month_count
+    FROM lesson_bookings lb
+    JOIN private_lessons pl ON pl.id = lb.private_lesson_id
+    WHERE pl.community_id = ${communityId}
+      AND lb.payment_status = 'succeeded'
+  `;
+
+  const thisMonthAmount = parseFloat(row?.this_month_revenue ?? '0');
+  const lastMonthAmount = parseFloat(row?.last_month_revenue ?? '0');
+  return {
+    thisMonth: thisMonthAmount,
+    lastMonth: lastMonthAmount,
+    growth: computeMoMGrowth(thisMonthAmount, lastMonthAmount),
+    thisMonthCount: row?.this_month_count ?? 0,
+  };
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
