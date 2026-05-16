@@ -416,16 +416,67 @@ export default function PrivateLessonManagementModal({
           </div>
         ) : (
           <div className="space-y-4">
-            {lessonBookings.map((booking) => (
+            {lessonBookings.map((booking) => {
+              // Derive a display status for the lesson itself (separate from
+              // payment). lesson_status only flips to 'completed' / 'canceled'
+              // when someone explicitly marks it, so we also compute an 'ended'
+              // state for lessons whose scheduled window has already passed.
+              const scheduledMs = booking.scheduled_at
+                ? new Date(booking.scheduled_at).getTime()
+                : null;
+              const durationMin = booking.duration_minutes ?? 60;
+              const lessonEndMs =
+                scheduledMs !== null ? scheduledMs + durationMin * 60_000 : null;
+              const GRACE_MS = 15 * 60_000;
+
+              const isCanceled = booking.lesson_status === 'canceled';
+              const isCompleted = booking.lesson_status === 'completed';
+              const isEnded =
+                !isCanceled &&
+                !isCompleted &&
+                lessonEndMs !== null &&
+                Date.now() > lessonEndMs + GRACE_MS;
+
+              const lessonStatusLabel = isCanceled
+                ? 'Canceled'
+                : isCompleted
+                ? 'Completed'
+                : isEnded
+                ? 'Ended'
+                : booking.scheduled_at
+                ? 'Upcoming'
+                : 'Unscheduled';
+
+              const lessonStatusColor = isCanceled
+                ? 'bg-rose-100 text-rose-700'
+                : isCompleted
+                ? 'bg-emerald-100 text-emerald-700'
+                : isEnded
+                ? 'bg-slate-100 text-slate-600'
+                : booking.scheduled_at
+                ? 'bg-blue-100 text-blue-700'
+                : 'bg-slate-100 text-slate-600';
+
+              const isJoinable =
+                booking.payment_status === 'succeeded' &&
+                !!booking.scheduled_at &&
+                !isCanceled &&
+                !isCompleted &&
+                !isEnded;
+
+              return (
               <div key={booking.id} className="bg-card rounded-2xl p-4 sm:p-6 border border-border/50 hover:border-primary/20 transition-all duration-200">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-3">
+                    <div className="flex items-center gap-3 mb-3 flex-wrap">
                       <h4 className="font-display font-semibold text-lg text-foreground">{booking.lesson_title}</h4>
                       <Badge
                         className={cn("rounded-full border-0", PAYMENT_STATUS_BADGE[booking.payment_status])}
                       >
                         {booking.payment_status}
+                      </Badge>
+                      <Badge className={cn("rounded-full border-0", lessonStatusColor)}>
+                        {lessonStatusLabel}
                       </Badge>
                     </div>
 
@@ -466,7 +517,7 @@ export default function PrivateLessonManagementModal({
                   </div>
 
                   <div className="flex flex-wrap sm:flex-col gap-2 sm:ml-4 sm:shrink-0">
-                    {booking.payment_status === 'succeeded' && booking.scheduled_at && (
+                    {isJoinable && (
                       <Button
                         onClick={() => handleJoinVideoSession(booking)}
                         className="rounded-lg bg-emerald-500 hover:bg-emerald-600"
@@ -490,7 +541,8 @@ export default function PrivateLessonManagementModal({
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
