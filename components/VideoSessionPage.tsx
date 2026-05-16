@@ -170,6 +170,7 @@ export default function VideoSessionPage() {
             onLeave={handleLeave}
             classTitle={booking.lesson_title}
             isTeacher={isTeacher}
+            autoEnableMedia
           />
         </div>
       </div>

@@ -41,6 +41,9 @@ interface LiveKitClassRoomProps {
   onEndClass?: () => void;
   classTitle?: string;
   isTeacher?: boolean;
+  /** Skip the hand-raise gating and auto-enable camera/mic on join.
+   *  Set true for 1:1 private lessons where both participants act as peers. */
+  autoEnableMedia?: boolean;
 }
 
 function CallInterface({
@@ -48,18 +51,22 @@ function CallInterface({
   onEndClass,
   classTitle,
   isTeacher = false,
+  autoEnableMedia = false,
 }: {
   onLeave: () => void;
   onEndClass?: () => void;
   classTitle?: string;
   isTeacher?: boolean;
+  autoEnableMedia?: boolean;
 }) {
   const room = useRoomContext();
   const participants = useParticipants();
   const { localParticipant } = useLocalParticipant();
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [hasMediaPermission, setHasMediaPermission] = useState(isTeacher);
+  const [hasMediaPermission, setHasMediaPermission] = useState(
+    isTeacher || autoEnableMedia
+  );
   const [handRaises, setHandRaises] = useState<HandRaise[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [deniedFeedback, setDeniedFeedback] = useState(false);
@@ -130,9 +137,11 @@ function CallInterface({
     setHandRaises((prev) => prev.filter((r) => identities.includes(r.participantIdentity)));
   }, [participants, isTeacher]);
 
-  // Teacher auto-enables camera and mic on connect
+  // Auto-enable camera and mic on connect for the teacher (live classes) and
+  // for both peers in private lessons (autoEnableMedia).
   useEffect(() => {
-    if (!isTeacher || !localParticipant) return;
+    if (!localParticipant) return;
+    if (!isTeacher && !autoEnableMedia) return;
     const enableMedia = async () => {
       try {
         await localParticipant.setCameraEnabled(true);
@@ -144,7 +153,7 @@ function CallInterface({
     enableMedia();
   // Run once when localParticipant becomes available
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTeacher, localParticipant?.identity]);
+  }, [isTeacher, autoEnableMedia, localParticipant?.identity]);
 
   // Clear feedback toasts after delay
   useEffect(() => {
@@ -324,6 +333,7 @@ export default function LiveKitClassRoom({
   onEndClass,
   classTitle,
   isTeacher = false,
+  autoEnableMedia = false,
 }: LiveKitClassRoomProps) {
   return (
     <LiveKitRoom
@@ -337,6 +347,7 @@ export default function LiveKitClassRoom({
         onEndClass={onEndClass}
         classTitle={classTitle}
         isTeacher={isTeacher}
+        autoEnableMedia={autoEnableMedia}
       />
     </LiveKitRoom>
   );
