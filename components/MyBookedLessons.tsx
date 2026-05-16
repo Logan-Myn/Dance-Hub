@@ -53,87 +53,75 @@ export default function MyBookedLessons() {
     }
   };
 
-  const getStatusColor = (paymentStatus: string, lessonStatus: string) => {
-    if (paymentStatus === 'succeeded') {
-      switch (lessonStatus) {
-        case 'scheduled':
-        case 'completed':
-          return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-        default:
-          return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      }
-    }
-    return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+  // lesson_status only flips to 'completed' / 'canceled' when explicitly set,
+  // so we also compute an 'ended' state for lessons whose scheduled window
+  // has already passed. Mirrors the teacher-side modal logic.
+  const deriveLessonState = (booking: LessonBookingWithDetails) => {
+    const scheduledMs = booking.scheduled_at ? new Date(booking.scheduled_at).getTime() : null;
+    const durationMin = booking.duration_minutes ?? 60;
+    const lessonEndMs = scheduledMs !== null ? scheduledMs + durationMin * 60_000 : null;
+    const GRACE_MS = 15 * 60_000;
+
+    const isCanceled = booking.lesson_status === 'canceled';
+    const isCompleted = booking.lesson_status === 'completed';
+    const isEnded =
+      !isCanceled && !isCompleted && lessonEndMs !== null && Date.now() > lessonEndMs + GRACE_MS;
+
+    return { scheduledMs, lessonEndMs, isCanceled, isCompleted, isEnded };
   };
 
-  const getStatusText = (paymentStatus: string, lessonStatus: string) => {
-    if (paymentStatus !== 'succeeded') {
-      return 'Payment Pending';
+  const getStatusColor = (booking: LessonBookingWithDetails) => {
+    if (booking.payment_status !== 'succeeded') {
+      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
     }
-    
-    switch (lessonStatus) {
-      case 'booked':
-        return 'Booked';
-      case 'scheduled':
-        return 'In Progress';
-      case 'completed':
-        return 'Completed';
-      case 'canceled':
-        return 'Canceled';
-      default:
-        return 'Unknown';
-    }
+    const { isCanceled, isCompleted, isEnded } = deriveLessonState(booking);
+    if (isCanceled) return 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-200';
+    if (isCompleted) return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200';
+    if (isEnded) return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+    if (booking.scheduled_at) return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+    return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+  };
+
+  const getStatusText = (booking: LessonBookingWithDetails) => {
+    if (booking.payment_status !== 'succeeded') return 'Payment Pending';
+    const { isCanceled, isCompleted, isEnded } = deriveLessonState(booking);
+    if (isCanceled) return 'Canceled';
+    if (isCompleted) return 'Completed';
+    if (isEnded) return 'Ended';
+    if (booking.scheduled_at) return 'Upcoming';
+    return 'Unscheduled';
   };
 
   const canJoinVideo = (booking: LessonBookingWithDetails) => {
     if (booking.payment_status !== 'succeeded') return false;
     if (!booking.daily_room_name) return false;
-    
-    const now = new Date();
-    const expiresAt = booking.daily_room_expires_at ? new Date(booking.daily_room_expires_at) : null;
-    const scheduledAt = booking.scheduled_at ? new Date(booking.scheduled_at) : null;
-    
-    // If lesson has expired, can't join
-    if (expiresAt && now.getTime() > expiresAt.getTime()) return false;
-    
-    // If lesson is scheduled, only allow joining 15 minutes before start time
-    if (scheduledAt) {
-      const fifteenMinutesBefore = new Date(scheduledAt.getTime() - 15 * 60 * 1000);
-      return now.getTime() >= fifteenMinutesBefore.getTime();
+
+    const { scheduledMs, isCanceled, isCompleted, isEnded } = deriveLessonState(booking);
+    if (isCanceled || isCompleted || isEnded) return false;
+
+    // Open the join window 15 minutes before the scheduled start.
+    if (scheduledMs !== null) {
+      const fifteenMinutesBefore = scheduledMs - 15 * 60_000;
+      return Date.now() >= fifteenMinutesBefore;
     }
-    
-    // For immediate lessons (no scheduled time), can join if not expired
-    return !expiresAt || now.getTime() < expiresAt.getTime();
+
+    // No schedule = on-demand lesson, joinable while still active.
+    return true;
   };
 
   const getJoinButtonText = (booking: LessonBookingWithDetails) => {
-    if (booking.lesson_status === 'completed') {
-      return 'Lesson Completed';
+    const { isCanceled, isCompleted, isEnded, scheduledMs } = deriveLessonState(booking);
+    if (isCanceled) return 'Lesson Canceled';
+    if (isCompleted) return 'Lesson Completed';
+    if (isEnded) return 'Lesson Ended';
+
+    if (scheduledMs !== null) {
+      const fifteenMinutesBefore = scheduledMs - 15 * 60_000;
+      if (Date.now() < fifteenMinutesBefore) return 'Lesson Starts Soon';
     }
-    
-    const now = new Date();
-    const scheduledAt = booking.scheduled_at ? new Date(booking.scheduled_at) : null;
-    const expiresAt = booking.daily_room_expires_at ? new Date(booking.daily_room_expires_at) : null;
-    
-    // Check if lesson has expired
-    if (expiresAt && now.getTime() > expiresAt.getTime()) {
-      return 'Video Session Expired';
-    }
-    
-    // Check if lesson hasn't started yet (more than 15 minutes before)
-    if (scheduledAt) {
-      const fifteenMinutesBefore = new Date(scheduledAt.getTime() - 15 * 60 * 1000);
-      if (now.getTime() < fifteenMinutesBefore.getTime()) {
-        return 'Lesson Starts Soon';
-      }
-    }
-    
-    if (!canJoinVideo(booking)) {
-      return 'Video Session Unavailable';
-    }
-    if (booking.session_started_at) {
-      return 'Rejoin Lesson';
-    }
+
+    if (!canJoinVideo(booking)) return 'Video Session Unavailable';
+    if (booking.session_started_at) return 'Rejoin Lesson';
     return 'Join Video Lesson';
   };
 
@@ -185,8 +173,8 @@ export default function MyBookedLessons() {
                     {booking.community_name}
                   </CardDescription>
                 </div>
-                <Badge className={getStatusColor(booking.payment_status, booking.lesson_status)}>
-                  {getStatusText(booking.payment_status, booking.lesson_status)}
+                <Badge className={getStatusColor(booking)}>
+                  {getStatusText(booking)}
                 </Badge>
               </div>
             </CardHeader>
