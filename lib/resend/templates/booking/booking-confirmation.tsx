@@ -76,7 +76,7 @@ export const BookingConfirmationEmail: React.FC<BookingConfirmationEmailProps> =
             <strong>Booking ID:</strong> {bookingId}
           </Text>
           <Text style={{ fontSize: '14px', color: EMAIL_COLORS.textLight, margin: '4px 0' }}>
-            <strong>Amount Paid:</strong> ${(price / 100).toFixed(2)}
+            <strong>Amount Paid:</strong> €{price.toFixed(2)}
           </Text>
           <Text style={{ fontSize: '14px', color: EMAIL_COLORS.textLight, margin: '4px 0' }}>
             <strong>Payment Method:</strong> {paymentMethod}
