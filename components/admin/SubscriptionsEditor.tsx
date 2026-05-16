@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/AuthContext";
-import { OnboardingWizard } from "@/components/stripe-onboarding/OnboardingWizard";
 import { PayoutScheduleForm } from "@/components/admin/PayoutScheduleForm";
 
 // Ported from CommunitySettingsModal.tsx lines 92-120.
@@ -141,7 +140,6 @@ export function SubscriptionsEditor({
   const [newAccountHolderName, setNewAccountHolderName] = useState("");
 
   // Onboarding wizard visibility.
-  const [isOnboardingWizardOpen, setIsOnboardingWizardOpen] = useState(false);
 
   // Fetch Stripe account status (modal lines 299-358).
   useEffect(() => {
@@ -412,42 +410,12 @@ export function SubscriptionsEditor({
     }
   }, [stripeAccountId]);
 
-  // Opens the custom onboarding wizard (modal lines 852-854).
+  // The custom onboarding flow now lives at /[slug]/admin/stripe-onboarding
+  // (a dedicated page in the (focused) route group). Triggers in this editor
+  // navigate there via Link instead of mounting the wizard modal here.
   const handleStartCustomOnboarding = useCallback(() => {
-    setIsOnboardingWizardOpen(true);
-  }, []);
-
-  // Called when the OnboardingWizard signals success (modal lines 856-878).
-  // Ported + adapted: the old modal pushed the new account id up to the
-  // parent via onCommunityUpdate; here we persist locally and then invoke
-  // router.refresh() so the RSC re-reads stripe_account_id from the DB.
-  const handleOnboardingComplete = useCallback(
-    async (accountId: string) => {
-      setStripeAccountId(accountId);
-      setIsOnboardingWizardOpen(false);
-
-      try {
-        const response = await fetch(
-          `/api/stripe/account-status/${accountId}`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setStripeAccountStatus({
-            isEnabled: data.chargesEnabled && data.payoutsEnabled,
-            needsSetup: !data.detailsSubmitted,
-            accountId,
-            details: data,
-          });
-        }
-        toast.success("Stripe account setup completed successfully!");
-        router.refresh();
-      } catch (error) {
-        console.error("Error completing onboarding:", error);
-        toast.error("Setup completed but failed to update status");
-      }
-    },
-    [router]
-  );
+    router.push(`/${communitySlug}/admin/stripe-onboarding`);
+  }, [router, communitySlug]);
 
   // Creates / updates the Stripe Price + toggles membership on/off
   // (modal lines 880-917).
@@ -937,16 +905,6 @@ export function SubscriptionsEditor({
           {renderPayoutManagement()}
         </>
       )}
-
-      {/* Custom Stripe Onboarding Wizard — mounted alongside the form so the
-          dialog overlays the entire admin page (matches modal lines 1938-1945). */}
-      <OnboardingWizard
-        isOpen={isOnboardingWizardOpen}
-        onClose={() => setIsOnboardingWizardOpen(false)}
-        communityId={communityId}
-        communitySlug={communitySlug}
-        onComplete={handleOnboardingComplete}
-      />
     </div>
   );
 }

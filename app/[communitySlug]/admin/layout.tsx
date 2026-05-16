@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth-session';
 import { getCommunityBySlug, getUserIsAdmin } from '@/lib/community-data';
-import { AdminNav } from '@/components/admin/AdminNav';
 
 export default async function AdminLayout(
   props: {
@@ -10,10 +9,7 @@ export default async function AdminLayout(
   }
 ) {
   const params = await props.params;
-
-  const {
-    children
-  } = props;
+  const { children } = props;
 
   const session = await getSession();
   if (!session) redirect('/auth/login');
@@ -27,15 +23,11 @@ export default async function AdminLayout(
   const canManage = isOwner || (await getUserIsAdmin(session.user.id));
   if (!canManage) redirect(`/${params.communitySlug}`);
 
+  // Chrome around the admin pages is set by the child route groups
+  // (with-nav) and (focused) — this layout only enforces access.
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10 lg:py-14 font-sans pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-14">
-      <div className="flex flex-col md:flex-row gap-3 lg:gap-4">
-        <AdminNav
-          communitySlug={params.communitySlug}
-          communityName={community.name}
-        />
-        <div className="flex-1 min-w-0">{children}</div>
-      </div>
+      {children}
     </div>
   );
 }

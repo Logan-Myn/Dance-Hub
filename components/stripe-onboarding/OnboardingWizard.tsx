@@ -1,21 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  ResponsiveDialog,
-  ResponsiveDialogContent,
-  ResponsiveDialogHeader,
-  ResponsiveDialogTitle,
-} from "@/components/ui/responsive-dialog";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "react-hot-toast";
-import { ArrowLeft, ArrowRight, CheckCircle } from "lucide-react";
 
 import ErrorBoundary from "./ErrorBoundary";
-import { ProgressIndicator } from "./ProgressIndicator";
+import { ProgressIndicatorHorizontal } from "./ProgressIndicatorHorizontal";
 import { BusinessInfoStep } from "./steps/BusinessInfoStep";
 import { PersonalInfoStep } from "./steps/PersonalInfoStep";
 import { BankAccountStep } from "./steps/BankAccountStep";
@@ -78,8 +69,6 @@ interface OnboardingData {
 }
 
 interface OnboardingWizardProps {
-  isOpen: boolean;
-  onClose: () => void;
   communityId: string;
   communitySlug: string;
   onComplete: (accountId: string) => void;
@@ -93,7 +82,7 @@ const STEPS = [
   { id: 5, title: "Verification", description: "Final review and verification" },
 ];
 
-export function OnboardingWizard({ isOpen, onClose, communityId, communitySlug, onComplete }: OnboardingWizardProps) {
+export function OnboardingWizard({ communityId, communitySlug, onComplete }: OnboardingWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -144,7 +133,7 @@ export function OnboardingWizard({ isOpen, onClose, communityId, communitySlug, 
   const { user, session } = useAuth();
 
   useEffect(() => {
-    if (!isOpen || !session) return;
+    if (!session) return;
 
     let cancelled = false;
     const checkExistingAccount = async () => {
@@ -171,24 +160,23 @@ export function OnboardingWizard({ isOpen, onClose, communityId, communitySlug, 
     return () => {
       cancelled = true;
     };
-  }, [isOpen, session, communitySlug]);
+  }, [session, communitySlug]);
 
   useEffect(() => {
-    if (isOpen) {
-      // Load any existing progress from localStorage
-      const savedProgress = localStorage.getItem(`stripe-onboarding-${communityId}`);
-      if (savedProgress) {
-        try {
-          const parsed = JSON.parse(savedProgress);
-          setOnboardingData(parsed.data || onboardingData);
-          setCurrentStep(parsed.currentStep || 1);
-          setCompletedSteps(parsed.completedSteps || []);
-        } catch (error) {
-          console.error("Failed to load saved progress:", error);
-        }
+    // Load any existing progress from localStorage
+    const savedProgress = localStorage.getItem(`stripe-onboarding-${communityId}`);
+    if (savedProgress) {
+      try {
+        const parsed = JSON.parse(savedProgress);
+        setOnboardingData(parsed.data || onboardingData);
+        setCurrentStep(parsed.currentStep || 1);
+        setCompletedSteps(parsed.completedSteps || []);
+      } catch (error) {
+        console.error("Failed to load saved progress:", error);
       }
     }
-  }, [isOpen, communityId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [communityId]);
 
   const saveProgress = useCallback(() => {
     const progressData = {
@@ -331,7 +319,6 @@ export function OnboardingWizard({ isOpen, onClose, communityId, communitySlug, 
       
       toast.success("Stripe onboarding completed successfully!");
       onComplete(onboardingData.accountId);
-      onClose();
     } catch (error) {
       console.error("Error completing onboarding:", error);
       toast.error("Failed to complete onboarding");
@@ -368,52 +355,31 @@ export function OnboardingWizard({ isOpen, onClose, communityId, communitySlug, 
     }
   };
 
-  const progressPercentage = (completedSteps.length / STEPS.length) * 100;
-
   return (
     <ErrorBoundary>
-      <ResponsiveDialog open={isOpen} onOpenChange={onClose}>
-        <ResponsiveDialogContent className="max-w-4xl lg:h-[90vh] lg:w-[95vw] flex flex-col">
-          <ResponsiveDialogHeader>
-            <ResponsiveDialogTitle>
-              <span className="text-xl sm:text-2xl font-bold">Stripe Payment Setup</span>
-            </ResponsiveDialogTitle>
+      <div className="space-y-6">
+        <header className="space-y-2">
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-foreground">
+            Stripe Payment Setup
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Step {currentStep} of {STEPS.length}: {STEPS[currentStep - 1]?.title}
+          </p>
+        </header>
 
-            <div className="space-y-2 mt-4">
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>Step {currentStep} of {STEPS.length}</span>
-                <span>{Math.round(progressPercentage)}% Complete</span>
-              </div>
-              <Progress value={progressPercentage} className="w-full" />
-            </div>
-          </ResponsiveDialogHeader>
+        <ProgressIndicatorHorizontal
+          steps={STEPS}
+          currentStep={currentStep}
+          completedSteps={completedSteps}
+          onStepClick={(step: number) => {
+            if (canProceedToStep(step)) {
+              setCurrentStep(step);
+            }
+          }}
+        />
 
-          <div className="flex flex-col lg:flex-row gap-6 lg:flex-1 lg:min-h-0 lg:overflow-hidden">
-            {/* Progress Sidebar — desktop only. On mobile the top progress bar
-                + step counter already convey state, and the vertical step list
-                eats half the viewport making the form unreachable. */}
-            <div className="hidden lg:block lg:w-64 lg:flex-shrink-0 lg:overflow-y-auto">
-              <ProgressIndicator
-                steps={STEPS}
-                currentStep={currentStep}
-                completedSteps={completedSteps}
-                onStepClick={(step: number) => {
-                  if (canProceedToStep(step)) {
-                    setCurrentStep(step);
-                  }
-                }}
-              />
-            </div>
-
-            {/* Main Content */}
-            <div className="flex-1 min-w-0 lg:overflow-y-auto">
-              <Card className="p-4 sm:p-6">
-                {renderCurrentStep()}
-              </Card>
-            </div>
-          </div>
-        </ResponsiveDialogContent>
-      </ResponsiveDialog>
+        <Card className="p-4 sm:p-6">{renderCurrentStep()}</Card>
+      </div>
     </ErrorBoundary>
   );
 } 
