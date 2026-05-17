@@ -273,6 +273,12 @@ export function ManageSubscriptionModal({
                   </p>
                 </div>
               )}
+
+              {summary.status !== "active" && summary.status !== "past_due" && (
+                <div className="mt-3 rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                  This subscription is no longer active.
+                </div>
+              )}
             </section>
 
             <section>
@@ -289,6 +295,10 @@ export function ManageSubscriptionModal({
                   variant={summary.defaultPaymentMethod ? "outline" : "default"}
                   size="sm"
                   onClick={startUpdate}
+                  disabled={
+                    summary.status !== "active" &&
+                    summary.status !== "past_due"
+                  }
                 >
                   Update
                 </Button>
