@@ -302,8 +302,7 @@ export default function CommunitySidebar({
               </>
             ) : isMember ? (
               <div className="space-y-2">
-                {(subscriptionStatus === "active" ||
-                  subscriptionStatus === "past_due") && (
+                {stripeAccountId && (
                   <Button
                     onClick={onManageClick}
                     variant="outline"
