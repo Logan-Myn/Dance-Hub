@@ -15,6 +15,7 @@ import ComposerBox from "@/components/community/ComposerBox";
 import CategoryPills from "@/components/community/CategoryPills";
 import ThreadCardFluid from "@/components/community/ThreadCardFluid";
 import CommunitySidebar from "@/components/community/CommunitySidebar";
+import { ManageSubscriptionModal } from "@/components/community/ManageSubscriptionModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -201,6 +202,7 @@ export default function FeedClient({
   }, [selectedThread, searchParams, router, pathname]);
   const [totalMembers, setTotalMembers] = useState(0);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+  const [showManageModal, setShowManageModal] = useState(false);
   const [accessEndDate, setAccessEndDate] = useState<string | null>(initialAccessEndDate);
   const [memberStatus, setMemberStatus] = useState<string | null>(initialMemberStatus);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(initialSubscriptionStatus);
@@ -758,6 +760,7 @@ export default function FeedClient({
                 membershipEnabled={community.membershipEnabled}
                 stripeAccountId={community.stripeAccountId}
                 onLeaveClick={() => setShowLeaveDialog(true)}
+                onManageClick={() => setShowManageModal(true)}
                 onReactivateClick={handleReactivateMembership}
                 onJoinClick={handleJoinCommunity}
               />
@@ -843,6 +846,15 @@ export default function FeedClient({
           window.location.reload();
         }}
       />
+
+      {community?.stripeAccountId && (
+        <ManageSubscriptionModal
+          isOpen={showManageModal}
+          onClose={() => setShowManageModal(false)}
+          communitySlug={communitySlug}
+          stripeAccountId={community.stripeAccountId}
+        />
+      )}
 
       <AlertDialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
         <AlertDialogContent>

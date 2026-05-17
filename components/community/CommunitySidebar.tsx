@@ -43,6 +43,7 @@ interface CommunitySidebarProps {
   membershipEnabled?: boolean;
   stripeAccountId?: string | null;
   onLeaveClick: () => void;
+  onManageClick: () => void;
   onReactivateClick: () => void;
   onJoinClick: () => void;
 }
@@ -106,6 +107,7 @@ export default function CommunitySidebar({
   membershipEnabled,
   stripeAccountId,
   onLeaveClick,
+  onManageClick,
   onReactivateClick,
   onJoinClick,
 }: CommunitySidebarProps) {
@@ -299,13 +301,25 @@ export default function CommunitySidebar({
                 )}
               </>
             ) : isMember ? (
-              <Button
-                onClick={onLeaveClick}
-                variant="outline"
-                className="w-full border-destructive/30 text-destructive hover:bg-destructive/10"
-              >
-                Leave Community
-              </Button>
+              <div className="space-y-2">
+                {(subscriptionStatus === "active" ||
+                  subscriptionStatus === "past_due") && (
+                  <Button
+                    onClick={onManageClick}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    Manage
+                  </Button>
+                )}
+                <Button
+                  onClick={onLeaveClick}
+                  variant="outline"
+                  className="w-full border-destructive/30 text-destructive hover:bg-destructive/10"
+                >
+                  Leave Community
+                </Button>
+              </div>
             ) : (
               <Button
                 onClick={onJoinClick}
