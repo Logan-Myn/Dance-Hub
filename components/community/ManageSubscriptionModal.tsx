@@ -10,6 +10,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Loader2, AlertTriangle } from "lucide-react";
+import { loadStripe, type Stripe as StripeClient } from "@stripe/stripe-js";
+import {
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
+import { toast } from "react-hot-toast";
 
 type Status = "active" | "past_due" | "canceled" | "incomplete" | string;
 
@@ -34,6 +42,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   communitySlug: string;
+  stripeAccountId: string;
 }
 
 const formatMoney = (minor: number, currency: string) =>
@@ -55,47 +64,169 @@ const intervalLabel = (interval: string) =>
 const brandLabel = (brand: string) =>
   brand.charAt(0).toUpperCase() + brand.slice(1);
 
+function UpdateCardForm({
+  communitySlug,
+  onSuccess,
+  onCancel,
+}: {
+  communitySlug: string;
+  onSuccess: (result: { retried: boolean; retryError?: string }) => void;
+  onCancel: () => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setSubmitting(true);
+
+    try {
+      const { error, setupIntent } = await stripe.confirmSetup({
+        elements,
+        redirect: "if_required",
+      });
+      if (error) throw error;
+      if (!setupIntent || setupIntent.status !== "succeeded") {
+        throw new Error("Card was not saved. Please try again.");
+      }
+      const paymentMethodId =
+        typeof setupIntent.payment_method === "string"
+          ? setupIntent.payment_method
+          : setupIntent.payment_method?.id;
+      if (!paymentMethodId) throw new Error("Missing payment method.");
+
+      const resp = await fetch(
+        `/api/community/${communitySlug}/subscription/payment-method`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentMethodId }),
+        }
+      );
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data.error ?? "Failed to update card.");
+      }
+      onSuccess({ retried: data.retried, retryError: data.retryError });
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to update card.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 py-2">
+      <PaymentElement />
+      <div className="flex gap-2 justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          disabled={submitting}
+        >
+          Cancel
+        </Button>
+        <Button type="submit" disabled={!stripe || submitting}>
+          {submitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving
+            </>
+          ) : (
+            "Save"
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export function ManageSubscriptionModal({
   isOpen,
   onClose,
   communitySlug,
+  stripeAccountId,
 }: Props) {
   const [summary, setSummary] = useState<SubscriptionSummary | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"details" | "update">("details");
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [stripePromise, setStripePromise] =
+    useState<Promise<StripeClient | null> | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    let cancelled = false;
+  const fetchAll = React.useCallback(async () => {
     setLoading(true);
     setError(null);
+    try {
+      const [s, p] = await Promise.all([
+        fetch(`/api/community/${communitySlug}/subscription`).then((r) =>
+          r.ok ? r.json() : Promise.reject(r)
+        ),
+        fetch(`/api/community/${communitySlug}/subscription/payments`).then(
+          (r) => (r.ok ? r.json() : Promise.reject(r))
+        ),
+      ]);
+      setSummary(s);
+      setPayments(p.invoices ?? []);
+    } catch {
+      setError("Could not load subscription details.");
+    } finally {
+      setLoading(false);
+    }
+  }, [communitySlug]);
 
-    Promise.all([
-      fetch(`/api/community/${communitySlug}/subscription`).then((r) =>
-        r.ok ? r.json() : Promise.reject(r)
-      ),
-      fetch(`/api/community/${communitySlug}/subscription/payments`).then((r) =>
-        r.ok ? r.json() : Promise.reject(r)
-      ),
-    ])
-      .then(([s, p]) => {
-        if (cancelled) return;
-        setSummary(s);
-        setPayments(p.invoices ?? []);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setError("Could not load subscription details.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+  useEffect(() => {
+    if (!isOpen) {
+      setView("details");
+      setClientSecret(null);
+      return;
+    }
+    fetchAll();
+  }, [isOpen, fetchAll]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, communitySlug]);
+  useEffect(() => {
+    const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+    if (!key) return;
+    setStripePromise(loadStripe(key, { stripeAccount: stripeAccountId }));
+  }, [stripeAccountId]);
+
+  const startUpdate = async () => {
+    try {
+      const resp = await fetch(
+        `/api/community/${communitySlug}/subscription/setup-intent`,
+        { method: "POST" }
+      );
+      const data = await resp.json();
+      if (!resp.ok || !data.clientSecret) {
+        throw new Error(data.error ?? "Could not start card update.");
+      }
+      setClientSecret(data.clientSecret);
+      setView("update");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not start card update.");
+    }
+  };
+
+  const handleUpdateSuccess = (result: {
+    retried: boolean;
+    retryError?: string;
+  }) => {
+    if (result.retryError) {
+      toast.success("Card updated. We'll retry the pending charge automatically.");
+    } else if (result.retried) {
+      toast.success("Card updated and payment completed.");
+    } else {
+      toast.success("Card updated.");
+    }
+    setView("details");
+    setClientSecret(null);
+    fetchAll();
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -103,7 +234,9 @@ export function ManageSubscriptionModal({
         <DialogHeader>
           <DialogTitle>Manage subscription</DialogTitle>
           <DialogDescription>
-            View your plan and update the card on file.
+            {view === "details"
+              ? "View your plan and update the card on file."
+              : "Enter a new card. The old one will be replaced."}
           </DialogDescription>
         </DialogHeader>
 
@@ -117,7 +250,7 @@ export function ManageSubscriptionModal({
           <p className="text-sm text-destructive py-4">{error}</p>
         )}
 
-        {!loading && summary && (
+        {!loading && summary && view === "details" && (
           <div className="space-y-6 py-2">
             <section>
               <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-2">
@@ -155,8 +288,7 @@ export function ManageSubscriptionModal({
                 <Button
                   variant={summary.defaultPaymentMethod ? "outline" : "default"}
                   size="sm"
-                  disabled
-                  title="Card update coming in next task"
+                  onClick={startUpdate}
                 >
                   Update
                 </Button>
@@ -198,6 +330,25 @@ export function ManageSubscriptionModal({
               )}
             </section>
           </div>
+        )}
+
+        {view === "update" && clientSecret && stripePromise && (
+          <Elements
+            stripe={stripePromise}
+            options={{
+              clientSecret,
+              appearance: { theme: "stripe" as const },
+            }}
+          >
+            <UpdateCardForm
+              communitySlug={communitySlug}
+              onSuccess={handleUpdateSuccess}
+              onCancel={() => {
+                setView("details");
+                setClientSecret(null);
+              }}
+            />
+          </Elements>
         )}
       </DialogContent>
     </Dialog>
