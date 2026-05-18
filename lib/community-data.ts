@@ -115,6 +115,8 @@ interface PrivateLessonRow {
   max_bookings_per_month: number | null;
   requirements: string | null;
   location_type: 'online' | 'in_person' | 'both';
+  cancellation_cutoff_hours: number;
+  late_refund_policy: 'refund' | 'no_refund';
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -160,6 +162,8 @@ export const getActivePrivateLessons = cache(async (
     max_bookings_per_month: r.max_bookings_per_month ?? undefined,
     requirements: r.requirements ?? undefined,
     location_type: r.location_type,
+    cancellation_cutoff_hours: r.cancellation_cutoff_hours,
+    late_refund_policy: r.late_refund_policy,
     created_at: toIso(r.created_at),
     updated_at: toIso(r.updated_at),
   }));

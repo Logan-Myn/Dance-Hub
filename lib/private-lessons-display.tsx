@@ -35,6 +35,7 @@ export const PAYMENT_STATUS_BADGE: Record<LessonBooking["payment_status"], strin
   pending: "bg-amber-100 text-amber-700",
   failed: "bg-destructive/10 text-destructive",
   canceled: "bg-destructive/10 text-destructive",
+  refunded: "bg-slate-100 text-slate-700",
 };
 
 export const LESSON_STATUS_BADGE: Record<LessonBooking["lesson_status"], string> = {

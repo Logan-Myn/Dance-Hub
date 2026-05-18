@@ -12,6 +12,8 @@ export interface PrivateLesson {
   max_bookings_per_month?: number;
   requirements?: string;
   location_type: 'online' | 'in_person' | 'both';
+  cancellation_cutoff_hours: number;
+  late_refund_policy: 'refund' | 'no_refund';
   created_at: string;
   updated_at: string;
 }
@@ -26,12 +28,14 @@ export interface LessonBooking {
   is_community_member: boolean;
   price_paid: number;
   stripe_payment_intent_id?: string;
-  payment_status: 'pending' | 'succeeded' | 'failed' | 'canceled';
+  payment_status: 'pending' | 'succeeded' | 'failed' | 'canceled' | 'refunded';
   lesson_status: 'booked' | 'scheduled' | 'completed' | 'canceled';
   scheduled_at?: string;
   student_message?: string;
   teacher_notes?: string;
   contact_info?: Record<string, any>;
+  canceled_at?: string;
+  canceled_by?: 'student' | 'teacher';
   created_at: string;
   updated_at: string;
   
@@ -83,6 +87,8 @@ export interface CreatePrivateLessonData {
   max_bookings_per_month?: number;
   requirements?: string;
   location_type: 'online' | 'in_person' | 'both';
+  cancellation_cutoff_hours?: number;
+  late_refund_policy?: 'refund' | 'no_refund';
 }
 
 export interface CreateLessonBookingData {
