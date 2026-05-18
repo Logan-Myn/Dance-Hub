@@ -72,7 +72,9 @@ export async function GET(
           lb.id as booking_id,
           lb.payment_status
         FROM teacher_availability_slots tas
-        LEFT JOIN lesson_bookings lb ON lb.availability_slot_id = tas.id
+        LEFT JOIN lesson_bookings lb
+          ON lb.availability_slot_id = tas.id
+          AND lb.lesson_status != 'canceled'
         WHERE tas.teacher_id = ${targetTeacherId}
           AND tas.community_id = ${community.id}
           AND tas.is_active = true
@@ -87,7 +89,9 @@ export async function GET(
           lb.id as booking_id,
           lb.payment_status
         FROM teacher_availability_slots tas
-        LEFT JOIN lesson_bookings lb ON lb.availability_slot_id = tas.id
+        LEFT JOIN lesson_bookings lb
+          ON lb.availability_slot_id = tas.id
+          AND lb.lesson_status != 'canceled'
         WHERE tas.teacher_id = ${targetTeacherId}
           AND tas.community_id = ${community.id}
           AND tas.is_active = true
@@ -101,7 +105,9 @@ export async function GET(
           lb.id as booking_id,
           lb.payment_status
         FROM teacher_availability_slots tas
-        LEFT JOIN lesson_bookings lb ON lb.availability_slot_id = tas.id
+        LEFT JOIN lesson_bookings lb
+          ON lb.availability_slot_id = tas.id
+          AND lb.lesson_status != 'canceled'
         WHERE tas.teacher_id = ${targetTeacherId}
           AND tas.community_id = ${community.id}
           AND tas.is_active = true
@@ -115,7 +121,9 @@ export async function GET(
           lb.id as booking_id,
           lb.payment_status
         FROM teacher_availability_slots tas
-        LEFT JOIN lesson_bookings lb ON lb.availability_slot_id = tas.id
+        LEFT JOIN lesson_bookings lb
+          ON lb.availability_slot_id = tas.id
+          AND lb.lesson_status != 'canceled'
         WHERE tas.teacher_id = ${targetTeacherId}
           AND tas.community_id = ${community.id}
           AND tas.is_active = true
