@@ -18,7 +18,7 @@ import PrivateLessonPaymentModal from "./PrivateLessonPaymentModal";
 
 function describeCancellationPolicy(hours: number, latePolicy: 'refund' | 'no_refund'): string {
   if (latePolicy === 'refund') {
-    return 'Free cancellation anytime.';
+    return 'Free cancellation.';
   }
   if (hours === 0) {
     return 'Cancellations are non-refundable.';
