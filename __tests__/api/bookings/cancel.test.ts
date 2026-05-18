@@ -233,4 +233,15 @@ describe('POST /api/bookings/[bookingId]/cancel — refund decisions', () => {
     expect(res.status).toBe(502);
     expect(mockedSql).not.toHaveBeenCalled();
   });
+
+  test('502 when payment exists but community Stripe account is missing', async () => {
+    mockedSession.mockResolvedValueOnce({ user: { id: STUDENT_ID } });
+    mockedQueryOne.mockResolvedValueOnce(
+      bookingRow({ community_stripe_account_id: null })
+    );
+    const res = await callRoute();
+    expect(res.status).toBe(502);
+    expect(mockedRefund).not.toHaveBeenCalled();
+    expect(mockedSql).not.toHaveBeenCalled();
+  });
 });

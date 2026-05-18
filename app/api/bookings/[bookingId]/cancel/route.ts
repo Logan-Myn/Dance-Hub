@@ -114,15 +114,20 @@ export async function POST(
 
   // Stripe refund (if applicable)
   let refundId: string | null = null;
-  if (
-    refundCents > 0 &&
-    booking.stripe_payment_intent_id &&
-    booking.community_stripe_account_id
-  ) {
+  const owedARefund = refundCents > 0 && !!booking.stripe_payment_intent_id;
+
+  if (owedARefund) {
+    if (!booking.community_stripe_account_id) {
+      console.error("[cancel] missing Stripe account on community, refund not issued", { bookingId });
+      return NextResponse.json(
+        { error: "refund_failed", message: "Could not issue refund. Try again or contact support." },
+        { status: 502 }
+      );
+    }
     try {
       const refund = await stripe.refunds.create(
         {
-          payment_intent: booking.stripe_payment_intent_id,
+          payment_intent: booking.stripe_payment_intent_id!,
           refund_application_fee: true,
         },
         { stripeAccount: booking.community_stripe_account_id }
@@ -131,10 +136,7 @@ export async function POST(
     } catch (err) {
       console.error("[cancel] Stripe refund failed", { bookingId, err });
       return NextResponse.json(
-        {
-          error: "refund_failed",
-          message: "Could not issue refund. Try again or contact support.",
-        },
+        { error: "refund_failed", message: "Could not issue refund. Try again or contact support." },
         { status: 502 }
       );
     }
