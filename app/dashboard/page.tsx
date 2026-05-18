@@ -260,15 +260,27 @@ export default function DashboardPage() {
           </Button>
         </header>
 
-        {/* Your Communities — new hero. If user has zero, show the dashed
-            empty state inside the same section so the page anchor stays
-            consistent. */}
+        {/* Next Lesson — first thing students see when they have one
+            coming up. Compact strip; disappears entirely when there's no
+            upcoming lesson. */}
+        {nextLesson && (
+          <NextLessonCard
+            booking={nextLesson}
+            canJoinVideo={canJoinVideo(nextLesson)}
+            timeUntil={getTimeUntil(nextLesson.scheduled_at)}
+            formattedDate={formatLessonDate(nextLesson.scheduled_at)}
+            onCancel={() => setCancelTarget(nextLesson)}
+          />
+        )}
+
+        {/* Your Communities. If user has zero, show the dashed empty state
+            inside the same section so the page anchor stays consistent. */}
         <section>
           <h3 className="font-display text-lg font-semibold text-foreground mb-4">
             Your Communities
           </h3>
           {communities && communities.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {communities.map((community) => (
                 <CommunityCard
                   key={community.id}
@@ -291,18 +303,6 @@ export default function DashboardPage() {
             </div>
           ) : null}
         </section>
-
-        {/* Next Lesson — compact strip, only shown when there's an upcoming
-            lesson. */}
-        {nextLesson && (
-          <NextLessonCard
-            booking={nextLesson}
-            canJoinVideo={canJoinVideo(nextLesson)}
-            timeUntil={getTimeUntil(nextLesson.scheduled_at)}
-            formattedDate={formatLessonDate(nextLesson.scheduled_at)}
-            onCancel={() => setCancelTarget(nextLesson)}
-          />
-        )}
 
         {/* Upcoming Lessons List */}
         {upcomingLessons.length > 1 && (
