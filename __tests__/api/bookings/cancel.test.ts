@@ -2,6 +2,7 @@ import { POST } from '@/app/api/bookings/[bookingId]/cancel/route';
 import { queryOne, sql } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
 import { stripe } from '@/lib/stripe';
+import { getEmailService } from '@/lib/resend/email-service';
 
 jest.mock('@/lib/db', () => ({
   queryOne: jest.fn(),
@@ -46,6 +47,8 @@ const bookingRow = (overrides: Partial<any> = {}) => ({
   late_refund_policy: 'no_refund',
   student_email: 'stu@x.com',
   student_name: 'Stu',
+  teacher_email: 'teacher@x.com',
+  teacher_name: 'Teacher',
   duration_minutes: 60,
   ...overrides,
 });
@@ -103,9 +106,18 @@ describe('POST /api/bookings/[bookingId]/cancel — guards', () => {
 
 describe('POST /api/bookings/[bookingId]/cancel — refund decisions', () => {
   test('student before cutoff: full refund with application_fee returned', async () => {
+    const mockSend = jest.fn().mockResolvedValue({ id: 'em_1' });
+    (getEmailService as jest.Mock).mockReturnValueOnce({
+      sendNotificationEmail: mockSend,
+    });
+
     mockedSession.mockResolvedValueOnce({ user: { id: STUDENT_ID } });
     mockedQueryOne.mockResolvedValueOnce(
-      bookingRow({ scheduled_at: futureScheduledAt(48), cancellation_cutoff_hours: 24 })
+      bookingRow({
+        scheduled_at: futureScheduledAt(48),
+        cancellation_cutoff_hours: 24,
+        teacher_email: 'teacher@x.com',
+      })
     );
     mockedRefund.mockResolvedValueOnce({ id: 're_1', amount: 5000 });
 
@@ -117,6 +129,11 @@ describe('POST /api/bookings/[bookingId]/cancel — refund decisions', () => {
         refund_application_fee: true,
       }),
       { stripeAccount: 'acct_x' }
+    );
+    expect(mockSend).toHaveBeenCalledWith(
+      'teacher@x.com',
+      expect.stringMatching(/canceled/i),
+      expect.anything()
     );
     const body = await res.json();
     expect(body.refunded_amount_cents).toBe(5000);
@@ -158,6 +175,11 @@ describe('POST /api/bookings/[bookingId]/cancel — refund decisions', () => {
   });
 
   test('teacher anytime: always full refund', async () => {
+    const mockSend = jest.fn().mockResolvedValue({ id: 'em_1' });
+    (getEmailService as jest.Mock).mockReturnValueOnce({
+      sendNotificationEmail: mockSend,
+    });
+
     mockedSession.mockResolvedValueOnce({ user: { id: TEACHER_ID } });
     mockedQueryOne.mockResolvedValueOnce(
       bookingRow({
@@ -171,6 +193,11 @@ describe('POST /api/bookings/[bookingId]/cancel — refund decisions', () => {
     const res = await callRoute();
     expect(res.status).toBe(200);
     expect(mockedRefund).toHaveBeenCalled();
+    expect(mockSend).toHaveBeenCalledWith(
+      'stu@x.com',
+      expect.stringMatching(/canceled/i),
+      expect.anything()
+    );
     const body = await res.json();
     expect(body.refunded_amount_cents).toBe(5000);
   });

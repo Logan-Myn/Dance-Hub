@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import React from "react";
 import { queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { stripe } from "@/lib/stripe";
+import { getEmailService } from "@/lib/resend/email-service";
 
 const GRACE_MINUTES = 5;
 const CANCELABLE_STATUSES = new Set(["booked", "scheduled"]);
@@ -23,6 +25,8 @@ interface BookingForCancel {
   late_refund_policy: "refund" | "no_refund";
   student_email: string;
   student_name: string | null;
+  teacher_email: string;
+  teacher_name: string | null;
   duration_minutes: number;
 }
 
@@ -56,10 +60,14 @@ export async function POST(
       pl.late_refund_policy,
       c.created_by        AS community_created_by,
       c.stripe_account_id AS community_stripe_account_id,
-      c.name              AS community_name
+      c.name              AS community_name,
+      tu.email            AS teacher_email,
+      tp.full_name        AS teacher_name
     FROM lesson_bookings lb
     INNER JOIN private_lessons pl ON pl.id = lb.private_lesson_id
     INNER JOIN communities c       ON c.id = pl.community_id
+    INNER JOIN "user" tu           ON tu.id = c.created_by
+    LEFT JOIN profiles tp          ON tp.auth_user_id = tu.id
     WHERE lb.id = ${bookingId}
   `;
 
@@ -148,6 +156,53 @@ export async function POST(
       updated_at           = NOW()
     WHERE id = ${bookingId}
   `;
+
+  try {
+    const emailService = getEmailService();
+    const lessonDate = booking.scheduled_at
+      ? new Date(booking.scheduled_at).toLocaleString('en-GB', {
+          dateStyle: 'long',
+          timeStyle: 'short',
+        })
+      : 'the scheduled date';
+    const refundedAmount = refundCents / 100;
+    if (role === 'student') {
+      const { CancellationByStudentEmail } = await import(
+        '@/lib/resend/templates/booking/cancellation-by-student'
+      );
+      await emailService.sendNotificationEmail(
+        booking.teacher_email,
+        `Booking canceled: ${booking.lesson_title}`,
+        React.createElement(CancellationByStudentEmail, {
+          teacherName: booking.teacher_name ?? 'there',
+          studentName: booking.student_name ?? booking.student_email,
+          lessonTitle: booking.lesson_title,
+          lessonDate,
+          refundedAmount,
+          currency: 'eur',
+          wasRefunded: refundCents > 0,
+        })
+      );
+    } else {
+      const { CancellationByTeacherEmail } = await import(
+        '@/lib/resend/templates/booking/cancellation-by-teacher'
+      );
+      await emailService.sendNotificationEmail(
+        booking.student_email,
+        `Your lesson was canceled`,
+        React.createElement(CancellationByTeacherEmail, {
+          studentName: booking.student_name ?? 'there',
+          communityName: booking.community_name,
+          lessonTitle: booking.lesson_title,
+          lessonDate,
+          refundedAmount,
+          currency: 'eur',
+        })
+      );
+    }
+  } catch (err) {
+    console.error('[cancel] email dispatch failed', { bookingId, err });
+  }
 
   return NextResponse.json({
     status: "canceled",
