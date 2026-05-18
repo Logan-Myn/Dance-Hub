@@ -23,6 +23,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { cn, formatPrice } from "@/lib/utils";
 import { PAYMENT_STATUS_BADGE } from "@/lib/private-lessons-display";
 import type { PrivateLesson, LessonBookingWithDetails } from "@/types/private-lessons";
+import { CancelLessonModal } from "@/components/CancelLessonModal";
 
 interface PrivateLessonManagementModalProps {
   isOpen: boolean;
@@ -61,6 +62,8 @@ export default function PrivateLessonManagementModal({
 
   const [lessonToDelete, setLessonToDelete] = useState<PrivateLesson | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [cancelTarget, setCancelTarget] = useState<LessonBookingWithDetails | null>(null);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -538,6 +541,16 @@ export default function PrivateLessonManagementModal({
                     >
                       Contact Student
                     </Button>
+                    {['booked', 'scheduled'].includes(booking.lesson_status) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCancelTarget(booking)}
+                        className="rounded-lg border-border/50 hover:bg-muted"
+                      >
+                        Cancel booking
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -684,6 +697,30 @@ export default function PrivateLessonManagementModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {cancelTarget && (
+        <CancelLessonModal
+          isOpen={!!cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          onCancelled={() => {
+            setLessonBookings((prev) =>
+              prev.map((b) =>
+                b.id === cancelTarget.id
+                  ? { ...b, lesson_status: 'canceled', payment_status: 'refunded' }
+                  : b
+              )
+            );
+            setCancelTarget(null);
+          }}
+          bookingId={cancelTarget.id}
+          lessonTitle={cancelTarget.lesson_title}
+          scheduledAtIso={cancelTarget.scheduled_at ?? null}
+          pricePaid={Number(cancelTarget.price_paid)}
+          currency="EUR"
+          role="teacher"
+          expectedRefundCents={Math.round(Number(cancelTarget.price_paid) * 100)}
+        />
+      )}
     </Transition>
   );
 }
