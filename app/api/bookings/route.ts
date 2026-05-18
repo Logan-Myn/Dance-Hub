@@ -30,6 +30,8 @@ interface BookingWithDetails {
   regular_price: number;
   member_price: number | null;
   location_type: string;
+  cancellation_cutoff_hours: number;
+  late_refund_policy: 'refund' | 'no_refund';
   community_name: string;
   community_slug: string;
 }
@@ -77,6 +79,8 @@ export async function GET() {
         pl.regular_price,
         pl.member_price,
         pl.location_type,
+        pl.cancellation_cutoff_hours,
+        pl.late_refund_policy,
         c.name as community_name,
         c.slug as community_slug
       FROM lesson_bookings lb

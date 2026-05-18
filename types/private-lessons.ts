@@ -63,6 +63,8 @@ export interface LessonBookingWithDetails extends LessonBooking {
   duration_minutes: number;
   regular_price: number;
   member_price?: number;
+  cancellation_cutoff_hours: number;
+  late_refund_policy: 'refund' | 'no_refund';
   community_name: string;
   community_slug: string;
   student_full_name?: string;

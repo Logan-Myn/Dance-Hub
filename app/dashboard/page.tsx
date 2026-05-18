@@ -23,6 +23,7 @@ import { useEffect, useState } from 'react';
 import { format, isToday, isTomorrow, formatDistanceToNow } from 'date-fns';
 import { LessonBookingWithDetails } from "@/types/private-lessons";
 import { cn } from "@/lib/utils";
+import { CancelLessonModal } from "@/components/CancelLessonModal";
 
 interface Community {
   id: string;
@@ -48,6 +49,7 @@ export default function DashboardPage() {
   const [bookings, setBookings] = useState<LessonBookingWithDetails[]>([]);
   const [isLoadingBookings, setIsLoadingBookings] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<LessonBookingWithDetails | null>(null);
 
   const { data: communities, error, isLoading: isDataLoading } = useSWR<Community[]>(
     user ? `user-communities:${user.id}` : null,
@@ -161,6 +163,22 @@ export default function DashboardPage() {
     const endMs = startMs + (booking.duration_minutes ?? 60) * 60_000;
     return Date.now() > endMs + GRACE_MS;
   };
+
+  function expectedRefundCents(
+    pricePaid: number,
+    scheduledAtIso: string | null,
+    cutoffHours: number,
+    latePolicy: 'refund' | 'no_refund'
+  ): number {
+    if (!scheduledAtIso) return Math.round(pricePaid * 100);
+    const scheduledMs = new Date(scheduledAtIso).getTime();
+    const cutoffMs = scheduledMs - cutoffHours * 3600_000;
+    const beforeCutoff = Date.now() <= cutoffMs;
+    if (beforeCutoff || latePolicy === 'refund') {
+      return Math.round(pricePaid * 100);
+    }
+    return 0;
+  }
 
   // Get upcoming lessons (paid, not completed/canceled, and still in the future
   // or currently live within the grace window).
@@ -311,6 +329,14 @@ export default function DashboardPage() {
                     View Details
                   </Link>
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCancelTarget(nextLesson)}
+                  className="bg-transparent border-white/40 text-white hover:bg-white/10 hover:text-white"
+                >
+                  Cancel
+                </Button>
               </div>
             </div>
           </section>
@@ -411,6 +437,14 @@ export default function DashboardPage() {
                         Soon
                       </Badge>
                     )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCancelTarget(booking)}
+                      className="rounded-xl"
+                    >
+                      Cancel
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -469,6 +503,29 @@ export default function DashboardPage() {
           </section>
         )}
       </div>
+
+      {cancelTarget && (
+        <CancelLessonModal
+          isOpen={!!cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          onCancelled={() => {
+            setBookings((prev) => prev.filter((b) => b.id !== cancelTarget.id));
+            setCancelTarget(null);
+          }}
+          bookingId={cancelTarget.id}
+          lessonTitle={cancelTarget.lesson_title}
+          scheduledAtIso={cancelTarget.scheduled_at ?? null}
+          pricePaid={Number(cancelTarget.price_paid)}
+          currency="EUR"
+          role="student"
+          expectedRefundCents={expectedRefundCents(
+            Number(cancelTarget.price_paid),
+            cancelTarget.scheduled_at ?? null,
+            cancelTarget.cancellation_cutoff_hours,
+            cancelTarget.late_refund_policy
+          )}
+        />
+      )}
     </div>
   );
 }
