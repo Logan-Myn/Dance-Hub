@@ -44,6 +44,8 @@ export default function CreatePrivateLessonModal({
     is_active: true,
     max_bookings_per_month: null as number | null,
     requirements: "",
+    cancellation_cutoff_hours: 24,
+    late_refund_policy: "no_refund" as "refund" | "no_refund",
   });
 
   // Populate form when editing
@@ -59,6 +61,8 @@ export default function CreatePrivateLessonModal({
         is_active: editingLesson.is_active !== undefined ? editingLesson.is_active : true,
         max_bookings_per_month: editingLesson.max_bookings_per_month || null,
         requirements: editingLesson.requirements || "",
+        cancellation_cutoff_hours: editingLesson.cancellation_cutoff_hours ?? 24,
+        late_refund_policy: editingLesson.late_refund_policy ?? "no_refund",
       });
     } else if (!editingLesson && isOpen) {
       // Reset to default values when creating new
@@ -72,6 +76,8 @@ export default function CreatePrivateLessonModal({
         is_active: true,
         max_bookings_per_month: null,
         requirements: "",
+        cancellation_cutoff_hours: 24,
+        late_refund_policy: "no_refund",
       });
     }
   }, [editingLesson, isOpen]);
@@ -147,6 +153,8 @@ export default function CreatePrivateLessonModal({
         is_active: true,
         max_bookings_per_month: null,
         requirements: "",
+        cancellation_cutoff_hours: 24,
+        late_refund_policy: "no_refund",
       });
     } catch (error) {
       console.error("Error creating private lesson:", error);
@@ -271,6 +279,71 @@ export default function CreatePrivateLessonModal({
                 />
                 <p className="text-sm text-gray-500 mt-1">
                   Leave empty if no member discount
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Cancellation policy */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">Cancellation policy</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="cancellation_cutoff_hours">Cancellation cutoff</Label>
+                <Select
+                  value={String(formData.cancellation_cutoff_hours)}
+                  onValueChange={(value) => handleInputChange("cancellation_cutoff_hours", Number(value))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Anytime</SelectItem>
+                    <SelectItem value="12">12 hours before</SelectItem>
+                    <SelectItem value="24">24 hours before</SelectItem>
+                    <SelectItem value="48">48 hours before</SelectItem>
+                    <SelectItem value="72">72 hours before</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Cancellations before this cutoff are always fully refunded.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Late cancellations</Label>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="late-refund"
+                      name="late_refund_policy"
+                      value="refund"
+                      checked={formData.late_refund_policy === "refund"}
+                      onChange={() => handleInputChange("late_refund_policy", "refund")}
+                      className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <Label htmlFor="late-refund" className="font-normal cursor-pointer">
+                      Full refund
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="late-no-refund"
+                      name="late_refund_policy"
+                      value="no_refund"
+                      checked={formData.late_refund_policy === "no_refund"}
+                      onChange={() => handleInputChange("late_refund_policy", "no_refund")}
+                      className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <Label htmlFor="late-no-refund" className="font-normal cursor-pointer">
+                      No refund
+                    </Label>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  You can always cancel any booking yourself with a full refund to the student.
                 </p>
               </div>
             </div>

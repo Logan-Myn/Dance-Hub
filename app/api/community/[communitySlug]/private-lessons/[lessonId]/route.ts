@@ -133,6 +133,8 @@ export async function PUT(
         regular_price = COALESCE(${updateData.regular_price ?? null}, regular_price),
         member_price = COALESCE(${updateData.member_price ?? null}, member_price),
         is_active = COALESCE(${updateData.is_active ?? null}, is_active),
+        cancellation_cutoff_hours = COALESCE(${updateData.cancellation_cutoff_hours ?? null}, cancellation_cutoff_hours),
+        late_refund_policy = COALESCE(${updateData.late_refund_policy ?? null}, late_refund_policy),
         updated_at = NOW()
       WHERE id = ${lessonId}
         AND community_id = ${community.id}

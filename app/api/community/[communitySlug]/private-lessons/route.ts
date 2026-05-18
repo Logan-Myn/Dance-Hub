@@ -141,6 +141,8 @@ export async function POST(request: Request, props: { params: Promise<{ communit
     // Create the private lesson — honor the is_active flag from the form
     // (defaulting to true) so a creator can save a draft as deactivated.
     const isActive = (lessonData as { is_active?: boolean }).is_active ?? true;
+    const cancellationCutoffHours = lessonData.cancellation_cutoff_hours ?? 24;
+    const lateRefundPolicy = lessonData.late_refund_policy ?? 'no_refund';
     const lesson = await queryOne<PrivateLesson>`
       INSERT INTO private_lessons (
         community_id,
@@ -150,7 +152,9 @@ export async function POST(request: Request, props: { params: Promise<{ communit
         duration_minutes,
         regular_price,
         member_price,
-        is_active
+        is_active,
+        cancellation_cutoff_hours,
+        late_refund_policy
       ) VALUES (
         ${community.id},
         ${user.id},
@@ -159,7 +163,9 @@ export async function POST(request: Request, props: { params: Promise<{ communit
         ${lessonData.duration_minutes},
         ${lessonData.regular_price},
         ${lessonData.member_price || null},
-        ${isActive}
+        ${isActive},
+        ${cancellationCutoffHours},
+        ${lateRefundPolicy}
       )
       RETURNING *
     `;
