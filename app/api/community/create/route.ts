@@ -14,7 +14,21 @@ interface NewCommunity {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, description, imageUrl, createdBy } = body;
+    const { name, description, imageUrl, createdBy, focalX, focalY, zoom } = body;
+
+    const clampInt = (v: unknown, min: number, max: number, fallback: number) => {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(min, Math.min(max, Math.round(n)));
+    };
+    const clampFloat = (v: unknown, min: number, max: number, fallback: number) => {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(min, Math.min(max, n));
+    };
+    const safeFocalX = clampInt(focalX, 0, 100, 50);
+    const safeFocalY = clampInt(focalY, 0, 100, 50);
+    const safeZoom = Number(clampFloat(zoom, 1, 5, 1).toFixed(2));
 
     // Create a slug from the community name
     const slug = name
@@ -53,12 +67,18 @@ export async function POST(request: Request) {
         slug,
         description,
         image_url,
+        image_focal_x,
+        image_focal_y,
+        image_zoom,
         created_by
       ) VALUES (
         ${name},
         ${slug},
         ${description},
         ${imageUrl},
+        ${safeFocalX},
+        ${safeFocalY},
+        ${safeZoom},
         ${createdBy}
       )
       RETURNING id, slug

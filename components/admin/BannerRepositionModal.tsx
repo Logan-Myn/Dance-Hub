@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import Cropper, { Area } from "react-easy-crop";
-import { Loader2, Move, ZoomIn } from "lucide-react";
+import { useState } from "react";
+import { Loader2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import {
   Dialog,
@@ -13,11 +12,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-
-// Matches the banner's desktop aspect (max-w-7xl / h-72 ≈ 4.4:1). Picking
-// 4:1 keeps the preview honest on desktop and stays close enough on mobile
-// where the banner gets a bit shorter relative to width.
-const BANNER_ASPECT = 4 / 1;
+import { BannerCropper, type BannerCropValue } from "@/components/admin/BannerCropper";
 
 interface BannerRepositionModalProps {
   isOpen: boolean;
@@ -35,47 +30,25 @@ export function BannerRepositionModal({
   onClose,
   imageUrl,
   communitySlug,
-  initialFocalX,
-  initialFocalY,
   initialZoom,
   onSaved,
 }: BannerRepositionModalProps) {
-  // react-easy-crop wants the crop position in pixels (it manages it for us)
-  // and zoom as a multiplier. We feed back focal/zoom on save.
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(initialZoom);
-  const [croppedArea, setCroppedArea] = useState<Area | null>(null);
+  const [value, setValue] = useState<BannerCropValue | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const onCropComplete = useCallback((cropped: Area, _croppedPx: Area) => {
-    // `cropped` here is the percentage-based area react-easy-crop just
-    // reported — we translate its center to focal_x/y on save.
-    setCroppedArea(cropped);
-  }, []);
-
   async function handleSave() {
-    if (!croppedArea) {
+    if (!value) {
       onClose();
       return;
     }
     setIsSaving(true);
     try {
-      const focalX = Math.round(croppedArea.x + croppedArea.width / 2);
-      const focalY = Math.round(croppedArea.y + croppedArea.height / 2);
-      const clampedX = Math.max(0, Math.min(100, focalX));
-      const clampedY = Math.max(0, Math.min(100, focalY));
-      const clampedZoom = Math.max(1, Math.min(5, zoom));
-
       const response = await fetch(
         `/api/community/${communitySlug}/update-image-position`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            focalX: clampedX,
-            focalY: clampedY,
-            zoom: clampedZoom,
-          }),
+          body: JSON.stringify(value),
         }
       );
       if (!response.ok) {
@@ -94,13 +67,6 @@ export function BannerRepositionModal({
     }
   }
 
-  // Seed the cropper's initial crop position so the modal opens showing
-  // whatever the creator already saved. We translate focal/zoom back into
-  // a starting `crop` of {0,0} (center) — react-easy-crop recenters when
-  // zoom changes, so leaving it at the center with the right zoom + a
-  // recompute on first drag is good enough for v1.
-  const initialCrop = { x: 0, y: 0 };
-
   return (
     <Dialog
       open={isOpen}
@@ -117,45 +83,12 @@ export function BannerRepositionModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative w-full bg-black" style={{ aspectRatio: `${BANNER_ASPECT}` }}>
-          <Cropper
-            image={imageUrl}
-            crop={crop}
-            zoom={zoom}
-            aspect={BANNER_ASPECT}
-            onCropChange={setCrop}
-            onZoomChange={setZoom}
-            onCropComplete={onCropComplete}
-            minZoom={1}
-            maxZoom={5}
-            zoomSpeed={0.5}
-            // cover so the image always fills the crop frame (the banner
-            // shape) and the user can pan to reframe — matches what they'll
-            // get on the live page rather than letterboxing inside the modal.
-            objectFit="cover"
+        <div className="px-6 pb-2">
+          <BannerCropper
+            imageUrl={imageUrl}
+            initialZoom={initialZoom}
+            onChange={setValue}
           />
-        </div>
-
-        <div className="p-6 pt-4 space-y-3">
-          <div className="flex items-center gap-3">
-            <ZoomIn className="h-4 w-4 text-muted-foreground" />
-            <input
-              type="range"
-              min={1}
-              max={5}
-              step={0.05}
-              value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
-              className="flex-1 accent-primary"
-              aria-label="Zoom"
-            />
-            <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">
-              {zoom.toFixed(2)}x
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-            <Move className="h-3 w-3" /> Drag the image inside the frame to reposition
-          </p>
         </div>
 
         <DialogFooter className="p-6 pt-0">

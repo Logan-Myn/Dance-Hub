@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 import { Textarea } from "@/components/ui/textarea";
 import { UploadCloud, X } from 'lucide-react';
 import { uploadFileToStorage, STORAGE_FOLDERS } from '@/lib/storage-client';
-import Image from 'next/image';
+import { BannerCropper, type BannerCropValue } from '@/components/admin/BannerCropper';
 
 export default function OnboardingForm() {
   const [communityName, setCommunityName] = useState('');
@@ -18,6 +18,7 @@ export default function OnboardingForm() {
   const [isUploading, setIsUploading] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [crop, setCrop] = useState<BannerCropValue>({ focalX: 50, focalY: 50, zoom: 1 });
   const [nameError, setNameError] = useState<string | null>(null);
   const { user } = useAuth();
   const router = useRouter();
@@ -33,9 +34,11 @@ export default function OnboardingForm() {
     }
 
     setImageFile(file);
-    // Create preview URL
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewUrl(URL.createObjectURL(file));
+    setCrop({ focalX: 50, focalY: 50, zoom: 1 });
   };
 
   const removeImage = () => {
@@ -44,6 +47,7 @@ export default function OnboardingForm() {
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
     }
+    setCrop({ focalX: 50, focalY: 50, zoom: 1 });
   };
 
   // Function to generate slug from name
@@ -119,6 +123,7 @@ export default function OnboardingForm() {
           description: description,
           imageUrl: imageUrl,
           createdBy: user.id,
+          ...(imageUrl ? { focalX: crop.focalX, focalY: crop.focalY, zoom: crop.zoom } : {}),
         }),
       });
 
@@ -189,54 +194,50 @@ export default function OnboardingForm() {
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Community photo
         </label>
-        <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg">
-          <div className="w-full max-w-2xl space-y-1 text-center">
-            <div className="flex flex-col items-center">
-              {previewUrl && imageFile ? (
-                <div className="relative w-full">
-                  <div className="relative w-full h-40 rounded-lg overflow-hidden">
-                    <Image
-                      src={previewUrl}
-                      alt="Preview"
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={removeImage}
-                    className="absolute -top-2 -right-2 p-1 bg-red-100 rounded-full hover:bg-red-200 transition-colors"
-                  >
-                    <X className="h-4 w-4 text-red-500" />
-                  </button>
-                  <div className="mt-2 text-sm text-gray-600">
-                    {imageFile.name}
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
-                  <div className="flex text-sm text-gray-600">
-                    <label htmlFor="file-upload" className="relative cursor-pointer rounded-md font-medium text-blue-600 hover:text-blue-500">
-                      <span>Upload a file</span>
-                      <input
-                        id="file-upload"
-                        name="file-upload"
-                        type="file"
-                        accept="image/*"
-                        className="sr-only"
-                        onChange={handleImageUpload}
-                        disabled={isUploading}
-                      />
-                    </label>
-                    <p className="pl-1">or drag and drop</p>
-                  </div>
-                </>
-              )}
+        {previewUrl && imageFile ? (
+          <div className="space-y-2">
+            <div className="relative">
+              <BannerCropper key={previewUrl} imageUrl={previewUrl} onChange={setCrop} />
+              <button
+                type="button"
+                onClick={removeImage}
+                className="absolute -top-2 -right-2 p-1 bg-red-100 rounded-full hover:bg-red-200 transition-colors z-10"
+                aria-label="Remove image"
+              >
+                <X className="h-4 w-4 text-red-500" />
+              </button>
             </div>
-            <p className="text-xs text-gray-500">PNG, JPG, GIF up to 5MB</p>
+            <p className="text-xs text-gray-500">
+              Drag and zoom to choose what shows in the banner. {imageFile.name}
+            </p>
           </div>
-        </div>
+        ) : (
+          <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg">
+            <div className="w-full max-w-2xl space-y-1 text-center">
+              <div className="flex flex-col items-center">
+                <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
+                <div className="flex text-sm text-gray-600">
+                  <label htmlFor="file-upload" className="relative cursor-pointer rounded-md font-medium text-blue-600 hover:text-blue-500">
+                    <span>Upload a file</span>
+                    <input
+                      id="file-upload"
+                      name="file-upload"
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={handleImageUpload}
+                      disabled={isUploading}
+                    />
+                  </label>
+                  <p className="pl-1">or drag and drop</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">
+                PNG, JPG, GIF up to 5MB. Wide images (around 1600x400) work best.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       <Button 
