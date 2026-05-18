@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { stripe, STRIPE_API_VERSION } from '@/lib/stripe';
 import { query, queryOne, sql } from '@/lib/db';
-import { videoRoomService } from '@/lib/video-room-service';
 import { getEmailService } from '@/lib/resend/email-service';
 import { BookingConfirmationEmail } from '@/lib/resend/templates/booking/booking-confirmation';
 import { TeacherBookingNotificationEmail } from '@/lib/resend/templates/booking/teacher-booking-notification';
@@ -314,28 +313,11 @@ export async function POST(request: Request) {
               studentProfile?.full_name ||
               'Student';
 
-            // Create video room after successful booking creation
-            let videoRoomUrl: string | undefined;
-            try {
-              console.log('🎬 Creating video room for booking:', newBooking.id);
-              const result = await videoRoomService.createRoomForBooking(newBooking.id);
-              if (result.success) {
-                console.log('✅ Video room created successfully for booking:', newBooking.id);
-                // Get the updated booking with video room URL
-                const updatedBooking = await queryOne<LessonBooking>`
-                  SELECT daily_room_url
-                  FROM lesson_bookings
-                  WHERE id = ${newBooking.id}
-                `;
-                videoRoomUrl = updatedBooking?.daily_room_url || undefined;
-              } else {
-                console.error('❌ Video room creation failed:', result.error);
-              }
-            } catch (videoError) {
-              console.error('❌ Error creating video room (non-critical):', videoError);
-              // Don't fail the webhook for video room creation errors
-              // The video room can be created later if needed
-            }
+            // Video session uses LiveKit and is provisioned lazily on first
+            // /video-token request. The email's "Join" link points at the
+            // in-app session page, which mounts LiveKitVideoCall.
+            const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://dance-hub.io';
+            const videoRoomUrl = `${appBaseUrl}/video-session/${newBooking.id}`;
 
             try {
               const emailService = getEmailService();
