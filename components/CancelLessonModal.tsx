@@ -20,7 +20,6 @@ interface Props {
   bookingId: string;
   lessonTitle: string;
   scheduledAtIso: string | null;
-  pricePaid: number;
   currency: string;
   role: "student" | "teacher";
   expectedRefundCents: number;
@@ -46,7 +45,6 @@ export function CancelLessonModal({
   onCancelled,
   bookingId,
   lessonTitle,
-  pricePaid: _pricePaid,
   currency,
   role,
   expectedRefundCents,

@@ -515,7 +515,6 @@ export default function DashboardPage() {
           bookingId={cancelTarget.id}
           lessonTitle={cancelTarget.lesson_title}
           scheduledAtIso={cancelTarget.scheduled_at ?? null}
-          pricePaid={Number(cancelTarget.price_paid)}
           currency="EUR"
           role="student"
           expectedRefundCents={expectedRefundCents(

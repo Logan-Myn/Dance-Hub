@@ -715,7 +715,6 @@ export default function PrivateLessonManagementModal({
           bookingId={cancelTarget.id}
           lessonTitle={cancelTarget.lesson_title}
           scheduledAtIso={cancelTarget.scheduled_at ?? null}
-          pricePaid={Number(cancelTarget.price_paid)}
           currency="EUR"
           role="teacher"
           expectedRefundCents={Math.round(Number(cancelTarget.price_paid) * 100)}

@@ -18,7 +18,6 @@ const baseProps = {
   bookingId: 'bk_1',
   lessonTitle: 'Bachata Basics',
   scheduledAtIso: new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
-  pricePaid: 50,
   currency: 'EUR',
   role: 'student' as const,
   expectedRefundCents: 5000,
