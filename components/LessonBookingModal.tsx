@@ -16,6 +16,18 @@ import { formatPrice, formatSlotTime } from "@/lib/utils";
 import { getLocationText } from "@/lib/private-lessons-display";
 import PrivateLessonPaymentModal from "./PrivateLessonPaymentModal";
 
+function describeCancellationPolicy(hours: number, latePolicy: 'refund' | 'no_refund'): string {
+  if (hours === 0) {
+    return latePolicy === 'refund'
+      ? 'Free cancellation anytime.'
+      : 'Cancellations are non-refundable.';
+  }
+  const window = hours === 1 ? '1 hour' : `${hours} hours`;
+  return latePolicy === 'refund'
+    ? `Free cancellation. Cancellations within ${window} of the lesson are also fully refunded.`
+    : `Free cancellation up to ${window} before the lesson. No refund within ${window}.`;
+}
+
 interface LessonBookingModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -253,6 +265,9 @@ export default function LessonBookingModal({
                 ✓ Member discount applied
               </p>
             )}
+            <p className="text-sm text-muted-foreground mt-2">
+              {describeCancellationPolicy(lesson.cancellation_cutoff_hours, lesson.late_refund_policy)}
+            </p>
           </div>
         </div>
 
