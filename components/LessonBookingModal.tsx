@@ -17,15 +17,14 @@ import { getLocationText } from "@/lib/private-lessons-display";
 import PrivateLessonPaymentModal from "./PrivateLessonPaymentModal";
 
 function describeCancellationPolicy(hours: number, latePolicy: 'refund' | 'no_refund'): string {
+  if (latePolicy === 'refund') {
+    return 'Free cancellation anytime.';
+  }
   if (hours === 0) {
-    return latePolicy === 'refund'
-      ? 'Free cancellation anytime.'
-      : 'Cancellations are non-refundable.';
+    return 'Cancellations are non-refundable.';
   }
   const window = hours === 1 ? '1 hour' : `${hours} hours`;
-  return latePolicy === 'refund'
-    ? `Free cancellation. Cancellations within ${window} of the lesson are also fully refunded.`
-    : `Free cancellation up to ${window} before the lesson. No refund within ${window}.`;
+  return `Free cancellation up to ${window} before the lesson. No refund within ${window}.`;
 }
 
 interface LessonBookingModalProps {
