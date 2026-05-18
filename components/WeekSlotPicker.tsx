@@ -46,6 +46,11 @@ export function WeekSlotPicker({ slots, selectedSlotId, onSelect, loading }: Wee
     [slots, today]
   );
 
+  const hasAnyAvailability = useMemo(
+    () => findFirstWeekWithSlots(slots, today, HORIZON_DAYS) !== null,
+    [slots, today]
+  );
+
   const [weekStart, setWeekStart] = useState<Date>(initialWeekStart);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
@@ -73,7 +78,7 @@ export function WeekSlotPicker({ slots, selectedSlotId, onSelect, loading }: Wee
     );
   }
 
-  if (slots.length === 0 || findFirstWeekWithSlots(slots, today, HORIZON_DAYS) === null) {
+  if (!hasAnyAvailability) {
     return (
       <div className="text-center py-4 text-gray-500 bg-gray-50 dark:bg-gray-800 rounded-lg">
         No availability in the next 30 days. Please contact the teacher directly.
@@ -142,6 +147,7 @@ export function WeekSlotPicker({ slots, selectedSlotId, onSelect, loading }: Wee
               onClick={() => hasSlots && setSelectedDate(date)}
               disabled={!hasSlots}
               aria-label={`${dayLabel} ${dateNum}`}
+              aria-pressed={isSelected}
               className={cn(
                 'flex flex-col items-center py-2 rounded-lg border transition-colors',
                 isSelected
@@ -176,6 +182,7 @@ export function WeekSlotPicker({ slots, selectedSlotId, onSelect, loading }: Wee
                   key={slot.id}
                   type="button"
                   onClick={() => onSelect(slot)}
+                  aria-pressed={isSelected}
                   className={cn(
                     'px-3 py-2 rounded-lg border text-sm transition-colors',
                     isSelected

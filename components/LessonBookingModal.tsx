@@ -107,15 +107,6 @@ export default function LessonBookingModal({
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString + 'T00:00:00');
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      month: 'short', 
-      day: 'numeric' 
-    });
-  };
-
   const handleInputChange = (field: string, value: string) => {
     if (field.startsWith('contact_info.')) {
       const contactField = field.split('.')[1];
