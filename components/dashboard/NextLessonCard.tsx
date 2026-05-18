@@ -10,6 +10,7 @@ interface NextLessonCardProps {
   canJoinVideo: boolean;
   timeUntil: string | null;
   formattedDate: string;
+  onCancel?: () => void;
 }
 
 export function NextLessonCard({
@@ -17,6 +18,7 @@ export function NextLessonCard({
   canJoinVideo,
   timeUntil,
   formattedDate,
+  onCancel,
 }: NextLessonCardProps) {
   return (
     <section className="rounded-2xl p-4 sm:p-5 bg-primary/5 border border-primary/15">
@@ -56,19 +58,31 @@ export function NextLessonCard({
         </span>
       </div>
 
-      {canJoinVideo ? (
-        <Button asChild className="rounded-xl">
-          <Link href={`/video-session/${booking.id}`} className="flex items-center gap-2">
-            <Video className="h-4 w-4" />
-            Join Video
-          </Link>
-        </Button>
-      ) : (
-        <Button disabled variant="secondary" className="rounded-xl">
-          <Clock className="h-4 w-4 mr-2" />
-          Opens soon
-        </Button>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {canJoinVideo ? (
+          <Button asChild className="rounded-xl">
+            <Link href={`/video-session/${booking.id}`} className="flex items-center gap-2">
+              <Video className="h-4 w-4" />
+              Join Video
+            </Link>
+          </Button>
+        ) : (
+          <Button disabled variant="secondary" className="rounded-xl">
+            <Clock className="h-4 w-4 mr-2" />
+            Opens soon
+          </Button>
+        )}
+        {onCancel && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCancel}
+            className="rounded-xl"
+          >
+            Cancel
+          </Button>
+        )}
+      </div>
     </section>
   );
 }

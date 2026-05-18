@@ -7,9 +7,7 @@ import {
   Calendar,
   Clock,
   Video,
-  ChevronRight,
   Settings,
-  Sparkles,
   Users,
   CheckCircle,
   AlertCircle
@@ -24,13 +22,19 @@ import { format, isToday, isTomorrow, formatDistanceToNow } from 'date-fns';
 import { LessonBookingWithDetails } from "@/types/private-lessons";
 import { cn } from "@/lib/utils";
 import { CancelLessonModal } from "@/components/CancelLessonModal";
+import { CommunityCard } from "@/components/dashboard/CommunityCard";
+import { NextLessonCard } from "@/components/dashboard/NextLessonCard";
 
 interface Community {
   id: string;
   name: string;
   slug: string;
   description: string;
-  image_url: string;
+  image_url: string | null;
+  image_focal_x: number | null;
+  image_focal_y: number | null;
+  image_zoom: string | number | null;
+  created_by: string;
   members_count: number;
   created_at: string;
 }
@@ -256,133 +260,48 @@ export default function DashboardPage() {
           </Button>
         </header>
 
-        {/* Next Lesson Hero Card */}
-        {nextLesson ? (
-          <section
-            className={cn(
-              "relative overflow-hidden rounded-2xl p-6",
-              "bg-gradient-to-br from-primary/90 via-primary to-accent",
-              "text-primary-foreground shadow-lg",
-              "transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5"
-            )}
-          >
-            {/* Decorative elements */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
-
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="h-4 w-4" />
-                <span className="text-sm font-medium text-white/90">Next Lesson</span>
-                {nextLesson.scheduled_at && (
-                  <Badge className="bg-white/20 text-white border-0 text-xs ml-auto">
-                    {getTimeUntil(nextLesson.scheduled_at)}
-                  </Badge>
-                )}
-              </div>
-
-              <h2 className="font-display text-xl md:text-2xl font-semibold mb-1">
-                {nextLesson.lesson_title}
-              </h2>
-
-              <p className="text-white/80 text-sm mb-4">
-                {nextLesson.community_name}
-              </p>
-
-              <div className="flex items-center gap-4 text-sm text-white/80 mb-5">
-                <span className="flex items-center gap-1.5">
-                  <Calendar className="h-4 w-4" />
-                  {formatLessonDate(nextLesson.scheduled_at)}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Clock className="h-4 w-4" />
-                  {nextLesson.duration_minutes} min
-                </span>
-              </div>
-
-              <div className="flex gap-3">
-                {nextLesson.daily_room_name && canJoinVideo(nextLesson) ? (
-                  <Button
-                    asChild
-                    className="bg-white text-primary hover:bg-white/90 font-medium"
-                  >
-                    <Link href={`/video-session/${nextLesson.id}`} className="flex items-center gap-2">
-                      <Video className="h-4 w-4" />
-                      Join Video
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button
-                    disabled
-                    className="bg-white/20 text-white border-0 font-medium"
-                  >
-                    <Clock className="h-4 w-4 mr-2" />
-                    Opens soon
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  asChild
-                  className="text-white/90 hover:text-white hover:bg-white/10"
-                >
-                  <Link href={`/${nextLesson.community_slug}/private-lessons`}>
-                    View Details
-                  </Link>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCancelTarget(nextLesson)}
-                  className="bg-transparent border-white/40 text-white hover:bg-white/10 hover:text-white"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </section>
-        ) : (
-          <section className="rounded-2xl border-2 border-dashed border-border/60 p-8 text-center">
-            <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-              <Calendar className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <h2 className="font-display text-lg font-semibold text-foreground mb-1">
-              No upcoming lessons
-            </h2>
-            <p className="text-muted-foreground text-sm mb-4">
-              Browse your communities to book a private lesson
-            </p>
-          </section>
-        )}
-
-        {/* Communities Pills */}
-        {communities && communities.length > 0 && (
-          <section>
-            <h3 className="font-display text-lg font-semibold text-foreground mb-3">
-              Your Communities
-            </h3>
-            <div className="flex flex-wrap gap-2">
+        {/* Your Communities — new hero. If user has zero, show the dashed
+            empty state inside the same section so the page anchor stays
+            consistent. */}
+        <section>
+          <h3 className="font-display text-lg font-semibold text-foreground mb-4">
+            Your Communities
+          </h3>
+          {communities && communities.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {communities.map((community) => (
-                <Link
+                <CommunityCard
                   key={community.id}
-                  href={`/${community.slug}`}
-                  className={cn(
-                    "inline-flex items-center gap-2 px-4 py-2.5 rounded-full",
-                    "bg-card border border-border/50 shadow-sm",
-                    "text-sm font-medium text-foreground",
-                    "transition-all duration-200 ease-out",
-                    "hover:border-primary/30 hover:shadow-md hover:-translate-y-0.5",
-                    "focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  )}
-                >
-                  <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Users className="h-3.5 w-3.5 text-primary" />
-                  </div>
-                  {community.name}
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </Link>
+                  community={community}
+                  isAdmin={community.created_by === user.id}
+                />
               ))}
             </div>
-          </section>
+          ) : !error ? (
+            <div className="rounded-2xl border-2 border-dashed border-border/60 p-8 text-center">
+              <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                <Users className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <h2 className="font-display text-lg font-semibold text-foreground mb-1">
+                Join a community
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                Discover dance communities and start your journey
+              </p>
+            </div>
+          ) : null}
+        </section>
+
+        {/* Next Lesson — compact strip, only shown when there's an upcoming
+            lesson. */}
+        {nextLesson && (
+          <NextLessonCard
+            booking={nextLesson}
+            canJoinVideo={canJoinVideo(nextLesson)}
+            timeUntil={getTimeUntil(nextLesson.scheduled_at)}
+            formattedDate={formatLessonDate(nextLesson.scheduled_at)}
+            onCancel={() => setCancelTarget(nextLesson)}
+          />
         )}
 
         {/* Upcoming Lessons List */}
@@ -473,21 +392,6 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-          </section>
-        )}
-
-        {/* Empty state when no communities */}
-        {(!communities || communities.length === 0) && !error && (
-          <section className="rounded-2xl border-2 border-dashed border-border/60 p-8 text-center">
-            <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-              <Users className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <h2 className="font-display text-lg font-semibold text-foreground mb-1">
-              Join a community
-            </h2>
-            <p className="text-muted-foreground text-sm">
-              Discover dance communities and start your journey
-            </p>
           </section>
         )}
 
