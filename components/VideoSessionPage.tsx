@@ -21,6 +21,24 @@ interface VideoToken {
 
 type BookingWithRole = LessonBookingWithDetails & { is_teacher?: boolean };
 
+function formatTimeUntil(totalMinutes: number): string {
+  if (totalMinutes < 60) {
+    return `${totalMinutes} ${totalMinutes === 1 ? "minute" : "minutes"}`;
+  }
+  if (totalMinutes < 24 * 60) {
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    const hourPart = `${hours} ${hours === 1 ? "hour" : "hours"}`;
+    if (mins === 0) return hourPart;
+    return `${hourPart} ${mins} ${mins === 1 ? "minute" : "minutes"}`;
+  }
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const dayPart = `${days} ${days === 1 ? "day" : "days"}`;
+  if (hours === 0) return dayPart;
+  return `${dayPart} ${hours} ${hours === 1 ? "hour" : "hours"}`;
+}
+
 export default function VideoSessionPage() {
   const params = useParams();
   const router = useRouter();
@@ -209,7 +227,7 @@ export default function VideoSessionPage() {
       );
       heading =
         minutesUntilStart > 0
-          ? `Lesson starts in ${minutesUntilStart} minutes`
+          ? `Lesson starts in ${formatTimeUntil(minutesUntilStart)}`
           : "Lesson starting soon";
       body = "You'll be able to join 15 minutes before the lesson begins.";
     }
