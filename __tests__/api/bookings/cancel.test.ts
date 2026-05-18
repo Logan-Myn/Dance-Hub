@@ -94,10 +94,19 @@ describe('POST /api/bookings/[bookingId]/cancel — guards', () => {
     expect(res.status).toBe(409);
   });
 
-  test('409 when scheduled_at is in the past (beyond 5-min grace)', async () => {
+  test('409 when scheduled_at is at or past now', async () => {
     mockedSession.mockResolvedValueOnce({ user: { id: STUDENT_ID } });
     mockedQueryOne.mockResolvedValueOnce(
       bookingRow({ scheduled_at: futureScheduledAt(-1) }) // 1h ago
+    );
+    const res = await callRoute();
+    expect(res.status).toBe(409);
+  });
+
+  test('409 when scheduled_at is exactly now (no grace)', async () => {
+    mockedSession.mockResolvedValueOnce({ user: { id: STUDENT_ID } });
+    mockedQueryOne.mockResolvedValueOnce(
+      bookingRow({ scheduled_at: new Date().toISOString() })
     );
     const res = await callRoute();
     expect(res.status).toBe(409);

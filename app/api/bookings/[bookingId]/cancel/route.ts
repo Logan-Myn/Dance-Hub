@@ -5,7 +5,6 @@ import { getSession } from "@/lib/auth-session";
 import { stripe } from "@/lib/stripe";
 import { getEmailService } from "@/lib/resend/email-service";
 
-const GRACE_MINUTES = 5;
 const CANCELABLE_STATUSES = new Set(["booked", "scheduled"]);
 
 interface BookingForCancel {
@@ -93,9 +92,9 @@ export async function POST(
     ? new Date(booking.scheduled_at).getTime()
     : null;
   const nowMs = Date.now();
-  if (scheduledMs !== null && scheduledMs + GRACE_MINUTES * 60_000 < nowMs) {
+  if (scheduledMs !== null && nowMs >= scheduledMs) {
     return NextResponse.json(
-      { error: "Lesson already started or ended" },
+      { error: "Lesson has already started or ended" },
       { status: 409 }
     );
   }
