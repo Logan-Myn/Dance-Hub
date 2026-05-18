@@ -34,9 +34,10 @@ interface BookingWithDetails {
   late_refund_policy: 'refund' | 'no_refund';
   community_name: string;
   community_slug: string;
+  viewer_role: 'student' | 'teacher';
 }
 
-// GET: Fetch all bookings for the current user (as student)
+// GET: Fetch all bookings for the current user (as student or teacher)
 export async function GET() {
   try {
     // Get the current user from Better Auth session
@@ -82,11 +83,12 @@ export async function GET() {
         pl.cancellation_cutoff_hours,
         pl.late_refund_policy,
         c.name as community_name,
-        c.slug as community_slug
+        c.slug as community_slug,
+        CASE WHEN pl.teacher_id = ${user.id} THEN 'teacher' ELSE 'student' END as viewer_role
       FROM lesson_bookings lb
       INNER JOIN private_lessons pl ON pl.id = lb.private_lesson_id
       INNER JOIN communities c ON c.id = pl.community_id
-      WHERE lb.student_id = ${user.id}
+      WHERE lb.student_id = ${user.id} OR pl.teacher_id = ${user.id}
       ORDER BY lb.created_at DESC
       LIMIT 100
     `;

@@ -172,8 +172,11 @@ export default function DashboardPage() {
     pricePaid: number,
     scheduledAtIso: string | null,
     cutoffHours: number,
-    latePolicy: 'refund' | 'no_refund'
+    latePolicy: 'refund' | 'no_refund',
+    role: 'student' | 'teacher'
   ): number {
+    // Teacher-initiated cancellations always refund in full (mirrors cancel route).
+    if (role === 'teacher') return Math.round(pricePaid * 100);
     if (!scheduledAtIso) return Math.round(pricePaid * 100);
     const scheduledMs = new Date(scheduledAtIso).getTime();
     const cutoffMs = scheduledMs - cutoffHours * 3600_000;
@@ -338,7 +341,11 @@ export default function DashboardPage() {
                       <p className="text-sm text-muted-foreground flex items-center gap-2">
                         <span>{formatLessonDate(booking.scheduled_at)}</span>
                         <span className="text-border">·</span>
-                        <span>{booking.community_name}</span>
+                        <span>
+                          {booking.viewer_role === 'teacher'
+                            ? `with ${booking.student_name || booking.student_email}`
+                            : booking.community_name}
+                        </span>
                       </p>
                     </div>
                   </div>
@@ -420,12 +427,13 @@ export default function DashboardPage() {
           lessonTitle={cancelTarget.lesson_title}
           scheduledAtIso={cancelTarget.scheduled_at ?? null}
           currency="EUR"
-          role="student"
+          role={cancelTarget.viewer_role}
           expectedRefundCents={expectedRefundCents(
             Number(cancelTarget.price_paid),
             cancelTarget.scheduled_at ?? null,
             cancelTarget.cancellation_cutoff_hours,
-            cancelTarget.late_refund_policy
+            cancelTarget.late_refund_policy,
+            cancelTarget.viewer_role
           )}
         />
       )}

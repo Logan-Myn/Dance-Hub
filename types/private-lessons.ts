@@ -69,6 +69,7 @@ export interface LessonBookingWithDetails extends LessonBooking {
   community_slug: string;
   student_full_name?: string;
   student_display_name?: string;
+  viewer_role: 'student' | 'teacher';
 }
 
 // Daily.co utility types

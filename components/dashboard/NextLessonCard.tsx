@@ -44,7 +44,9 @@ export function NextLessonCard({
       </Link>
 
       <p className="text-sm text-muted-foreground mt-1 mb-3">
-        {booking.community_name}
+        {booking.viewer_role === 'teacher'
+          ? `with ${booking.student_name || booking.student_email}`
+          : booking.community_name}
       </p>
 
       <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4 flex-wrap">
