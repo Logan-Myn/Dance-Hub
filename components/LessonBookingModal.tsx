@@ -12,9 +12,10 @@ import { Clock, MapPin, Percent, Calendar } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAuthModal } from "@/contexts/AuthModalContext";
-import { formatPrice, formatSlotTime } from "@/lib/utils";
+import { formatPrice } from "@/lib/utils";
 import { getLocationText } from "@/lib/private-lessons-display";
 import PrivateLessonPaymentModal from "./PrivateLessonPaymentModal";
+import { WeekSlotPicker } from './WeekSlotPicker';
 
 function describeCancellationPolicy(hours: number, latePolicy: 'refund' | 'no_refund'): string {
   if (latePolicy === 'refund') {
@@ -104,15 +105,6 @@ export default function LessonBookingModal({
     } finally {
       setAvailabilityLoading(false);
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString + 'T00:00:00');
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      month: 'short', 
-      day: 'numeric' 
-    });
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -274,49 +266,14 @@ export default function LessonBookingModal({
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4" />
-            <Label className="text-base font-medium">Select a Time Slot *</Label>
+            <Label className="text-base font-medium">Select a time *</Label>
           </div>
-          
-          {availabilityLoading ? (
-            <div className="text-center py-4 text-gray-500">
-              Loading available time slots...
-            </div>
-          ) : availableSlots.length === 0 ? (
-            <div className="text-center py-4 text-gray-500 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              No available time slots found. Please contact the teacher directly.
-            </div>
-          ) : (
-            <div className="grid gap-2 max-h-40 overflow-y-auto">
-              {availableSlots.map((slot) => (
-                <button
-                  key={slot.id}
-                  type="button"
-                  onClick={() => setSelectedSlot(slot)}
-                  className={`p-3 text-left rounded-lg border transition-colors ${
-                    selectedSlot?.id === slot.id
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <div className="font-medium">
-                        {formatDate(slot.availability_date)}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {formatSlotTime(slot.start_time)} - {formatSlotTime(slot.end_time)}
-                      </div>
-                    </div>
-                    {selectedSlot?.id === slot.id && (
-                      <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
-                        <div className="w-2 h-2 bg-white rounded-full"></div>
-                      </div>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+          <WeekSlotPicker
+            slots={availableSlots}
+            selectedSlotId={selectedSlot?.id ?? null}
+            onSelect={setSelectedSlot}
+            loading={availabilityLoading}
+          />
         </div>
 
         {/* Booking Form */}
