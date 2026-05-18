@@ -5,43 +5,63 @@ APP_NAME="dance-hub-preprod"
 APP_PORT=3009
 DOMAIN="preprod.dance-hub.io"
 BRANCH="${2:-main}"
-PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Main repo (canonical source of .env.preprod, where you edit it).
+MAIN_REPO="$(cd "$(dirname "$0")" && pwd)"
+# Dedicated worktree where preprod is built and served from. Detached HEAD
+# at origin/$BRANCH; this gives preprod its own cwd / .env.local / .next so it
+# never fights with prod over /home/debian/apps/dance-hub/.env.local.
+PREPROD_DIR="/home/debian/apps/dance-hub-preprod"
 NGINX_CONF="/etc/nginx/sites-available/$DOMAIN"
 
-cd "$PROJECT_DIR"
+require_preprod_dir() {
+  if [ ! -d "$PREPROD_DIR/.git" ] && [ ! -f "$PREPROD_DIR/.git" ]; then
+    echo "ERROR: $PREPROD_DIR is not a git worktree. Create it with:"
+    echo "  cd $MAIN_REPO && git worktree add $PREPROD_DIR --detach"
+    exit 1
+  fi
+}
 
-cmd_deploy() {
-  echo "==> Checking out branch $BRANCH..."
+sync_preprod_code() {
+  cd "$PREPROD_DIR"
+  echo "==> Fetching origin..."
   git fetch origin
-  git checkout "$BRANCH"
-  git pull origin "$BRANCH"
+  echo "==> Checking out origin/$BRANCH (detached)..."
+  git checkout --detach "origin/$BRANCH"
+}
 
-  echo "==> Copying preprod env..."
-  cp .env.preprod .env.local
+sync_preprod_env() {
+  echo "==> Syncing preprod env from main repo..."
+  cp "$MAIN_REPO/.env.preprod" "$PREPROD_DIR/.env.local"
+}
 
+build_preprod() {
+  cd "$PREPROD_DIR"
   echo "==> Installing dependencies..."
   bun install
-
   echo "==> Building..."
   bun run build
+}
 
-  echo "==> Restoring production env..."
-  git checkout main -- .env.local 2>/dev/null || true
+start_pm2() {
+  echo "==> (Re)starting PM2 $APP_NAME from $PREPROD_DIR..."
+  pm2 delete "$APP_NAME" 2>/dev/null || true
+  pm2 start "npx" --name "$APP_NAME" --cwd "$PREPROD_DIR" -- next start -p "$APP_PORT"
+  pm2 save
+}
+
+cmd_deploy() {
+  require_preprod_dir
+  sync_preprod_code
+  sync_preprod_env
+  build_preprod
 
   echo "==> Updating Nginx..."
   write_nginx_config
   sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/
   sudo nginx -t && sudo nginx -s reload
 
-  echo "==> Starting preprod with PM2..."
-  pm2 delete "$APP_NAME" 2>/dev/null || true
-  ENV_FILE="$PROJECT_DIR/.env.preprod" pm2 start bash --name "$APP_NAME" -- -c "
-    cd $PROJECT_DIR && \
-    git checkout $BRANCH 2>/dev/null && \
-    cp .env.preprod .env.local && \
-    npx next start -p $APP_PORT
-  "
-  pm2 save
+  start_pm2
 
   echo ""
   echo "Done! Preprod running at https://$DOMAIN (port $APP_PORT)"
@@ -49,29 +69,11 @@ cmd_deploy() {
 }
 
 cmd_restart() {
-  echo "==> Pulling latest..."
-  git fetch origin
-  git stash 2>/dev/null || true
-  git checkout "$BRANCH"
-  git pull origin "$BRANCH"
-  git stash pop 2>/dev/null || true
-
-  echo "==> Copying preprod env..."
-  cp .env.preprod .env.local
-
-  echo "==> Installing & building..."
-  bun install
-  bun run build
-
-  echo "==> Restarting PM2..."
-  pm2 delete "$APP_NAME" 2>/dev/null || true
-  pm2 start bash --name "$APP_NAME" -- -c "
-    cd $PROJECT_DIR && \
-    cp .env.preprod .env.local && \
-    npx next start -p $APP_PORT
-  "
-  pm2 save
-
+  require_preprod_dir
+  sync_preprod_code
+  sync_preprod_env
+  build_preprod
+  start_pm2
   echo "Done! Preprod restarted."
 }
 
@@ -129,9 +131,12 @@ case "${1:-}" in
   *)
     echo "Usage: ./deploy-preprod.sh [deploy|restart|stop] [branch]"
     echo ""
-    echo "  deploy  [branch]  — Full setup: checkout branch, build, nginx, pm2 (default: main)"
-    echo "  restart [branch]  — Pull latest, rebuild, restart pm2 (default: main)"
+    echo "  deploy  [branch]  — Full setup: nginx + pm2 + build in $PREPROD_DIR (default: main)"
+    echo "  restart [branch]  — Pull latest, rebuild, restart pm2 in $PREPROD_DIR (default: main)"
     echo "  stop              — Stop preprod process"
+    echo ""
+    echo "Preprod runs from $PREPROD_DIR (detached HEAD), separate from prod cwd."
+    echo "Edit the canonical preprod env at $MAIN_REPO/.env.preprod — the script syncs it on each run."
     exit 1
     ;;
 esac
