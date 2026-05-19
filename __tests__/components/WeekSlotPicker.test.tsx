@@ -14,6 +14,7 @@ const mkSlot = (date: string, start: string): TeacherAvailabilitySlot => ({
   is_active: true,
   created_at: '',
   updated_at: '',
+  teacher_timezone: 'UTC',
 });
 
 // Freeze "today" to make tests deterministic.

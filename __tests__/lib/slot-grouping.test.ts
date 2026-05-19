@@ -17,6 +17,7 @@ const mkSlot = (date: string, start = '09:00'): TeacherAvailabilitySlot => ({
   is_active: true,
   created_at: '',
   updated_at: '',
+  teacher_timezone: 'UTC',
 });
 
 describe('addDays', () => {

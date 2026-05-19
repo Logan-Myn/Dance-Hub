@@ -125,11 +125,12 @@ export interface TeacherAvailabilitySlot {
   teacher_id: string;
   community_id: string;
   availability_date: string; // YYYY-MM-DD format
-  start_time: string; // HH:MM format
-  end_time: string; // HH:MM format
+  start_time: string; // HH:MM format — naive, in teacher's timezone
+  end_time: string;   // HH:MM format — naive, in teacher's timezone
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  teacher_timezone: string; // IANA tz string, e.g. "Europe/Tallinn"
 }
 
 export interface TeacherAvailabilityWithDetails extends TeacherAvailabilitySlot {

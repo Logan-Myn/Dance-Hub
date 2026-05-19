@@ -17,12 +17,12 @@ interface AvailabilitySlot {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  teacher_timezone: string;
 }
 
 interface SlotWithBookings extends AvailabilitySlot {
   booking_id: string | null;
   payment_status: string | null;
-  teacher_timezone: string;
 }
 
 export async function GET(
