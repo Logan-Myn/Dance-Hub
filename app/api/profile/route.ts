@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     // If userId is provided, fetch that specific profile (userId is Better Auth user ID)
     if (requestedUserId) {
       const profiles = await sql`
-        SELECT id, full_name, display_name, avatar_url, email, is_admin, auth_user_id
+        SELECT id, full_name, display_name, avatar_url, email, is_admin, auth_user_id, timezone
         FROM profiles
         WHERE auth_user_id = ${requestedUserId}
       `;
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     }
 
     const profiles = await sql`
-      SELECT id, full_name, display_name, avatar_url, email, is_admin, auth_user_id
+      SELECT id, full_name, display_name, avatar_url, email, is_admin, auth_user_id, timezone
       FROM profiles
       WHERE auth_user_id = ${session.user.id}
     `;
@@ -69,7 +69,7 @@ export async function PUT(request: Request) {
       );
     }
 
-    const { fullName, displayName, avatarUrl } = await request.json();
+    const { fullName, displayName, avatarUrl, timezone } = await request.json();
 
     // Check display name uniqueness if provided
     if (displayName) {
@@ -102,6 +102,7 @@ export async function PUT(request: Request) {
         full_name = COALESCE(${fullName}, full_name),
         display_name = ${displayName || null},
         avatar_url = COALESCE(${avatarUrl}, avatar_url),
+        timezone = COALESCE(${timezone ?? null}, timezone),
         updated_at = NOW()
       WHERE auth_user_id = ${session.user.id}
     `;
