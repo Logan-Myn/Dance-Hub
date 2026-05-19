@@ -93,6 +93,11 @@ export const fetcher = async (key: string) => {
     );
   }
 
+  // Fallback: treat any URL-like key as a direct fetch
+  if (key.startsWith('/')) {
+    return fetchJson(key, `Failed to fetch ${key}`);
+  }
+
   throw new Error(`No fetcher defined for key ${key}`);
 };
 
