@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
+import { formatInTz } from "@/lib/timezone";
+import { useUserTimezone } from "@/hooks/useUserTimezone";
 import { ClockIcon, CalendarIcon, VideoCameraIcon, PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -65,6 +67,7 @@ export default function LiveClassDetailsModal({
   onDeleted,
 }: LiveClassDetailsModalProps) {
   const isMobile = useIsMobile();
+  const userTimezone = useUserTimezone();
   const startTime = parseISO(liveClass.scheduled_start_time);
   const endTime = new Date(startTime.getTime() + liveClass.duration_minutes * 60000);
   // Scheduled-but-already-elapsed = effectively past.
@@ -159,12 +162,12 @@ export default function LiveClassDetailsModal({
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-gray-700">
                 <CalendarIcon className="h-5 w-5 text-gray-400" />
-                <span>{format(startTime, 'EEEE, MMMM d, yyyy')}</span>
+                <span>{formatInTz(startTime, userTimezone, 'EEEE, MMMM d, yyyy')}</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-gray-700">
                 <ClockIcon className="h-5 w-5 text-gray-400" />
                 <span>
-                  {format(startTime, 'h:mm a')} - {format(endTime, 'h:mm a')}
+                  {formatInTz(startTime, userTimezone, 'h:mm a')} - {formatInTz(endTime, userTimezone, 'h:mm a')}
                 </span>
                 <span className="text-gray-500">({liveClass.duration_minutes} minutes)</span>
               </div>

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { format } from "date-fns";
+import { formatInTz } from "@/lib/timezone";
+import { useUserTimezone } from "@/hooks/useUserTimezone";
 import { ClockIcon, UsersIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +44,7 @@ export default function VideoSessionPage() {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
+  const userTimezone = useUserTimezone();
   const bookingId = params?.bookingId as string;
 
   const [booking, setBooking] = useState<BookingWithRole | null>(null);
@@ -287,7 +289,7 @@ export default function VideoSessionPage() {
               {scheduledTime && endTime && (
                 <div className="flex items-center">
                   <ClockIcon className="h-4 w-4 mr-1" />
-                  {format(scheduledTime, "h:mm a")} - {format(endTime, "h:mm a")}
+                  {formatInTz(scheduledTime, userTimezone, "h:mm a")} - {formatInTz(endTime, userTimezone, "h:mm a")}
                 </div>
               )}
               <div className="flex items-center">

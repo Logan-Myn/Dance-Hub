@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
+import { formatInTz } from "@/lib/timezone";
+import { useUserTimezone } from "@/hooks/useUserTimezone";
 import { ClockIcon, UsersIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +41,7 @@ interface VideoToken {
 
 export default function LiveClassVideoPage({ classId, liveClass }: LiveClassVideoPageProps) {
   const router = useRouter();
+  const userTimezone = useUserTimezone();
   const [videoToken, setVideoToken] = useState<VideoToken | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -203,7 +206,7 @@ export default function LiveClassVideoPage({ classId, liveClass }: LiveClassVide
               <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-gray-600">
                 <div className="flex items-center">
                   <ClockIcon className="h-4 w-4 mr-1" />
-                  {format(startTime, 'h:mm a')} - {format(endTime, 'h:mm a')}
+                  {formatInTz(startTime, userTimezone, 'h:mm a')} - {formatInTz(endTime, userTimezone, 'h:mm a')}
                 </div>
                 <div className="flex items-center">
                   <UsersIcon className="h-4 w-4 mr-1" />

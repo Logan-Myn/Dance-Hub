@@ -1,10 +1,12 @@
 "use client";
 
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { PlayIcon, ClockIcon } from "@heroicons/react/24/solid";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useIsMobile } from "@/hooks/use-is-mobile";
+import { formatInTz } from "@/lib/timezone";
+import { useUserTimezone } from "@/hooks/useUserTimezone";
 
 interface LiveClass {
   id: string;
@@ -28,6 +30,7 @@ interface LiveClassCardProps {
 export default function LiveClassCard({ liveClass, communitySlug, onClick }: LiveClassCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
+  const userTimezone = useUserTimezone();
   // Skip the hover tooltip on touch devices — tap fires a synthetic
   // mouseenter that briefly flashes the tooltip before the click handler
   // opens the details bottom sheet.
@@ -91,7 +94,7 @@ export default function LiveClassCard({ liveClass, communitySlug, onClick }: Liv
             </p>
             <p className="text-[10px] opacity-90 mt-0.5 flex items-center gap-1">
               <ClockIcon className="h-2.5 w-2.5 inline" />
-              {format(startTime, 'h:mm')} - {format(endTime, 'h:mm a')}
+              {formatInTz(startTime, userTimezone, 'h:mm')} - {formatInTz(endTime, userTimezone, 'h:mm a')}
             </p>
           </div>
           {liveClass.is_currently_active && (
@@ -128,7 +131,7 @@ export default function LiveClassCard({ liveClass, communitySlug, onClick }: Liv
             <div className="space-y-1 text-xs text-gray-700 mb-2">
               <div className="flex items-center gap-1">
                 <ClockIcon className="h-3 w-3 text-gray-400" />
-                <span>{format(startTime, 'h:mm a')} - {format(endTime, 'h:mm a')}</span>
+                <span>{formatInTz(startTime, userTimezone, 'h:mm a')} - {formatInTz(endTime, userTimezone, 'h:mm a')}</span>
               </div>
               <div className="text-gray-500">
                 Duration: {liveClass.duration_minutes} minutes

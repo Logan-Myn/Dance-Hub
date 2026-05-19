@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
+import { formatInTz, naiveToUtc } from "@/lib/timezone";
+import { useUserTimezone } from "@/hooks/useUserTimezone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +48,7 @@ export default function LiveClassModal({
 }: LiveClassModalProps) {
   const { session } = useAuth();
   const isEdit = !!existingClass;
+  const userTimezone = useUserTimezone();
 
   const [formData, setFormData] = useState({
     title: "",
@@ -64,23 +67,23 @@ export default function LiveClassModal({
       setFormData({
         title: existingClass.title,
         description: existingClass.description ?? "",
-        scheduledDateTime: format(start, "yyyy-MM-dd"),
-        scheduledTime: format(start, "HH:mm"),
+        scheduledDateTime: formatInTz(start, userTimezone, "yyyy-MM-dd"),
+        scheduledTime: formatInTz(start, userTimezone, "HH:mm"),
         duration: String(existingClass.duration_minutes),
         enableRecording: false,
       });
       return;
     }
     if (initialDateTime) {
-      const date = format(initialDateTime, 'yyyy-MM-dd');
-      const time = format(initialDateTime, 'HH:mm');
+      const date = formatInTz(initialDateTime, userTimezone, 'yyyy-MM-dd');
+      const time = formatInTz(initialDateTime, userTimezone, 'HH:mm');
       setFormData(prev => ({
         ...prev,
         scheduledDateTime: date,
         scheduledTime: time,
       }));
     }
-  }, [initialDateTime, existingClass]);
+  }, [initialDateTime, existingClass, userTimezone]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,7 +96,7 @@ export default function LiveClassModal({
         return;
       }
 
-      const scheduledStartTime = new Date(`${formData.scheduledDateTime}T${formData.scheduledTime}`);
+      const scheduledStartTime = naiveToUtc(`${formData.scheduledDateTime}T${formData.scheduledTime}`, userTimezone);
 
       const url = isEdit
         ? `/api/community/${communitySlug}/live-classes/${existingClass!.id}`

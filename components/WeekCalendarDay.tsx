@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { addDays, format, isSameDay, parseISO } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import LiveClassCard from "./LiveClassCard";
+import { useUserTimezone } from "@/hooks/useUserTimezone";
 
 interface LiveClass {
   id: string;
@@ -39,6 +41,7 @@ export default function WeekCalendarDay({
   communitySlug,
   onClassClick,
 }: WeekCalendarDayProps) {
+  const userTimezone = useUserTimezone();
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   // Default selection: today if it lives in the current week, otherwise Sunday.
@@ -129,7 +132,7 @@ export default function WeekCalendarDay({
             <div className="divide-y divide-gray-100">
               {visibleHours.map((hour) => {
                 const hourClasses = selectedDayClasses.filter(
-                  (lc) => parseISO(lc.scheduled_start_time).getHours() === hour,
+                  (lc) => toZonedTime(parseISO(lc.scheduled_start_time), userTimezone).getHours() === hour,
                 );
                 const hourEnd = new Date(selectedDay);
                 hourEnd.setHours(hour, 59, 59, 999);
