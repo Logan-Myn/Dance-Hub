@@ -18,7 +18,9 @@ import useSWR from 'swr';
 import { fetcher } from '@/lib/fetcher';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { format, isToday, isTomorrow, formatDistanceToNow } from 'date-fns';
+import { isToday, isTomorrow, formatDistanceToNow } from 'date-fns';
+import { formatInTz, tzOffsetLabel } from '@/lib/timezone';
+import { useUserTimezone } from '@/hooks/useUserTimezone';
 import { LessonBookingWithDetails } from "@/types/private-lessons";
 import { cn } from "@/lib/utils";
 import { CancelLessonModal } from "@/components/CancelLessonModal";
@@ -54,6 +56,8 @@ export default function DashboardPage() {
   const [isLoadingBookings, setIsLoadingBookings] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [cancelTarget, setCancelTarget] = useState<LessonBookingWithDetails | null>(null);
+
+  const userTimezone = useUserTimezone();
 
   const { data: communities, error, isLoading: isDataLoading } = useSWR<Community[]>(
     user ? `user-communities:${user.id}` : null,
@@ -215,9 +219,9 @@ export default function DashboardPage() {
   const formatLessonDate = (dateString: string | undefined) => {
     if (!dateString) return 'Flexible timing';
     const date = new Date(dateString);
-    if (isToday(date)) return `Today at ${format(date, 'h:mm a')}`;
-    if (isTomorrow(date)) return `Tomorrow at ${format(date, 'h:mm a')}`;
-    return format(date, 'EEE, MMM d · h:mm a');
+    if (isToday(date)) return `Today at ${formatInTz(date, userTimezone, 'h:mm a')}`;
+    if (isTomorrow(date)) return `Tomorrow at ${formatInTz(date, userTimezone, 'h:mm a')}`;
+    return formatInTz(date, userTimezone, 'EEE, MMM d · h:mm a');
   };
 
   const getTimeUntil = (dateString: string | undefined) => {
@@ -247,7 +251,7 @@ export default function DashboardPage() {
               </h1>
               <p className="text-muted-foreground text-sm flex items-center gap-1.5 mt-0.5">
                 <Calendar className="h-3.5 w-3.5" />
-                {format(currentTime, 'EEEE, MMMM d')}
+                {formatInTz(currentTime, userTimezone, 'EEEE, MMMM d')}
               </p>
             </div>
           </div>
@@ -316,6 +320,9 @@ export default function DashboardPage() {
                           {booking.viewer_role === 'teacher'
                             ? `with ${booking.student_name || booking.student_email}`
                             : booking.community_name}
+                        </span>
+                        <span className="text-xs text-muted-foreground/60">
+                          {tzOffsetLabel(userTimezone)}
                         </span>
                       </p>
                     </div>
