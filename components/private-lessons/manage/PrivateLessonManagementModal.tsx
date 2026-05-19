@@ -15,8 +15,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import TeacherCalendarAvailability from './TeacherCalendarAvailability';
-import CreatePrivateLessonModal from './CreatePrivateLessonModal';
+import TeacherCalendarAvailability from '../../TeacherCalendarAvailability';
+import CreatePrivateLessonModal from '../../CreatePrivateLessonModal';
 import { Loader2, Edit, BookOpen, Users, Calendar, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
