@@ -91,7 +91,10 @@ export function BookingsTab({ communitySlug }: BookingsTabProps) {
     setIsLoading(true);
     try {
       const res = await fetch(`/api/community/${communitySlug}/lesson-bookings`);
-      if (res.ok) setBookings(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setBookings(Array.isArray(data) ? data : data.bookings ?? []);
+      }
     } catch (e) {
       console.error('Failed to load bookings', e);
     } finally {

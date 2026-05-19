@@ -46,7 +46,8 @@ export function LessonsTab({
         `/api/community/${communitySlug}/private-lessons?include_inactive=true`,
       );
       if (res.ok) {
-        setLessons(await res.json());
+        const data = await res.json();
+        setLessons(Array.isArray(data) ? data : data.lessons ?? []);
       }
     } catch (e) {
       console.error('Failed to load lessons', e);
