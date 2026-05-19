@@ -4,6 +4,7 @@ import { Outfit, Figtree } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AuthModalProvider } from "@/contexts/AuthModalContext";
+import { TimezoneSync } from "@/components/TimezoneSync";
 import { Toaster } from "react-hot-toast";
 import { Analytics } from "@vercel/analytics/next";
 import { NextStepProvider } from "nextstepjs";
@@ -63,6 +64,7 @@ export default function RootLayout({
         <NextStepProvider>
           <NextStepWrapper>
             <AuthProvider>
+              <TimezoneSync />
               <AuthModalProvider>
                 {children}
               </AuthModalProvider>
