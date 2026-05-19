@@ -16,7 +16,7 @@ import { formatPrice } from "@/lib/utils";
 import { getLocationText } from "@/lib/private-lessons-display";
 import PrivateLessonPaymentModal from "./PrivateLessonPaymentModal";
 import { WeekSlotPicker } from './WeekSlotPicker';
-import { naiveToUtc, tzOffsetLabel } from '@/lib/timezone';
+import { naiveToUtc } from '@/lib/timezone';
 import { useUserTimezone } from '@/hooks/useUserTimezone';
 
 function describeCancellationPolicy(hours: number, latePolicy: 'refund' | 'no_refund'): string {
