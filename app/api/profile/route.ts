@@ -102,11 +102,13 @@ export async function PUT(request: Request) {
     await sql`
       UPDATE profiles
       SET
-        full_name = COALESCE(${fullName}, full_name),
-        display_name = ${displayName || null},
-        avatar_url = COALESCE(${avatarUrl}, avatar_url),
-        timezone = COALESCE(${timezone ?? null}, timezone),
-        updated_at = NOW()
+        full_name    = COALESCE(${fullName ?? null}, full_name),
+        display_name = CASE WHEN ${displayName !== undefined}
+                           THEN ${displayName ?? null}
+                           ELSE display_name END,
+        avatar_url   = COALESCE(${avatarUrl ?? null}, avatar_url),
+        timezone     = COALESCE(${timezone ?? null}, timezone),
+        updated_at   = NOW()
       WHERE auth_user_id = ${session.user.id}
     `;
 
