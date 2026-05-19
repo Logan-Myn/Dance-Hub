@@ -37,6 +37,9 @@ export default function SettingsPage() {
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isSavingTimezone, setIsSavingTimezone] = useState(false);
+  const [selectedTimezone, setSelectedTimezone] = useState(() =>
+    Intl.DateTimeFormat().resolvedOptions().timeZone
+  );
   const { user } = useAuth();
 
   // Check if user signed in via Google (from Better Auth session)
@@ -54,6 +57,7 @@ export default function SettingsPage() {
         if (!fetchedTz || fetchedTz === 'UTC') {
           const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
           setProfile({ ...data, timezone: browserTz });
+          setSelectedTimezone(browserTz);
           fetch('/api/profile', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -61,6 +65,7 @@ export default function SettingsPage() {
           }).catch(() => {});
         } else {
           setProfile(data);
+          setSelectedTimezone(fetchedTz);
         }
       } catch (error) {
         console.error('Error fetching profile:', error);
@@ -189,7 +194,7 @@ export default function SettingsPage() {
   };
 
   const handleTimezoneChange = async (tz: string) => {
-    if (!user || !profile) return;
+    setSelectedTimezone(tz);
     setProfile(prev => prev ? { ...prev, timezone: tz } : null);
     setIsSavingTimezone(true);
     try {
@@ -480,7 +485,7 @@ export default function SettingsPage() {
             <Label htmlFor="timezone-select">Your timezone</Label>
             <select
               id="timezone-select"
-              value={profile?.timezone ?? ''}
+              value={selectedTimezone}
               onChange={e => handleTimezoneChange(e.target.value)}
               disabled={isSavingTimezone}
               className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
