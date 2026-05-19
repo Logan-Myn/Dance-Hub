@@ -5,7 +5,7 @@
  * Never falls back to DATABASE_URL — running tests against prod would
  * delete real rows in cleanupTestData().
  */
-import { neon } from '@neondatabase/serverless';
+import postgres from 'postgres';
 import { config } from 'dotenv';
 import { resolve } from 'path';
 import crypto from 'crypto';
@@ -21,7 +21,7 @@ if (!databaseUrl) {
   );
 }
 
-export const testSql = neon(databaseUrl);
+export const testSql = postgres(databaseUrl);
 
 /**
  * Execute a typed SQL query
@@ -30,7 +30,7 @@ export async function testQuery<T>(
   strings: TemplateStringsArray,
   ...values: unknown[]
 ): Promise<T[]> {
-  return testSql(strings, ...values) as Promise<T[]>;
+  return testSql(strings, ...(values as unknown as readonly never[])) as unknown as Promise<T[]>;
 }
 
 /**
@@ -40,7 +40,7 @@ export async function testQueryOne<T>(
   strings: TemplateStringsArray,
   ...values: unknown[]
 ): Promise<T | null> {
-  const results = await testSql(strings, ...values) as T[];
+  const results = (await testSql(strings, ...(values as unknown as readonly never[]))) as unknown as T[];
   return results[0] ?? null;
 }
 

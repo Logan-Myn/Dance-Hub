@@ -14,7 +14,7 @@
  *   - profiles table has auth_user_id column
  */
 
-import { neon } from "@neondatabase/serverless";
+import postgres from "postgres";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -23,7 +23,7 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const sql = neon(DATABASE_URL);
+const sql = postgres(DATABASE_URL);
 
 function generateId(): string {
   return crypto.randomUUID().replace(/-/g, "");
