@@ -6,7 +6,7 @@ import { PrivateLesson } from "@/types/private-lessons";
 import PrivateLessonCard from "./PrivateLessonCard";
 import LessonBookingModal from "./LessonBookingModal";
 import CreatePrivateLessonModal from "./CreatePrivateLessonModal";
-import PrivateLessonManagementModal from "./PrivateLessonManagementModal";
+import PrivateLessonManagementModal from "./private-lessons/manage/PrivateLessonManagementModal";
 import { Button } from "@/components/ui/button";
 import { Plus, BookOpen, Settings, Users, Sparkles } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
