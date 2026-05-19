@@ -16,6 +16,8 @@ import { formatPrice } from "@/lib/utils";
 import { getLocationText } from "@/lib/private-lessons-display";
 import PrivateLessonPaymentModal from "./PrivateLessonPaymentModal";
 import { WeekSlotPicker } from './WeekSlotPicker';
+import { naiveToUtc, tzOffsetLabel } from '@/lib/timezone';
+import { useUserTimezone } from '@/hooks/useUserTimezone';
 
 function describeCancellationPolicy(hours: number, latePolicy: 'refund' | 'no_refund'): string {
   if (latePolicy === 'refund') {
@@ -47,6 +49,7 @@ export default function LessonBookingModal({
 }: LessonBookingModalProps) {
   const { user, session } = useAuth();
   const { showAuthModal } = useAuthModal();
+  const studentTimezone = useUserTimezone();
   const [isLoading, setIsLoading] = useState(false);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availableSlots, setAvailableSlots] = useState<TeacherAvailabilitySlot[]>([]);
@@ -95,8 +98,11 @@ export default function LessonBookingModal({
         // Filter out past time slots
         const now = new Date();
         const futureSlots = slots.filter((slot: TeacherAvailabilitySlot) => {
-          const slotDateTime = new Date(`${slot.availability_date}T${slot.start_time}`);
-          return slotDateTime > now;
+          const slotUtc = naiveToUtc(
+            `${slot.availability_date}T${slot.start_time}`,
+            slot.teacher_timezone ?? 'UTC'
+          );
+          return slotUtc > now;
         });
         setAvailableSlots(futureSlots);
       }
@@ -154,7 +160,10 @@ export default function LessonBookingModal({
       // Create booking and get payment intent
       const bookingData = {
         ...formData,
-        scheduled_at: new Date(`${selectedSlot.availability_date}T${selectedSlot.start_time}`).toISOString(),
+        scheduled_at: naiveToUtc(
+          `${selectedSlot.availability_date}T${selectedSlot.start_time}`,
+          selectedSlot.teacher_timezone ?? 'UTC'
+        ).toISOString(),
         availability_slot_id: selectedSlot.id,
       };
 
@@ -273,6 +282,7 @@ export default function LessonBookingModal({
             selectedSlotId={selectedSlot?.id ?? null}
             onSelect={setSelectedSlot}
             loading={availabilityLoading}
+            studentTimezone={studentTimezone}
           />
         </div>
 

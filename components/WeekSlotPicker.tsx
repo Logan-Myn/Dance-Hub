@@ -10,6 +10,7 @@ import {
   findFirstWeekWithSlots,
 } from '@/lib/slot-grouping';
 import { formatSlotTime, cn } from '@/lib/utils';
+import { naiveToUtc, formatInTz, tzOffsetLabel } from '@/lib/timezone';
 
 const HORIZON_DAYS = 30;
 const DAY_ABBREV = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -19,6 +20,7 @@ type WeekSlotPickerProps = {
   selectedSlotId: string | null;
   onSelect: (slot: TeacherAvailabilitySlot) => void;
   loading?: boolean;
+  studentTimezone?: string;
 };
 
 function todayAtMidnight(): Date {
@@ -37,7 +39,7 @@ function formatWeekRangeLabel(weekStart: Date): string {
   return `${startLabel} – ${endLabel}`;
 }
 
-export function WeekSlotPicker({ slots, selectedSlotId, onSelect, loading }: WeekSlotPickerProps) {
+export function WeekSlotPicker({ slots, selectedSlotId, onSelect, loading, studentTimezone }: WeekSlotPickerProps) {
   const today = useMemo(() => todayAtMidnight(), []);
   const slotsByDate = useMemo(() => groupSlotsByDate(slots), [slots]);
 
@@ -167,16 +169,33 @@ export function WeekSlotPicker({ slots, selectedSlotId, onSelect, loading }: Wee
 
       {selectedDate && selectedSlots.length > 0 ? (
         <div className="space-y-2">
-          <div className="text-xs text-gray-500">
-            {new Date(`${selectedDate}T00:00:00`).toLocaleDateString('en-US', {
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric',
-            })}
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-gray-500">
+              {new Date(`${selectedDate}T00:00:00`).toLocaleDateString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+              })}
+            </div>
+            {studentTimezone && (
+              <div className="text-xs text-gray-400">
+                Times in {tzOffsetLabel(studentTimezone)}
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             {selectedSlots.map((slot) => {
               const isSelected = slot.id === selectedSlotId;
+              const displayTime = studentTimezone
+                ? formatInTz(
+                    naiveToUtc(
+                      `${slot.availability_date}T${slot.start_time}`,
+                      slot.teacher_timezone ?? 'UTC'
+                    ),
+                    studentTimezone,
+                    'h:mm a'
+                  )
+                : formatSlotTime(slot.start_time);
               return (
                 <button
                   key={slot.id}
@@ -190,7 +209,7 @@ export function WeekSlotPicker({ slots, selectedSlotId, onSelect, loading }: Wee
                       : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
                   )}
                 >
-                  {formatSlotTime(slot.start_time)}
+                  {displayTime}
                 </button>
               );
             })}
