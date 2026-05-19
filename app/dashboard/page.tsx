@@ -276,38 +276,9 @@ export default function DashboardPage() {
           />
         )}
 
-        {/* Your Communities. If user has zero, show the dashed empty state
-            inside the same section so the page anchor stays consistent. */}
-        <section>
-          <h3 className="font-display text-lg font-semibold text-foreground mb-4">
-            Your Communities
-          </h3>
-          {communities && communities.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {communities.map((community) => (
-                <CommunityCard
-                  key={community.id}
-                  community={community}
-                  isAdmin={community.created_by === user.id}
-                />
-              ))}
-            </div>
-          ) : !error ? (
-            <div className="rounded-2xl border-2 border-dashed border-border/60 p-8 text-center">
-              <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                <Users className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <h2 className="font-display text-lg font-semibold text-foreground mb-1">
-                Join a community
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                Discover dance communities and start your journey
-              </p>
-            </div>
-          ) : null}
-        </section>
-
-        {/* Upcoming Lessons List */}
+        {/* Upcoming Lessons List. Sits right under the next-lesson strip so
+            scheduling info stays grouped. Hidden when there's only one
+            upcoming lesson (already shown above) to avoid repeating it. */}
         {upcomingLessons.length > 1 && (
           <section>
             <div className="flex items-center justify-between mb-3">
@@ -377,6 +348,37 @@ export default function DashboardPage() {
             </div>
           </section>
         )}
+
+        {/* Your Communities. If user has zero, show the dashed empty state
+            inside the same section so the page anchor stays consistent. */}
+        <section>
+          <h3 className="font-display text-lg font-semibold text-foreground mb-4">
+            Your Communities
+          </h3>
+          {communities && communities.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {communities.map((community) => (
+                <CommunityCard
+                  key={community.id}
+                  community={community}
+                  isAdmin={community.created_by === user.id}
+                />
+              ))}
+            </div>
+          ) : !error ? (
+            <div className="rounded-2xl border-2 border-dashed border-border/60 p-8 text-center">
+              <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                <Users className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <h2 className="font-display text-lg font-semibold text-foreground mb-1">
+                Join a community
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                Discover dance communities and start your journey
+              </p>
+            </div>
+          ) : null}
+        </section>
 
         {/* Past/Completed Lessons Summary */}
         {bookings.some(b => b.lesson_status === 'completed') && (
