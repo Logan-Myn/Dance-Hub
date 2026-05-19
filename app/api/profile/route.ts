@@ -71,6 +71,18 @@ export async function PUT(request: Request) {
 
     const { fullName, displayName, avatarUrl, timezone } = await request.json();
 
+    if (timezone !== undefined) {
+      let validZones: string[];
+      try {
+        validZones = Intl.supportedValuesOf('timeZone');
+      } catch {
+        validZones = [];
+      }
+      if (validZones.length > 0 && !validZones.includes(timezone)) {
+        return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
+      }
+    }
+
     // Check display name uniqueness if provided
     if (displayName) {
       const existing = await sql`
@@ -86,15 +98,6 @@ export async function PUT(request: Request) {
         );
       }
     }
-
-    // Build update query dynamically
-    const updates: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
-    };
-
-    if (fullName !== undefined) updates.full_name = fullName;
-    if (displayName !== undefined) updates.display_name = displayName || null;
-    if (avatarUrl !== undefined) updates.avatar_url = avatarUrl;
 
     await sql`
       UPDATE profiles
