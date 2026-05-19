@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import useSWR, { mutate } from 'swr';
 import { fetcher } from '@/lib/fetcher';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,8 +8,8 @@ import { useAuth } from '@/contexts/AuthContext';
 /**
  * Invisible component. On first authenticated page load, if the user's
  * saved timezone is still the default 'UTC', auto-detects the browser
- * timezone and silently saves it. Uses sessionStorage to run at most once
- * per browser session, and shares the /api/profile SWR cache.
+ * timezone and silently saves it. Uses a ref so it fires at most once
+ * per page lifetime regardless of re-renders or tab inheritance.
  */
 export function TimezoneSync() {
   const { user } = useAuth();
@@ -17,16 +17,15 @@ export function TimezoneSync() {
     user ? '/api/profile' : null,
     fetcher
   );
+  const hasSynced = useRef(false);
 
   useEffect(() => {
     if (!user || !profile) return;
     if (profile.timezone && profile.timezone !== 'UTC') return;
-    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('tz-synced')) return;
+    if (hasSynced.current) return;
 
+    hasSynced.current = true;
     const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.setItem('tz-synced', '1');
-    }
 
     fetch('/api/profile', {
       method: 'PUT',
