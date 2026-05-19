@@ -3,10 +3,12 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { format, addDays, startOfWeek, endOfWeek, isSameDay, parseISO } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-is-mobile";
+import { useUserTimezone } from "@/hooks/useUserTimezone";
 import LiveClassModal from "./LiveClassModal";
 import LiveClassCard from "./LiveClassCard";
 import LiveClassDetailsModal from "./LiveClassDetailsModal";
@@ -32,6 +34,9 @@ interface WeekCalendarProps {
   /** Server-fetched classes for the current week — lets us skip the first
    *  client fetch and paint without a spinner. */
   initialClasses?: LiveClass[];
+  /** IANA timezone string for the viewer. Falls back to the user's saved
+   *  timezone (via useUserTimezone) and then to browser-local if omitted. */
+  userTimezone?: string;
 }
 
 const DEFAULT_MIN_HOUR = 6;  // default start of visible day: 6 AM
@@ -39,9 +44,11 @@ const DEFAULT_MAX_HOUR = 23; // default end of visible day:   11 PM
 const HALF_HOURS = [0, 30]; // Support 30-minute increments
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-export default function WeekCalendar({ communityId, communitySlug, isTeacher, initialClasses }: WeekCalendarProps) {
+export default function WeekCalendar({ communityId, communitySlug, isTeacher, initialClasses, userTimezone: userTimezoneProp }: WeekCalendarProps) {
   const router = useRouter();
   const isMobile = useIsMobile();
+  const hookTimezone = useUserTimezone();
+  const userTimezone = userTimezoneProp ?? hookTimezone;
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [liveClasses, setLiveClasses] = useState<LiveClass[]>(initialClasses ?? []);
   const [loading, setLoading] = useState(!initialClasses);
@@ -136,7 +143,7 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
   const classesByDayHour = useMemo(() => {
     const map = new Map<string, typeof liveClasses>();
     for (const liveClass of liveClasses) {
-      const classDate = parseISO(liveClass.scheduled_start_time);
+      const classDate = toZonedTime(parseISO(liveClass.scheduled_start_time), userTimezone);
       const key = `${format(classDate, "yyyy-MM-dd")}-${classDate.getHours()}`;
       const bucket = map.get(key);
       if (bucket) {
@@ -146,10 +153,11 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
       }
     }
     return map;
-  }, [liveClasses]);
+  }, [liveClasses, userTimezone]);
 
   const getClassesForTimeSlot = (day: Date, hour: number) => {
-    return classesByDayHour.get(`${format(day, "yyyy-MM-dd")}-${hour}`) ?? [];
+    const zonedDay = toZonedTime(day, userTimezone);
+    return classesByDayHour.get(`${format(zonedDay, "yyyy-MM-dd")}-${hour}`) ?? [];
   };
 
   const handleClassCreated = () => {
