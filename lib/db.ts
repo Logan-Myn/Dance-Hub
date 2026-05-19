@@ -1,4 +1,4 @@
-import { neon, NeonQueryFunction } from '@neondatabase/serverless';
+import postgres, { type Sql } from 'postgres';
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -6,7 +6,7 @@ if (!databaseUrl) {
   throw new Error('DATABASE_URL environment variable is required');
 }
 
-export const sql: NeonQueryFunction<false, false> = neon(databaseUrl);
+export const sql: Sql = postgres(databaseUrl);
 
 /**
  * Execute a typed SQL query using tagged template literals
@@ -17,7 +17,7 @@ export async function query<T>(
   strings: TemplateStringsArray,
   ...values: unknown[]
 ): Promise<T[]> {
-  return sql(strings, ...values) as Promise<T[]>;
+  return sql(strings, ...(values as unknown as readonly never[])) as unknown as Promise<T[]>;
 }
 
 /**
@@ -30,7 +30,7 @@ export async function queryOne<T>(
   strings: TemplateStringsArray,
   ...values: unknown[]
 ): Promise<T | null> {
-  const results = await sql(strings, ...values) as T[];
+  const results = (await sql(strings, ...(values as unknown as readonly never[]))) as unknown as T[];
   return results[0] ?? null;
 }
 
@@ -44,7 +44,7 @@ export async function queryFirst<T>(
   strings: TemplateStringsArray,
   ...values: unknown[]
 ): Promise<T> {
-  const results = await sql(strings, ...values) as T[];
+  const results = (await sql(strings, ...(values as unknown as readonly never[]))) as unknown as T[];
   if (results.length === 0) {
     throw new Error('Query returned no results');
   }
