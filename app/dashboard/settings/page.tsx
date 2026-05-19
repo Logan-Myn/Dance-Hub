@@ -18,6 +18,7 @@ interface Profile {
   display_name: string | null;
   avatar_url: string | null;
   email: string | null;
+  timezone: string;
 }
 
 function formatDisplayName(fullName: string | null): string | null {
@@ -35,6 +36,7 @@ export default function SettingsPage() {
   const [isChangingEmail, setIsChangingEmail] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isSavingTimezone, setIsSavingTimezone] = useState(false);
   const { user } = useAuth();
 
   // Check if user signed in via Google (from Better Auth session)
@@ -48,7 +50,18 @@ export default function SettingsPage() {
         const response = await fetch('/api/profile');
         if (!response.ok) throw new Error('Failed to fetch profile');
         const data = await response.json();
-        setProfile(data);
+        const fetchedTz: string = data.timezone;
+        if (!fetchedTz || fetchedTz === 'UTC') {
+          const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          setProfile({ ...data, timezone: browserTz });
+          fetch('/api/profile', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timezone: browserTz }),
+          }).catch(() => {});
+        } else {
+          setProfile(data);
+        }
       } catch (error) {
         console.error('Error fetching profile:', error);
       } finally {
@@ -173,6 +186,25 @@ export default function SettingsPage() {
     setProfile(prev =>
       prev ? { ...prev, display_name: value || null } : null
     );
+  };
+
+  const handleTimezoneChange = async (tz: string) => {
+    if (!user || !profile) return;
+    setProfile(prev => prev ? { ...prev, timezone: tz } : null);
+    setIsSavingTimezone(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timezone: tz }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Timezone updated');
+    } catch {
+      toast.error('Failed to save timezone');
+    } finally {
+      setIsSavingTimezone(false);
+    }
   };
 
   const handleEmailChange = async (e: React.MouseEvent) => {
@@ -435,6 +467,31 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </form>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Timezone</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-gray-500">
+            Lesson and class times are shown in your timezone.
+          </p>
+          <div className="space-y-1">
+            <Label htmlFor="timezone-select">Your timezone</Label>
+            <select
+              id="timezone-select"
+              value={profile?.timezone ?? ''}
+              onChange={e => handleTimezoneChange(e.target.value)}
+              disabled={isSavingTimezone}
+              className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {Intl.supportedValuesOf('timeZone').map(tz => (
+                <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
+              ))}
+            </select>
+          </div>
+        </CardContent>
+      </Card>
 
       <EmailPreferencesCard />
     </div>
