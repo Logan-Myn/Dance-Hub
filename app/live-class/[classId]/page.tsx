@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { sql } from "@/lib/db";
+import { getSession } from "@/lib/auth-session";
 import LiveClassVideoPage from "@/components/LiveClassVideoPage";
 
 interface LiveClassPageProps {
@@ -20,6 +21,8 @@ interface LiveClass {
   community_name: string;
   teacher_name: string;
   teacher_avatar_url?: string;
+  teacher_id: string;
+  community_created_by: string;
   is_currently_active: boolean;
   is_starting_soon: boolean;
 }
@@ -32,7 +35,8 @@ export default async function LiveClassPage(props: LiveClassPageProps) {
   const liveClasses = await sql`
     SELECT id, title, description, scheduled_start_time, duration_minutes,
            daily_room_name, status, community_slug, community_name,
-           teacher_name, teacher_avatar_url, is_currently_active, is_starting_soon
+           teacher_name, teacher_avatar_url, teacher_id, community_created_by,
+           is_currently_active, is_starting_soon
     FROM live_classes_with_details
     WHERE id = ${classId}
   ` as LiveClass[];
@@ -43,10 +47,17 @@ export default async function LiveClassPage(props: LiveClassPageProps) {
     redirect("/");
   }
 
+  const session = await getSession();
+  const canManage =
+    !!session?.user &&
+    (session.user.id === liveClass.teacher_id ||
+      session.user.id === liveClass.community_created_by);
+
   return (
     <LiveClassVideoPage
       classId={classId}
       liveClass={liveClass}
+      canManage={canManage}
     />
   );
 }

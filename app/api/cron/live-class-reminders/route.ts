@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, sql } from '@/lib/db';
+import { stopRecording as streamHubStopRecording } from '@/lib/stream-hub';
 import { getEmailService } from '@/lib/resend/email-service';
 import { LiveClassReminderEmail } from '@/lib/resend/templates/live-class/live-class-reminder';
 import React from 'react';
@@ -23,6 +24,56 @@ interface CommunityMember {
 
 export const dynamic = 'force-dynamic';
 
+interface StaleLiveClass {
+  id: string;
+  livekit_room_name: string | null;
+}
+
+// Safety net: end live classes that are well past their scheduled end time but
+// still marked 'live'. Normally the teacher ends a class via the in-room button,
+// but if they close the tab (or the class overruns and the button is gone) it can
+// get stuck 'live' forever. A 30-minute grace avoids cutting off classes that run
+// a bit over their scheduled duration.
+async function endStaleLiveClasses(): Promise<number> {
+  const stale = await query<StaleLiveClass>`
+    SELECT id, livekit_room_name
+    FROM live_classes
+    WHERE status = 'live'
+      AND scheduled_start_time
+          + (duration_minutes || ' minutes')::interval
+          + INTERVAL '30 minutes' < NOW()
+  `;
+
+  let ended = 0;
+  for (const lc of stale ?? []) {
+    try {
+      await sql`
+        UPDATE live_classes SET status = 'ended', updated_at = NOW()
+        WHERE id = ${lc.id} AND status = 'live'
+      `;
+      // Mirror the manual end flow: mark active recordings stopping, then ask
+      // the video service to stop the egress (404 is fine if it never started).
+      await sql`
+        UPDATE live_class_recordings
+        SET status = 'stopping', updated_at = NOW()
+        WHERE live_class_id = ${lc.id}
+          AND status IN ('pending', 'recording')
+      `;
+      if (lc.livekit_room_name) {
+        try {
+          await streamHubStopRecording(lc.livekit_room_name);
+        } catch (recErr) {
+          console.error(`Auto-end: stop recording failed for class ${lc.id} (may already be stopped):`, recErr);
+        }
+      }
+      ended++;
+    } catch (err) {
+      console.error(`Auto-end: failed to end stale live class ${lc.id}:`, err);
+    }
+  }
+  return ended;
+}
+
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -30,6 +81,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Close out any classes that got stuck 'live' past their end time.
+    const autoEnded = await endStaleLiveClasses();
+
     // Find scheduled live classes starting in 25-35 minutes that haven't had reminders sent
     const classes = await query<LiveClass>`
       SELECT
@@ -50,7 +104,7 @@ export async function GET(request: NextRequest) {
     `;
 
     if (!classes || classes.length === 0) {
-      return NextResponse.json({ message: 'No classes need reminders', sent: 0 });
+      return NextResponse.json({ message: 'No classes need reminders', sent: 0, autoEnded });
     }
 
     const emailService = getEmailService();
@@ -127,6 +181,7 @@ export async function GET(request: NextRequest) {
       message: 'Live class reminders processed',
       classesProcessed: classes.length,
       totalEmailsSent: totalSent,
+      autoEnded,
       results,
     });
   } catch (error) {

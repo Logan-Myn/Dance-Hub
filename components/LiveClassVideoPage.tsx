@@ -31,6 +31,7 @@ interface LiveClass {
 interface LiveClassVideoPageProps {
   classId: string;
   liveClass: LiveClass;
+  canManage?: boolean;
 }
 
 interface VideoToken {
@@ -39,7 +40,7 @@ interface VideoToken {
   isTeacher: boolean;
 }
 
-export default function LiveClassVideoPage({ classId, liveClass }: LiveClassVideoPageProps) {
+export default function LiveClassVideoPage({ classId, liveClass, canManage = false }: LiveClassVideoPageProps) {
   const router = useRouter();
   const userTimezone = useUserTimezone();
   const [videoToken, setVideoToken] = useState<VideoToken | null>(null);
@@ -126,6 +127,15 @@ export default function LiveClassVideoPage({ classId, liveClass }: LiveClassVide
     }
 
     if (hasEnded) {
+      // The class is past its scheduled end time but the DB still has it as
+      // 'live' (e.g. the teacher closed the room without ending it). Give the
+      // teacher/owner a way to close it out, since the in-room End button is
+      // no longer reachable from this screen.
+      const stillNeedsEnding =
+        canManage &&
+        liveClass.status !== 'ended' &&
+        liveClass.status !== 'cancelled';
+
       return (
         <div className="text-center py-12">
           <Badge variant="secondary" className="mb-4">Ended</Badge>
@@ -135,6 +145,16 @@ export default function LiveClassVideoPage({ classId, liveClass }: LiveClassVide
           <p className="text-gray-600">
             Thank you for participating! Check the calendar for upcoming classes.
           </p>
+          {stillNeedsEnding && (
+            <div className="mt-6">
+              <p className="text-sm text-gray-500 mb-3">
+                This class is still marked as live. End it to close it out for everyone.
+              </p>
+              <Button variant="destructive" onClick={handleEndClass}>
+                End class now
+              </Button>
+            </div>
+          )}
         </div>
       );
     }
