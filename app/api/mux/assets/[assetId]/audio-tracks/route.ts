@@ -94,25 +94,26 @@ export async function GET(request: Request, props: { params: Promise<{ assetId: 
       );
     }
 
-    // Reconcile any still-preparing rows against Mux (authoritative), tolerating Mux errors.
-    const preparing = await sql<{ mux_track_id: string }[]>`
-      SELECT mux_track_id FROM audio_tracks
-      WHERE mux_asset_id = ${assetId} AND status = 'preparing' AND mux_track_id IS NOT NULL
-    `;
-    if (preparing.length > 0) {
-      try {
-        const muxTracks = await listAssetAudioTracks(assetId);
-        const statusById = new Map(muxTracks.map((t) => [t.id, t.status]));
-        for (const { mux_track_id } of preparing) {
-          const muxStatus = statusById.get(mux_track_id);
-          if (muxStatus === 'ready' || muxStatus === 'errored') {
-            await sql`
-              UPDATE audio_tracks SET status = ${muxStatus} WHERE mux_track_id = ${mux_track_id}
-            `;
-          }
+    // Fetch Mux's view once: used both to reconcile statuses and to surface the original track.
+    let muxTracks: Awaited<ReturnType<typeof listAssetAudioTracks>> = [];
+    try {
+      muxTracks = await listAssetAudioTracks(assetId);
+    } catch (muxError) {
+      console.error('Listing Mux audio tracks failed (non-fatal):', muxError);
+    }
+
+    // Reconcile any still-preparing rows against Mux (authoritative).
+    if (muxTracks.length > 0) {
+      const statusById = new Map(muxTracks.map((t) => [t.id, t.status]));
+      const preparing = await sql<{ mux_track_id: string }[]>`
+        SELECT mux_track_id FROM audio_tracks
+        WHERE mux_asset_id = ${assetId} AND status = 'preparing' AND mux_track_id IS NOT NULL
+      `;
+      for (const { mux_track_id } of preparing) {
+        const muxStatus = statusById.get(mux_track_id);
+        if (muxStatus === 'ready' || muxStatus === 'errored') {
+          await sql`UPDATE audio_tracks SET status = ${muxStatus} WHERE mux_track_id = ${mux_track_id}`;
         }
-      } catch (reconcileError) {
-        console.error('Audio track reconcile failed (non-fatal):', reconcileError);
       }
     }
 
@@ -123,7 +124,12 @@ export async function GET(request: Request, props: { params: Promise<{ assetId: 
       ORDER BY created_at ASC
     `;
 
-    return NextResponse.json({ tracks: rows });
+    const primary = muxTracks.find((t) => t.primary);
+    const original = primary
+      ? { trackId: primary.id, languageCode: primary.language_code ?? '', name: primary.name ?? '' }
+      : null;
+
+    return NextResponse.json({ tracks: rows, original });
   } catch (error) {
     console.error('Error listing audio tracks:', error);
     return NextResponse.json({ error: 'Failed to list audio tracks' }, { status: 500 });

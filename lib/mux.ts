@@ -190,6 +190,7 @@ export interface MuxAudioTrack {
   status: string; // 'preparing' | 'ready' | 'errored'
   language_code?: string;
   name?: string;
+  primary?: boolean; // true for the baked-in original audio track
 }
 
 /** List the audio tracks Mux knows about for an asset (authoritative status). */
@@ -201,14 +202,40 @@ export async function listAssetAudioTracks(assetId: string): Promise<MuxAudioTra
     throw new Error(`Mux asset retrieve error (${response.status}): ${await response.text()}`);
   }
   const result = await response.json();
-  const tracks: Array<{ id: string; type: string; status: string; language_code?: string; name?: string }> =
-    result.data.tracks ?? [];
+  const tracks: Array<{
+    id: string;
+    type: string;
+    status: string;
+    language_code?: string;
+    name?: string;
+    primary?: boolean;
+  }> = result.data.tracks ?? [];
   return tracks.filter((t) => t.type === 'audio').map((t) => ({
     id: t.id,
     status: t.status,
     language_code: t.language_code,
     name: t.name,
+    primary: t.primary,
   }));
+}
+
+/** Update an existing track's language/name (used to label the original audio track). */
+export async function updateAudioTrack(
+  assetId: string,
+  trackId: string,
+  fields: { languageCode?: string; name?: string }
+): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if (fields.languageCode !== undefined) body.language_code = fields.languageCode;
+  if (fields.name !== undefined) body.name = fields.name;
+  const response = await fetch(`${MUX_API_BASE}/assets/${assetId}/tracks/${trackId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: muxAuthHeader() },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Mux update-track error (${response.status}): ${await response.text()}`);
+  }
 }
 
 /** Resolve the owning asset id for a playback id (About-page videos store only the playback id). */

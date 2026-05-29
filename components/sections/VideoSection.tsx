@@ -39,6 +39,7 @@ export default function VideoSection({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [playerReloadKey, setPlayerReloadKey] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cancelledRef = useRef(false);
   const { session } = useAuth();
@@ -346,6 +347,7 @@ export default function VideoSection({
             <>
               <div className="rounded-2xl overflow-hidden shadow-lg">
                 <MuxPlayer
+                  key={playerReloadKey}
                   playbackId={section.content.videoId}
                   maxResolution="1080p"
                   metadata={{
@@ -358,6 +360,7 @@ export default function VideoSection({
                 <AudioLanguagesPanel
                   assetId={section.content.videoAssetId}
                   communityId={communityId}
+                  onTracksReady={() => setPlayerReloadKey((k) => k + 1)}
                 />
               )}
             </>

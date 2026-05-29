@@ -114,6 +114,7 @@ function InlineLessonContent({
   const [isChangingVideo, setIsChangingVideo] = useState(false);
   const [editedContent, setEditedContent] = useState(lesson.content || "");
   const [isSaving, setIsSaving] = useState(false);
+  const [playerReloadKey, setPlayerReloadKey] = useState(0);
 
   // Reset state when lesson changes
   useEffect(() => {
@@ -166,12 +167,13 @@ function InlineLessonContent({
           {lesson.playbackId && !isChangingVideo ? (
             <>
               <div className="rounded-2xl overflow-hidden border border-border/50 shadow-sm bg-black">
-                <MuxPlayer playbackId={lesson.playbackId} />
+                <MuxPlayer key={playerReloadKey} playbackId={lesson.playbackId} />
               </div>
               {isEditMode && lesson.videoAssetId && (
                 <AudioLanguagesPanel
                   assetId={lesson.videoAssetId}
                   communityId={communityId}
+                  onTracksReady={() => setPlayerReloadKey((k) => k + 1)}
                 />
               )}
               {/* Small edit button in corner - doesn't block video playback */}

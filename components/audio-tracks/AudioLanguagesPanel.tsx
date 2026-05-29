@@ -15,8 +15,8 @@ interface AudioTrack {
 interface AudioLanguagesPanelProps {
   assetId: string;
   communityId: string;
-  /** Label for the baked-in original audio (default English). */
-  originalLanguageLabel?: string;
+  /** Called when an added track flips to ready, so the parent can reload the player. */
+  onTracksReady?: () => void;
 }
 
 const STATUS_LABEL: Record<AudioTrack["status"], string> = {
@@ -28,15 +28,21 @@ const STATUS_LABEL: Record<AudioTrack["status"], string> = {
 export function AudioLanguagesPanel({
   assetId,
   communityId,
-  originalLanguageLabel = "English",
+  onTracksReady,
 }: AudioLanguagesPanelProps) {
   const [tracks, setTracks] = useState<AudioTrack[]>([]);
+  const [original, setOriginal] = useState<{
+    trackId: string;
+    languageCode: string;
+    name: string;
+  } | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [languageCode, setLanguageCode] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevStatusRef = useRef<Record<string, string>>({});
 
   const loadTracks = useCallback(async () => {
     const res = await fetch(
@@ -45,6 +51,7 @@ export function AudioLanguagesPanel({
     if (!res.ok) return;
     const data = await res.json();
     setTracks(data.tracks ?? []);
+    setOriginal(data.original ?? null);
   }, [assetId, communityId]);
 
   useEffect(() => {
@@ -63,8 +70,44 @@ export function AudioLanguagesPanel({
     };
   }, [tracks, loadTracks]);
 
+  // When a track flips from processing to ready, tell the parent so it can reload the
+  // player (its manifest now includes the new track) — the teacher sees the language
+  // switch appear without a manual page refresh.
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    const justReady = tracks.find((t) => prev[t.id] === "preparing" && t.status === "ready");
+    prevStatusRef.current = Object.fromEntries(tracks.map((t) => [t.id, t.status]));
+    if (justReady) {
+      toast.success(`${justReady.name} is ready.`);
+      onTracksReady?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks]);
+
   const addedCodes = new Set(tracks.map((t) => t.language_code));
-  const available = AUDIO_LANGUAGES.filter((l) => !addedCodes.has(l.code));
+  // A language used by an alternate track can't also be the original (Mux requires unique
+  // names within the audio group), and the original's language can't be added as an alternate.
+  const originalOptions = AUDIO_LANGUAGES.filter((l) => !addedCodes.has(l.code));
+  const available = AUDIO_LANGUAGES.filter(
+    (l) => !addedCodes.has(l.code) && l.code !== original?.languageCode
+  );
+
+  const handleSetOriginalLanguage = async (code: string) => {
+    if (!code) return;
+    try {
+      const res = await fetch(`/api/mux/assets/${assetId}/original-language`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ communityId, languageCode: code }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Could not set the original language");
+      toast.success("Original language set.");
+      await loadTracks();
+      onTracksReady?.();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not set the original language");
+    }
+  };
 
   const handleAdd = async () => {
     const file = fileInputRef.current?.files?.[0];
@@ -157,8 +200,19 @@ export function AudioLanguagesPanel({
 
       <ul className="mt-3 space-y-2">
         <li className="flex items-center justify-between rounded-lg bg-background/60 px-3 py-2 text-sm">
-          <span>{originalLanguageLabel} (original)</span>
-          <span className="text-xs text-muted-foreground">Ready</span>
+          <span>Original audio</span>
+          <select
+            value={original && original.languageCode && original.languageCode !== "und" ? original.languageCode : ""}
+            onChange={(e) => handleSetOriginalLanguage(e.target.value)}
+            className="rounded-lg border border-border/50 bg-background px-2 py-1 text-xs"
+          >
+            <option value="">Set language</option>
+            {originalOptions.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.label}
+              </option>
+            ))}
+          </select>
         </li>
         {tracks.map((track) => (
           <li
