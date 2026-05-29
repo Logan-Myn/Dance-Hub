@@ -42,7 +42,7 @@ export function AudioLanguagesPanel({
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevStatusRef = useRef<Record<string, string>>({});
+  const reportedReadyRef = useRef<Set<string> | null>(null);
 
   const loadTracks = useCallback(async () => {
     const res = await fetch(
@@ -70,15 +70,23 @@ export function AudioLanguagesPanel({
     };
   }, [tracks, loadTracks]);
 
-  // When a track flips from processing to ready, tell the parent so it can reload the
-  // player (its manifest now includes the new track) — the teacher sees the language
-  // switch appear without a manual page refresh.
+  // When a track becomes ready that wasn't ready at first load, tell the parent so it can
+  // reload the player — its manifest now includes the new track, so the language switch
+  // appears without a manual page refresh. Diffs the ready-set (rather than watching for a
+  // preparing -> ready transition) so it also fires when a track finishes processing fast
+  // enough to already be ready on its first observed load.
   useEffect(() => {
-    const prev = prevStatusRef.current;
-    const justReady = tracks.find((t) => prev[t.id] === "preparing" && t.status === "ready");
-    prevStatusRef.current = Object.fromEntries(tracks.map((t) => [t.id, t.status]));
-    if (justReady) {
-      toast.success(`${justReady.name} is ready.`);
+    const readyIds = tracks.filter((t) => t.status === "ready").map((t) => t.id);
+    if (reportedReadyRef.current === null) {
+      // First load: the player already mounted with whatever tracks exist now.
+      reportedReadyRef.current = new Set(readyIds);
+      return;
+    }
+    const newlyReady = readyIds.filter((id) => !reportedReadyRef.current!.has(id));
+    reportedReadyRef.current = new Set(readyIds);
+    if (newlyReady.length > 0) {
+      const track = tracks.find((t) => t.id === newlyReady[0]);
+      if (track) toast.success(`${track.name} is ready.`);
       onTracksReady?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
