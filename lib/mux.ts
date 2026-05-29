@@ -120,3 +120,105 @@ export async function deleteMuxAsset(assetId: string) {
     return false;
   }
 }
+
+const MUX_API_BASE = 'https://api.mux.com/video/v1';
+
+function muxAuthHeader(): string {
+  const tokenId = process.env.MUX_TOKEN_ID;
+  const tokenSecret = process.env.MUX_TOKEN_SECRET;
+  if (!tokenId || !tokenSecret) {
+    throw new Error('Missing Mux API credentials');
+  }
+  return `Basic ${Buffer.from(`${tokenId}:${tokenSecret}`).toString('base64')}`;
+}
+
+const SUPPORTED_AUDIO_TYPES: Record<string, string> = {
+  m4a: 'audio/mp4',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+};
+
+/** Map a filename to a supported audio MIME type, or null if unsupported. Pure. */
+export function audioContentTypeForFile(fileName: string): string | null {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  if (!ext) return null;
+  return SUPPORTED_AUDIO_TYPES[ext] ?? null;
+}
+
+/** Build a unique B2 object key for an asset's audio track. Pure. */
+export function buildAudioTrackKey(assetId: string, fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? 'bin';
+  return `audio-tracks/${assetId}/${crypto.randomUUID()}.${ext}`;
+}
+
+export interface AudioTrackInput {
+  url: string;
+  languageCode: string;
+  name: string;
+}
+
+/** Attach an alternate audio track to a ready Mux asset. Returns the new track id. */
+export async function addAudioTrack(
+  assetId: string,
+  { url, languageCode, name }: AudioTrackInput
+): Promise<{ trackId: string }> {
+  const response = await fetch(`${MUX_API_BASE}/assets/${assetId}/tracks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: muxAuthHeader() },
+    body: JSON.stringify({ url, type: 'audio', language_code: languageCode, name }),
+  });
+  if (!response.ok) {
+    throw new Error(`Mux add-track error (${response.status}): ${await response.text()}`);
+  }
+  const result = await response.json();
+  return { trackId: result.data.id };
+}
+
+/** Remove an audio track from an asset. Treats 404 as already-gone. */
+export async function deleteAudioTrack(assetId: string, trackId: string): Promise<void> {
+  const response = await fetch(`${MUX_API_BASE}/assets/${assetId}/tracks/${trackId}`, {
+    method: 'DELETE',
+    headers: { Authorization: muxAuthHeader() },
+  });
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`Mux delete-track error (${response.status}): ${await response.text()}`);
+  }
+}
+
+export interface MuxAudioTrack {
+  id: string;
+  status: string; // 'preparing' | 'ready' | 'errored'
+  language_code?: string;
+  name?: string;
+}
+
+/** List the audio tracks Mux knows about for an asset (authoritative status). */
+export async function listAssetAudioTracks(assetId: string): Promise<MuxAudioTrack[]> {
+  const response = await fetch(`${MUX_API_BASE}/assets/${assetId}`, {
+    headers: { Authorization: muxAuthHeader() },
+  });
+  if (!response.ok) {
+    throw new Error(`Mux asset retrieve error (${response.status}): ${await response.text()}`);
+  }
+  const result = await response.json();
+  const tracks: Array<{ id: string; type: string; status: string; language_code?: string; name?: string }> =
+    result.data.tracks ?? [];
+  return tracks.filter((t) => t.type === 'audio').map((t) => ({
+    id: t.id,
+    status: t.status,
+    language_code: t.language_code,
+    name: t.name,
+  }));
+}
+
+/** Resolve the owning asset id for a playback id (About-page videos store only the playback id). */
+export async function resolveAssetIdFromPlaybackId(playbackId: string): Promise<string> {
+  const response = await fetch(`${MUX_API_BASE}/playback-ids/${playbackId}`, {
+    headers: { Authorization: muxAuthHeader() },
+  });
+  if (!response.ok) {
+    throw new Error(`Mux playback-id lookup error (${response.status}): ${await response.text()}`);
+  }
+  const result = await response.json();
+  return result.data.object.id;
+}
