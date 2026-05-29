@@ -38,11 +38,13 @@ export function AudioLanguagesPanel({
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadTracks = useCallback(async () => {
-    const res = await fetch(`/api/mux/assets/${assetId}/audio-tracks`);
+    const res = await fetch(
+      `/api/mux/assets/${assetId}/audio-tracks?communityId=${encodeURIComponent(communityId)}`
+    );
     if (!res.ok) return;
     const data = await res.json();
     setTracks(data.tracks ?? []);
-  }, [assetId]);
+  }, [assetId, communityId]);
 
   useEffect(() => {
     loadTracks();

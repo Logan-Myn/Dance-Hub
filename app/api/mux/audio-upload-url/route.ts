@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-session';
-import { userCanManageCommunity } from '@/lib/community-auth';
+import { userCanManageCommunity, assetBelongsToCommunity } from '@/lib/community-auth';
 import { getSignedUploadUrl } from '@/lib/storage';
 import { audioContentTypeForFile, buildAudioTrackKey } from '@/lib/mux';
 
@@ -27,6 +27,13 @@ export async function POST(request: Request) {
 
     if (!(await userCanManageCommunity(session.user.id, communityId))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (!(await assetBelongsToCommunity(assetId, communityId))) {
+      return NextResponse.json(
+        { error: 'This video is not part of this community. If you just uploaded it, save the page first.' },
+        { status: 403 }
+      );
     }
 
     const contentType = audioContentTypeForFile(fileName);

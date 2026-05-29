@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-session';
-import { userCanManageCommunity } from '@/lib/community-auth';
+import { userCanManageCommunity, assetBelongsToCommunity } from '@/lib/community-auth';
 import { queryOne, sql } from '@/lib/db';
 import { getSignedDownloadUrl } from '@/lib/storage';
 import { addAudioTrack, listAssetAudioTracks } from '@/lib/mux';
@@ -42,6 +42,13 @@ export async function POST(request: Request, props: { params: Promise<{ assetId:
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    if (!(await assetBelongsToCommunity(assetId, communityId))) {
+      return NextResponse.json(
+        { error: 'This video is not part of this community. If you just uploaded it, save the page first.' },
+        { status: 403 }
+      );
+    }
+
     // Reject a duplicate language up front for a friendly error (also enforced by the unique index).
     const existing = await queryOne<{ id: string }>`
       SELECT id FROM audio_tracks
@@ -72,6 +79,20 @@ export async function GET(request: Request, props: { params: Promise<{ assetId: 
   try {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const communityId = new URL(request.url).searchParams.get('communityId');
+    if (!communityId) {
+      return NextResponse.json({ error: 'communityId is required' }, { status: 400 });
+    }
+    if (!(await userCanManageCommunity(session.user.id, communityId))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    if (!(await assetBelongsToCommunity(assetId, communityId))) {
+      return NextResponse.json(
+        { error: 'This video is not part of this community. If you just uploaded it, save the page first.' },
+        { status: 403 }
+      );
+    }
 
     // Reconcile any still-preparing rows against Mux (authoritative), tolerating Mux errors.
     const preparing = await sql<{ mux_track_id: string }[]>`
