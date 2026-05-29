@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
 import { MuxPlayer } from "@/components/MuxPlayer";
+import { AudioLanguagesPanel } from "@/components/audio-tracks/AudioLanguagesPanel";
 
 interface VideoSectionProps {
   section: Section;
@@ -38,6 +39,7 @@ export default function VideoSection({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [playerReloadKey, setPlayerReloadKey] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cancelledRef = useRef(false);
   const { session } = useAuth();
@@ -61,6 +63,32 @@ export default function VideoSection({
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
+  useEffect(() => {
+    if (!isEditing) return;
+    if (!section.content.videoId || section.content.videoAssetId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/mux/resolve-asset-id", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ communityId, playbackId: section.content.videoId }),
+        });
+        if (!res.ok) return;
+        const { assetId } = await res.json();
+        if (!cancelled && assetId) {
+          onUpdate({ ...section.content, videoAssetId: assetId });
+        }
+      } catch {
+        // non-fatal; panel just will not show until resolvable
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, section.content.videoId, section.content.videoAssetId]);
 
   const handleUpload = async (file: File) => {
     try {
@@ -154,7 +182,8 @@ export default function VideoSection({
       if (cancelledRef.current) return;
       onUpdate({
         ...section.content,
-        videoId: readyAsset.playbackId
+        videoId: readyAsset.playbackId,
+        videoAssetId: readyAsset.id,
       });
       setIsUploading(false);
       toast.success('Video uploaded successfully!');
@@ -315,16 +344,26 @@ export default function VideoSection({
       <div className="py-12 md:py-16">
         <div className="max-w-4xl mx-auto px-4">
           {section.content.videoId ? (
-            <div className="rounded-2xl overflow-hidden shadow-lg">
-              <MuxPlayer
-                playbackId={section.content.videoId}
-                maxResolution="1080p"
-                metadata={{
-                  video_title: section.content.title || "Video",
-                  video_description: section.content.description || "",
-                }}
-              />
-            </div>
+            <>
+              <div className="rounded-2xl overflow-hidden shadow-lg">
+                <MuxPlayer
+                  key={playerReloadKey}
+                  playbackId={section.content.videoId}
+                  maxResolution="1080p"
+                  metadata={{
+                    video_title: section.content.title || "Video",
+                    video_description: section.content.description || "",
+                  }}
+                />
+              </div>
+              {isEditing && section.content.videoAssetId && (
+                <AudioLanguagesPanel
+                  assetId={section.content.videoAssetId}
+                  communityId={communityId}
+                  onTracksReady={() => setPlayerReloadKey((k) => k + 1)}
+                />
+              )}
+            </>
           ) : isEditing ? (
             <div
               className={cn(

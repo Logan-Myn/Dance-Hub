@@ -100,6 +100,9 @@ server {
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
+    # Audio language tracks upload through the app server; allow a generous body size.
+    client_max_body_size 100m;
+
     location /_next/static {
         proxy_pass http://localhost:$APP_PORT;
         add_header Cache-Control "public, max-age=31536000, immutable";

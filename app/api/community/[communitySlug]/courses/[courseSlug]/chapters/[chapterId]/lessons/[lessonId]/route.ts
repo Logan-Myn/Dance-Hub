@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { deleteMuxAsset } from "@/lib/mux";
+import { deleteFile } from "@/lib/storage";
 
 interface Community {
   id: string;
@@ -192,8 +193,23 @@ export async function DELETE(
     `;
 
     if (lesson?.video_asset_id) {
-      // Delete the video from Mux if it exists
+      // Delete the video from Mux (this also removes its alternate audio tracks on Mux).
       await deleteMuxAsset(lesson.video_asset_id);
+
+      // Clean up our audio-track rows and their stored source files.
+      const audioTracks = await sql<{ id: string; b2_key: string | null }[]>`
+        SELECT id, b2_key FROM audio_tracks WHERE mux_asset_id = ${lesson.video_asset_id}
+      `;
+      for (const track of audioTracks) {
+        if (track.b2_key) {
+          try {
+            await deleteFile(track.b2_key);
+          } catch (b2Error) {
+            console.error('Failed to delete audio source from storage (non-fatal):', b2Error);
+          }
+        }
+      }
+      await sql`DELETE FROM audio_tracks WHERE mux_asset_id = ${lesson.video_asset_id}`;
     }
 
     // Clean up any linked live class recording

@@ -64,6 +64,12 @@ export async function POST(request: NextRequest) {
       case "video.asset.errored":
         await handleAssetErrored(event);
         break;
+      case "video.asset.track.ready":
+        await handleTrackReady(event);
+        break;
+      case "video.asset.track.errored":
+        await handleTrackErrored(event);
+        break;
       default:
         console.log(`Unhandled Mux webhook event: ${eventType}`);
     }
@@ -219,4 +225,18 @@ async function findOrCreateMonthlyChapter(courseId: string, date: Date): Promise
 
   if (!created) throw new Error("Failed to create monthly chapter");
   return created;
+}
+
+async function handleTrackReady(event: any) {
+  const trackId = event.data?.id;
+  if (!trackId) return;
+  await sql`UPDATE audio_tracks SET status = 'ready' WHERE mux_track_id = ${trackId}`;
+  console.log(`Audio track ${trackId} ready`);
+}
+
+async function handleTrackErrored(event: any) {
+  const trackId = event.data?.id;
+  if (!trackId) return;
+  await sql`UPDATE audio_tracks SET status = 'errored' WHERE mux_track_id = ${trackId}`;
+  console.error(`Audio track ${trackId} errored`);
 }

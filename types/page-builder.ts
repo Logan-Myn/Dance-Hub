@@ -23,6 +23,7 @@ export interface Section {
     altText?: string;
     caption?: string;
     videoId?: string;
+    videoAssetId?: string;
     description?: string;
     width?: 'narrow' | 'medium' | 'full';
     background?: 'white' | 'light' | 'dark';
