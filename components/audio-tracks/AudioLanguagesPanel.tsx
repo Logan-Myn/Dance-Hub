@@ -34,6 +34,7 @@ export function AudioLanguagesPanel({
   const [isAdding, setIsAdding] = useState(false);
   const [languageCode, setLanguageCode] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -72,23 +73,41 @@ export function AudioLanguagesPanel({
       return;
     }
     setIsUploading(true);
+    setUploadProgress(0);
     try {
-      const urlRes = await fetch("/api/mux/audio-upload-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ communityId, assetId, fileName: file.name }),
-      });
-      if (!urlRes.ok) throw new Error((await urlRes.json()).error || "Could not start upload");
-      const { uploadUrl, key } = await urlRes.json();
+      const form = new FormData();
+      form.append("file", file);
+      form.append("communityId", communityId);
+      form.append("assetId", assetId);
 
-      await new Promise<void>((resolve, reject) => {
+      // Upload through our own origin (not browser-direct to storage) to avoid CORS.
+      const key = await new Promise<string>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.addEventListener("load", () =>
-          xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error("Upload failed"))
-        );
+        xhr.upload.addEventListener("progress", (event) => {
+          if (event.lengthComputable) {
+            setUploadProgress(Math.round((event.loaded / event.total) * 100));
+          }
+        });
+        xhr.addEventListener("load", () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(xhr.responseText).key);
+            } catch {
+              reject(new Error("Upload failed"));
+            }
+          } else {
+            let message = "Upload failed";
+            try {
+              message = JSON.parse(xhr.responseText).error || message;
+            } catch {
+              // keep default message
+            }
+            reject(new Error(message));
+          }
+        });
         xhr.addEventListener("error", () => reject(new Error("Network error during upload")));
-        xhr.open("PUT", uploadUrl);
-        xhr.send(file);
+        xhr.open("POST", "/api/mux/audio-upload");
+        xhr.send(form);
       });
 
       const createRes = await fetch(`/api/mux/assets/${assetId}/audio-tracks`, {
@@ -190,7 +209,7 @@ export function AudioLanguagesPanel({
           />
           <div className="flex gap-2">
             <Button size="sm" onClick={handleAdd} disabled={isUploading}>
-              {isUploading ? "Uploading..." : "Add language"}
+              {isUploading ? `Uploading ${uploadProgress}%` : "Add language"}
             </Button>
             <Button
               size="sm"
