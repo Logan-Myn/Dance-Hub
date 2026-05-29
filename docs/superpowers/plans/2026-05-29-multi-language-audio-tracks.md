@@ -24,8 +24,8 @@
 
 - [ ] **Step 1: Verify clean test baseline**
 
-Run: `bun test 2>&1 | tail -20`
-Expected: existing suite passes (or note any pre-existing failures before proceeding).
+Run: `bun run test 2>&1 | tail -20` (this repo's runner is Jest; `bun test` uses Bun's built-in runner and reports false failures)
+Expected: ~214 passing; 6 pre-existing unrelated suites fail (auth-database, database-views-functions, wave integration, admin-dashboard activity-feed/stats). Note them and proceed.
 
 - [ ] **Step 2: Write the migration SQL**
 
@@ -127,7 +127,7 @@ describe('buildAudioTrackKey', () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `bun test __tests__/lib/mux.test.ts 2>&1 | tail -20`
+Run: `bunx jest __tests__/lib/mux.test.ts 2>&1 | tail -20`
 Expected: FAIL — `audioContentTypeForFile`/`buildAudioTrackKey` not exported.
 
 - [ ] **Step 3: Add the helpers to `lib/mux.ts`**
@@ -240,7 +240,7 @@ export async function resolveAssetIdFromPlaybackId(playbackId: string): Promise<
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `bun test __tests__/lib/mux.test.ts 2>&1 | tail -20`
+Run: `bunx jest __tests__/lib/mux.test.ts 2>&1 | tail -20`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
@@ -671,7 +671,7 @@ describe('languageLabel', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `bun test __tests__/lib/languages.test.ts 2>&1 | tail -10`
+Run: `bunx jest __tests__/lib/languages.test.ts 2>&1 | tail -10`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Create the language list**
@@ -701,7 +701,7 @@ export function languageLabel(code: string): string {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `bun test __tests__/lib/languages.test.ts 2>&1 | tail -10`
+Run: `bunx jest __tests__/lib/languages.test.ts 2>&1 | tail -10`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Create the Languages panel component**
@@ -1193,7 +1193,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 Run:
 ```bash
-bun test 2>&1 | tail -20
+bun run test 2>&1 | tail -20
 bunx tsc --noEmit 2>&1 | tail -20
 bun lint 2>&1 | tail -20
 bun run build 2>&1 | tail -20
