@@ -55,6 +55,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { MuxPlayer } from "@/components/MuxPlayer";
+import { AudioLanguagesPanel } from "@/components/audio-tracks/AudioLanguagesPanel";
 import Editor from "@/components/Editor";
 import EditCourseModal from "@/components/EditCourseModal";
 import NotifyMembersModal from "@/components/NotifyMembersModal";
@@ -167,6 +168,12 @@ function InlineLessonContent({
               <div className="rounded-2xl overflow-hidden border border-border/50 shadow-sm bg-black">
                 <MuxPlayer playbackId={lesson.playbackId} />
               </div>
+              {isEditMode && lesson.videoAssetId && (
+                <AudioLanguagesPanel
+                  assetId={lesson.videoAssetId}
+                  communityId={communityId}
+                />
+              )}
               {/* Small edit button in corner - doesn't block video playback */}
               {isEditMode && (
                 <Button
