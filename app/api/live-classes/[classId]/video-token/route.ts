@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
-import { createRoom, generateToken, startRecording } from "@/lib/stream-hub";
+import { createRoom, getRoom, generateToken, startRecording } from "@/lib/stream-hub";
 
 interface LiveClassWithDetails {
   id: string;
@@ -89,10 +89,17 @@ export async function GET(request: NextRequest, props: { params: Promise<{ class
       return NextResponse.json({ error: "Class has ended" }, { status: 403 });
     }
 
-    // Create room if needed (idempotent)
+    // Ensure the LiveKit room actually exists on the server before we generate
+    // tokens or start recording. A saved livekit_room_name doesn't guarantee the
+    // room is still alive — empty rooms auto-close, so a class scheduled days ago
+    // points at a room that no longer exists. Egress can't attach to a missing
+    // room ("requested room does not exist"), so (re)create it whenever it's gone.
     const roomName = `live-class-${params.classId}`;
-    if (!liveClass.livekit_room_name) {
+    const existingRoom = await getRoom(roomName);
+    if (!existingRoom) {
       await createRoom(roomName, 100);
+    }
+    if (!liveClass.livekit_room_name) {
       await sql`
         UPDATE live_classes SET livekit_room_name = ${roomName}, updated_at = NOW()
         WHERE id = ${params.classId}
