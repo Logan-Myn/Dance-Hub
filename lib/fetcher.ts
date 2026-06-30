@@ -27,8 +27,8 @@ export const fetcher = async (key: string) => {
     return {
       ...data,
       imageUrl: data.image_url,
-      threadCategories: data.thread_categories || [],
-      customLinks: data.custom_links || [],
+      threadCategories: Array.isArray(data.thread_categories) ? data.thread_categories : [],
+      customLinks: Array.isArray(data.custom_links) ? data.custom_links : [],
       membershipEnabled: data.membership_enabled || false,
       membershipPrice: data.membership_price || 0,
       stripeAccountId: data.stripe_account_id || null,
