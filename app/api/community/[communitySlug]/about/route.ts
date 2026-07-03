@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql, queryOne } from "@/lib/db";
+import { getSession } from "@/lib/auth-session";
 
 // Disable caching for this route
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,22 @@ export async function PUT(request: Request, props: { params: Promise<{ community
   const params = await props.params;
   try {
     const { communitySlug } = params;
+
+    // Only an authenticated community owner may edit the About page.
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const owner = await queryOne<{ id: string; created_by: string }>`
+      SELECT id, created_by FROM communities WHERE slug = ${communitySlug}
+    `;
+    if (!owner) {
+      return NextResponse.json({ error: "Community not found" }, { status: 404 });
+    }
+    if (owner.created_by !== session.user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { aboutPage } = await request.json();
 
     // Update the community
@@ -31,9 +48,9 @@ export async function PUT(request: Request, props: { params: Promise<{ community
     };
 
     // Use sql.json() so postgres.js serializes the object exactly once.
-    // Passing JSON.stringify(...)::jsonb double-encodes under postgres.js
-    // (the driver re-serializes the already-stringified value), storing a
-    // jsonb *string* instead of an object and blanking the About page.
+    // Passing a pre-stringified value with a jsonb cast double-encodes under
+    // postgres.js (the driver re-serializes the already-stringified value),
+    // storing a jsonb *string* instead of an object and blanking the page.
     const result = await sql`
       UPDATE communities
       SET
