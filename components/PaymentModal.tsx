@@ -10,15 +10,13 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface PaymentFormProps {
-  clientSecret: string;
   communitySlug: string;
   price: number;
-  mode?: 'payment' | 'setup';
+  mode: 'payment' | 'setup';
   onSuccess: () => void;
-  onClose: () => void;
 }
 
-function PaymentForm({ clientSecret, communitySlug, price, mode = 'payment', onSuccess, onClose }: PaymentFormProps) {
+function PaymentForm({ communitySlug, price, mode, onSuccess }: PaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [isLoading, setIsLoading] = useState(false);
@@ -108,9 +106,9 @@ function PaymentForm({ clientSecret, communitySlug, price, mode = 'payment', onS
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <PaymentElement />
-      <Button 
-        type="submit" 
-        disabled={!stripe || isLoading} 
+      <Button
+        type="submit"
+        disabled={!stripe || isLoading}
         className="w-full"
       >
         {isLoading ? (
@@ -123,6 +121,59 @@ function PaymentForm({ clientSecret, communitySlug, price, mode = 'payment', onS
         )}
       </Button>
     </form>
+  );
+}
+
+// Small collapsible promo-code entry. A "Do you have a promo code?" link
+// reveals an input + Apply. Applying re-creates the membership subscription
+// with the discount (see PaymentModal.applyPromo).
+function PromoCodeEntry({
+  applied,
+  applying,
+  onApply,
+}: {
+  applied: string | null;
+  applying: boolean;
+  onApply: (code: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState('');
+
+  if (applied) {
+    return <p className="text-sm text-green-600">Promo applied: {applied}</p>;
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-sm text-primary underline underline-offset-2"
+      >
+        Do you have a promo code?
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex gap-2">
+      <input
+        autoFocus
+        className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm uppercase"
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+        placeholder="Enter code"
+        onKeyDown={(e) => { if (e.key === 'Enter' && code.trim() && !applying) onApply(code); }}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => onApply(code)}
+        disabled={!code.trim() || applying}
+      >
+        {applying ? 'Applying...' : 'Apply'}
+      </Button>
+    </div>
   );
 }
 
@@ -144,9 +195,25 @@ export default function PaymentModal({
   stripeAccountId,
   communitySlug,
   price,
-  mode = 'payment',
+  mode: initialMode = 'payment',
   onSuccess
 }: PaymentModalProps) {
+  const { user } = useAuth();
+
+  // Local copies so applying a promo can swap in a new subscription's client
+  // secret + mode without the parent re-opening the modal.
+  const [activeSecret, setActiveSecret] = useState<string | null>(clientSecret);
+  const [activeMode, setActiveMode] = useState<'payment' | 'setup'>(initialMode);
+  const [applied, setApplied] = useState<string | null>(null);
+  const [applying, setApplying] = useState(false);
+
+  // Reset when the parent hands us a fresh join (new client secret).
+  useEffect(() => {
+    setActiveSecret(clientSecret);
+    setActiveMode(initialMode);
+    setApplied(null);
+  }, [clientSecret, initialMode]);
+
   const stripePromise = useMemo(
     () =>
       stripeAccountId
@@ -157,12 +224,50 @@ export default function PaymentModal({
     [stripeAccountId],
   );
 
-  const options: StripeElementsOptions = {
-    clientSecret: clientSecret ?? '',
-    appearance: { theme: 'stripe' as const },
+  const applyPromo = async (rawCode: string) => {
+    if (!user) return;
+    setApplying(true);
+    try {
+      const vRes = await fetch(`/api/community/${communitySlug}/promo-codes/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: rawCode }),
+      });
+      const v = await vRes.json();
+      if (!v.valid) {
+        toast.error(v.reason || 'That code is not valid.');
+        return;
+      }
+
+      // Re-create the membership subscription with the discount attached.
+      // join-paid cleans up the previous incomplete subscription for this user.
+      const jRes = await fetch(`/api/community/${communitySlug}/join-paid`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, email: user.email, promotionCodeId: v.promotionCodeId }),
+      });
+      if (!jRes.ok) {
+        toast.error('Could not apply the code. Please try again.');
+        return;
+      }
+      const { clientSecret: newSecret, requiresSetup } = await jRes.json();
+      setActiveSecret(newSecret);
+      setActiveMode(requiresSetup ? 'setup' : 'payment');
+      setApplied(v.preview.label);
+      toast.success(`Promo applied: ${v.preview.label}`);
+    } catch {
+      toast.error('Could not apply the code. Please try again.');
+    } finally {
+      setApplying(false);
+    }
   };
 
-  if (!clientSecret || !stripeAccountId || !stripePromise) return null;
+  if (!activeSecret || !stripeAccountId || !stripePromise) return null;
+
+  const options: StripeElementsOptions = {
+    clientSecret: activeSecret,
+    appearance: { theme: 'stripe' as const },
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -173,14 +278,19 @@ export default function PaymentModal({
             Complete your payment to join this community
           </DialogDescription>
         </DialogHeader>
-        <Elements stripe={stripePromise} options={options}>
+
+        <div className="mb-4">
+          <PromoCodeEntry applied={applied} applying={applying} onApply={applyPromo} />
+        </div>
+
+        {/* key on the client secret so Elements re-mounts with the discounted
+            amount after a promo is applied. */}
+        <Elements key={activeSecret} stripe={stripePromise} options={options}>
           <PaymentForm
-            clientSecret={clientSecret}
             communitySlug={communitySlug}
             price={price}
-            mode={mode}
+            mode={activeMode}
             onSuccess={onSuccess}
-            onClose={onClose}
           />
         </Elements>
       </DialogContent>
