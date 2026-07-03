@@ -54,9 +54,9 @@ describe('buildCouponParams', () => {
 });
 
 describe('buildPromotionCodeParams', () => {
-  it('maps code string, coupon, expiry (unix), and max redemptions', () => {
+  it('nests the coupon under promotion, with code, expiry (unix), and max redemptions', () => {
     expect(buildPromotionCodeParams(base, 'coupon_1')).toEqual({
-      coupon: 'coupon_1',
+      promotion: { type: 'coupon', coupon: 'coupon_1' },
       code: 'MARCELA20',
       max_redemptions: 50,
       expires_at: Math.floor(new Date('2026-12-31T00:00:00.000Z').getTime() / 1000),
@@ -65,6 +65,6 @@ describe('buildPromotionCodeParams', () => {
   it('omits optional limits when null', () => {
     expect(buildPromotionCodeParams(
       { ...base, maxRedemptions: null, expiresAt: null }, 'coupon_1',
-    )).toEqual({ coupon: 'coupon_1', code: 'MARCELA20' });
+    )).toEqual({ promotion: { type: 'coupon', coupon: 'coupon_1' }, code: 'MARCELA20' });
   });
 });

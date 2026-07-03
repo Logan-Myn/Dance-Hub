@@ -44,11 +44,13 @@ export function buildPromotionCodeParams(
   input: CreatePromoCodeInput,
   couponId: string,
 ): Stripe.PromotionCodeCreateParams {
-  const params: Stripe.PromotionCodeCreateParams = {
-    coupon: couponId,
+  // API 2025-12-15.clover nests the coupon under `promotion` (the pinned SDK
+  // types still show the old top-level `coupon`, hence the cast on return).
+  const params: Record<string, unknown> = {
+    promotion: { type: 'coupon', coupon: couponId },
     code: input.code.trim(),
   };
   if (input.maxRedemptions != null) params.max_redemptions = input.maxRedemptions;
   if (input.expiresAt) params.expires_at = Math.floor(new Date(input.expiresAt).getTime() / 1000);
-  return params;
+  return params as unknown as Stripe.PromotionCodeCreateParams;
 }

@@ -51,7 +51,7 @@ it('creates coupon + promotion code on the connected account and inserts a row',
     { stripeAccount: 'acct_1' },
   );
   expect(mockPromoCreate).toHaveBeenCalledWith(
-    expect.objectContaining({ coupon: 'coupon_1', code: 'MARCELA20', max_redemptions: 50 }),
+    expect.objectContaining({ promotion: { type: 'coupon', coupon: 'coupon_1' }, code: 'MARCELA20', max_redemptions: 50 }),
     { stripeAccount: 'acct_1' },
   );
   expect(mockPricesRetrieve).not.toHaveBeenCalled(); // percent needs no currency

@@ -173,18 +173,16 @@ export async function validatePromoCode(args: {
   const promo = list.data[0];
   if (!promo || !promo.active) return invalid;
 
-  const coupon = promo.coupon as {
-    valid?: boolean;
-    percent_off: number | null;
-    amount_off: number | null;
-    currency: string | null;
-    duration: 'once' | 'repeating' | 'forever';
-    duration_in_months: number | null;
-  };
-  if (coupon.valid === false) return invalid;
-
   if (promo.expires_at && promo.expires_at * 1000 < Date.now()) return invalid;
   if (promo.max_redemptions != null && (promo.times_redeemed ?? 0) >= promo.max_redemptions) return invalid;
+
+  // API 2025-12-15.clover no longer exposes an expanded `coupon` on the
+  // promotion code; it carries the coupon id under `promotion.coupon`. Fetch
+  // the coupon to read its discount shape for the preview.
+  const couponId = (promo as any).promotion?.coupon as string | undefined;
+  if (!couponId) return invalid;
+  const coupon = await stripe.coupons.retrieve(couponId, { stripeAccount: args.stripeAccountId });
+  if (coupon.valid === false) return invalid;
 
   // We only create 'once'/'repeating' coupons; guard against anything else.
   if (coupon.duration !== 'once' && coupon.duration !== 'repeating') return invalid;
