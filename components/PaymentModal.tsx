@@ -13,11 +13,12 @@ interface PaymentFormProps {
   clientSecret: string;
   communitySlug: string;
   price: number;
+  mode?: 'payment' | 'setup';
   onSuccess: () => void;
   onClose: () => void;
 }
 
-function PaymentForm({ clientSecret, communitySlug, price, onSuccess, onClose }: PaymentFormProps) {
+function PaymentForm({ clientSecret, communitySlug, price, mode = 'payment', onSuccess, onClose }: PaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [isLoading, setIsLoading] = useState(false);
@@ -61,13 +62,22 @@ function PaymentForm({ clientSecret, communitySlug, price, onSuccess, onClose }:
     setIsLoading(true);
 
     try {
-      const { error } = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/${communitySlug}?success=true`,
-        },
-        redirect: 'if_required',
-      });
+      const { error } =
+        mode === 'setup'
+          ? await stripe.confirmSetup({
+              elements,
+              confirmParams: {
+                return_url: `${window.location.origin}/${communitySlug}?success=true`,
+              },
+              redirect: 'if_required',
+            })
+          : await stripe.confirmPayment({
+              elements,
+              confirmParams: {
+                return_url: `${window.location.origin}/${communitySlug}?success=true`,
+              },
+              redirect: 'if_required',
+            });
 
       if (error) {
         toast.error(error.message || 'Payment failed');
@@ -109,7 +119,7 @@ function PaymentForm({ clientSecret, communitySlug, price, onSuccess, onClose }:
             <span>Processing payment...</span>
           </div>
         ) : (
-          `Pay €${price}/month`
+          mode === 'setup' ? 'Save card and join' : `Pay €${price}/month`
         )}
       </Button>
     </form>
@@ -123,17 +133,19 @@ interface PaymentModalProps {
   stripeAccountId: string | null;
   communitySlug: string;
   price: number;
+  mode?: 'payment' | 'setup';
   onSuccess: () => void;
 }
 
-export default function PaymentModal({ 
-  isOpen, 
-  onClose, 
-  clientSecret, 
+export default function PaymentModal({
+  isOpen,
+  onClose,
+  clientSecret,
   stripeAccountId,
   communitySlug,
   price,
-  onSuccess 
+  mode = 'payment',
+  onSuccess
 }: PaymentModalProps) {
   const stripePromise = useMemo(
     () =>
@@ -162,10 +174,11 @@ export default function PaymentModal({
           </DialogDescription>
         </DialogHeader>
         <Elements stripe={stripePromise} options={options}>
-          <PaymentForm 
+          <PaymentForm
             clientSecret={clientSecret}
             communitySlug={communitySlug}
             price={price}
+            mode={mode}
             onSuccess={onSuccess}
             onClose={onClose}
           />

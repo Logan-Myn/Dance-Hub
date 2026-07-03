@@ -16,6 +16,7 @@ export function AdminNav({
     { href: `/${communitySlug}/admin/general`,           label: 'General',           exact: false },
     { href: `/${communitySlug}/admin/members`,           label: 'Members',           exact: false },
     { href: `/${communitySlug}/admin/subscriptions`,     label: 'Subscriptions',     exact: false },
+    { href: `/${communitySlug}/admin/promo-codes`,       label: 'Promo Codes',       exact: false },
     { href: `/${communitySlug}/admin/thread-categories`, label: 'Thread Categories', exact: false },
     { href: `/${communitySlug}/admin/emails`,            label: 'Broadcasts',        exact: false },
   ];

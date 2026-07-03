@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
 import PaymentModal from "@/components/PaymentModal";
+import { JoinPromoModal } from "@/components/JoinPromoModal";
 import { PreRegistrationPaymentModal } from "@/components/PreRegistrationPaymentModal";
 import { PreRegistrationComingSoon } from "@/components/PreRegistrationComingSoon";
 import Thread from "@/components/Thread";
@@ -169,6 +170,9 @@ export default function FeedClient({
     null
   );
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showJoinPromoModal, setShowJoinPromoModal] = useState(false);
+  const [isPreparingJoin, setIsPreparingJoin] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<'payment' | 'setup'>('payment');
   const [showPreRegistrationModal, setShowPreRegistrationModal] = useState(false);
   const [preRegistrationClientSecret, setPreRegistrationClientSecret] = useState<string | null>(null);
   const [preRegistrationOpeningDate, setPreRegistrationOpeningDate] = useState<string | null>(null);
@@ -301,6 +305,30 @@ export default function FeedClient({
     }
   }, [membersData, currentUser]);
 
+  const handleContinuePaidJoin = async (promotionCodeId: string | null) => {
+    if (!currentUser) return;
+    setIsPreparingJoin(true);
+    try {
+      const response = await fetch(`/api/community/${communitySlug}/join-paid`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser.id, email: currentUser.email, promotionCodeId }),
+      });
+      if (!response.ok) throw new Error("Failed to create payment");
+      const { clientSecret, requiresSetup, stripeAccountId } = await response.json();
+      setPaymentClientSecret(clientSecret);
+      setStripeAccountId(stripeAccountId);
+      setPaymentMode(requiresSetup ? 'setup' : 'payment');
+      setShowJoinPromoModal(false);
+      setShowPaymentModal(true);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to start checkout");
+    } finally {
+      setIsPreparingJoin(false);
+    }
+  };
+
   const handleJoinCommunity = async () => {
     if (!currentUser) {
       toast.error("Please sign in to join the community");
@@ -340,29 +368,8 @@ export default function FeedClient({
         community?.membershipPrice &&
         community.membershipPrice > 0
       ) {
-        // Handle paid membership
-        const response = await fetch(
-          `/api/community/${communitySlug}/join-paid`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              userId: currentUser.id,
-              email: currentUser.email,
-            }),
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error("Failed to create payment");
-        }
-
-        const { clientSecret, stripeAccountId } = await response.json();
-        setPaymentClientSecret(clientSecret);
-        setStripeAccountId(stripeAccountId);
-        setShowPaymentModal(true);
+        // Handle paid membership: collect an optional promo code first.
+        setShowJoinPromoModal(true);
       } else {
         // Handle free membership
         const response = await fetch(`/api/community/${communitySlug}/join`, {
@@ -821,6 +828,7 @@ export default function FeedClient({
         clientSecret={paymentClientSecret}
         stripeAccountId={stripeAccountId}
         price={community.membershipPrice || 0}
+        mode={paymentMode}
         onSuccess={() => {
           setIsMember(true);
           setShowPaymentModal(false);
@@ -828,6 +836,15 @@ export default function FeedClient({
           window.location.reload();
         }}
         communitySlug={communitySlug}
+      />
+
+      <JoinPromoModal
+        isOpen={showJoinPromoModal}
+        onClose={() => setShowJoinPromoModal(false)}
+        communitySlug={communitySlug}
+        price={community.membershipPrice || 0}
+        onContinue={handleContinuePaidJoin}
+        isContinuing={isPreparingJoin}
       />
 
       <PreRegistrationPaymentModal
