@@ -192,7 +192,7 @@ export async function POST(request: Request, props: { params: Promise<{ accountI
     await sql`
       UPDATE stripe_onboarding_progress
       SET
-        documents = ${JSON.stringify(updatedDocuments)}::jsonb,
+        documents = ${sql.json(updatedDocuments)},
         updated_at = NOW()
       WHERE stripe_account_id = ${accountId}
     `;

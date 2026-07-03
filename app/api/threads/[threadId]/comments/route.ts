@@ -111,7 +111,7 @@ export async function POST(request: Request, props: { params: Promise<{ threadId
         ${threadId},
         ${userId},
         ${content},
-        ${JSON.stringify(authorData)}::jsonb,
+        ${sql.json(authorData)},
         ARRAY[]::TEXT[],
         0
       )

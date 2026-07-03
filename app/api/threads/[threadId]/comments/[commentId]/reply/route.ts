@@ -63,7 +63,7 @@ export async function POST(
         ${userId},
         ${content},
         ${commentId},
-        ${JSON.stringify(authorData)}::jsonb,
+        ${sql.json(authorData)},
         ARRAY[]::TEXT[],
         0
       )

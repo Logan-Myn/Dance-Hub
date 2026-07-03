@@ -219,34 +219,14 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
       }
     }
 
-    // Update onboarding progress in database
-    const updateFields: string[] = ['updated_at = NOW()'];
-    const updateValues: any[] = [];
-
-    if (currentStep !== undefined) {
-      updateFields.push(`current_step = ${currentStep}`);
-    }
-    if (businessInfo) {
-      updateFields.push(`business_info = $1::jsonb`);
-      updateValues.push(JSON.stringify(businessInfo));
-    }
-    if (personalInfo) {
-      updateFields.push(`personal_info = $${updateValues.length + 1}::jsonb`);
-      updateValues.push(JSON.stringify(personalInfo));
-    }
-    if (bankAccount) {
-      updateFields.push(`bank_account = $${updateValues.length + 1}::jsonb`);
-      updateValues.push(JSON.stringify(bankAccount));
-    }
-
-    // Use simpler update with just the fields we need
+    // Update onboarding progress in database (one jsonb column per branch).
     if (businessInfo) {
       await sql`
         UPDATE stripe_onboarding_progress
         SET
           updated_at = NOW(),
           current_step = COALESCE(${currentStep ?? null}, current_step),
-          business_info = ${JSON.stringify(businessInfo)}::jsonb
+          business_info = ${sql.json(businessInfo as any)}
         WHERE stripe_account_id = ${accountId}
       `;
     } else if (personalInfo) {
@@ -255,7 +235,7 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
         SET
           updated_at = NOW(),
           current_step = COALESCE(${currentStep ?? null}, current_step),
-          personal_info = ${JSON.stringify(personalInfo)}::jsonb
+          personal_info = ${sql.json(personalInfo as any)}
         WHERE stripe_account_id = ${accountId}
       `;
     } else if (bankAccount) {
@@ -264,7 +244,7 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
         SET
           updated_at = NOW(),
           current_step = COALESCE(${currentStep ?? null}, current_step),
-          bank_account = ${JSON.stringify(bankAccount)}::jsonb
+          bank_account = ${sql.json(bankAccount as any)}
         WHERE stripe_account_id = ${accountId}
       `;
     } else if (currentStep !== undefined) {

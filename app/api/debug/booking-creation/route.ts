@@ -133,7 +133,7 @@ export async function POST(request: Request) {
         'scheduled',
         ${body.scheduled_at || null},
         ${body.student_message || ''},
-        ${JSON.stringify(contactInfo)}::jsonb,
+        ${sql.json(contactInfo)},
         NULL,
         NULL,
         NULL,

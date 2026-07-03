@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
             ${preferences.email},
             'unsubscribed',
             'teacher_broadcast',
-            ${JSON.stringify({ token, type, community_id: community.id })}::jsonb
+            ${sql.json({ token, type, community_id: community.id })}
           )
         `;
         const successUrl = new URL('/unsubscribe/success', SITE_URL);
@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
         ${preferences.email},
         'unsubscribed',
         ${type || 'all_marketing'},
-        ${JSON.stringify({ token, type })}::jsonb
+        ${sql.json({ token, type })}
       )
     `;
 
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
         ${existing.email},
         'preferences_updated',
         'preferences',
-        ${JSON.stringify({ newPreferences })}::jsonb
+        ${sql.json({ newPreferences })}
       )
     `;
 

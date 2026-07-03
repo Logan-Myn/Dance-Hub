@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { queryOne } from '@/lib/db';
+import { queryOne, sql } from '@/lib/db';
 
 interface Community {
   id: string;
@@ -58,7 +58,7 @@ export async function PUT(request: Request, props: { params: Promise<{ community
         name = ${updates.name},
         description = ${updates.description},
         image_url = ${updates.imageUrl},
-        custom_links = ${JSON.stringify(Array.isArray(updates.customLinks) ? updates.customLinks : [])}::jsonb,
+        custom_links = ${sql.json(Array.isArray(updates.customLinks) ? updates.customLinks : [])},
         slug = ${updates.slug},
         status = ${updates.status},
         opening_date = ${updates.opening_date},

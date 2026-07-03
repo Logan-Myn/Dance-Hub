@@ -98,7 +98,7 @@ export async function PUT(request: NextRequest) {
         ${preferences.email},
         'preferences_updated',
         'preferences',
-        ${JSON.stringify({ updates })}::jsonb
+        ${sql.json({ updates })}
       )
     `;
 

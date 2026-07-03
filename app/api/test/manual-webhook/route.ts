@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { queryOne } from "@/lib/db";
+import { queryOne, sql } from "@/lib/db";
 import { createVideoRoomForBooking } from "@/lib/video-room-creation";
 
 interface NewBooking {
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
         ${testBookingData.payment_status},
         ${testBookingData.lesson_status},
         ${testBookingData.student_message},
-        ${JSON.stringify(testBookingData.contact_info)}::jsonb,
+        ${sql.json(testBookingData.contact_info)},
         NULL,
         NULL,
         NULL,

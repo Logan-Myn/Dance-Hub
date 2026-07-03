@@ -258,7 +258,7 @@ export async function POST(request: Request) {
                 ${metadata.scheduled_at || null},
                 ${metadata.availability_slot_id || null},
                 ${metadata.student_message || ''},
-                ${JSON.stringify(contactInfo)}::jsonb,
+                ${sql.json(contactInfo)},
                 NULL,
                 NULL,
                 NULL,

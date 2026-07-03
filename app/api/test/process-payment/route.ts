@@ -91,7 +91,7 @@ export async function POST(request: Request) {
         'succeeded',
         'booked',
         ${metadata.student_message || ''},
-        ${JSON.stringify(contactInfo)}::jsonb,
+        ${sql.json(contactInfo)},
         NULL,
         NULL,
         NULL,

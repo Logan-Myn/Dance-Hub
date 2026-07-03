@@ -60,7 +60,7 @@ export async function POST(req: Request, props: { params: Promise<{ communitySlu
          recipient_count, status)
       VALUES
         (${community.id}, ${senderProfile.id}, ${subject}, ${htmlContent},
-         ${JSON.stringify(editorJson)}::jsonb, ${previewText ?? null}, 0, 'sending')
+         ${sql.json(editorJson as any)}, ${previewText ?? null}, 0, 'sending')
       RETURNING id
     `;
     if (!inserted) {

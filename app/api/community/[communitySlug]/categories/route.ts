@@ -11,7 +11,7 @@ export async function PUT(request: Request, props: { params: Promise<{ community
     const result = await sql`
       UPDATE communities
       SET
-        thread_categories = ${JSON.stringify(categories)}::jsonb,
+        thread_categories = ${sql.json(categories)},
         updated_at = NOW()
       WHERE slug = ${communitySlug}
       RETURNING id
