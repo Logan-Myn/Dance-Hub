@@ -30,10 +30,14 @@ export async function PUT(request: Request, props: { params: Promise<{ community
       },
     };
 
+    // Use sql.json() so postgres.js serializes the object exactly once.
+    // Passing JSON.stringify(...)::jsonb double-encodes under postgres.js
+    // (the driver re-serializes the already-stringified value), storing a
+    // jsonb *string* instead of an object and blanking the About page.
     const result = await sql`
       UPDATE communities
       SET
-        about_page = ${JSON.stringify(aboutPageData)}::jsonb,
+        about_page = ${sql.json(aboutPageData)},
         updated_at = NOW()
       WHERE slug = ${communitySlug}
       RETURNING id
