@@ -23,7 +23,7 @@ interface ExistingMember {
 export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
   try {
-    const { userId, email } = await request.json();
+    const { userId, email, promotionCodeId } = await request.json();
 
     // Get community with its membership price and stripe account
     const community = await queryOne<Community>`
@@ -143,6 +143,7 @@ export async function POST(request: Request, props: { params: Promise<{ communit
           platform_fee_percentage: feePercentage
         },
         application_fee_percent: feePercentage,
+        ...(promotionCodeId ? { discounts: [{ promotion_code: promotionCodeId }] } : {}),
         expand: ['latest_invoice.confirmation_secret'],
       },
       {
@@ -153,12 +154,39 @@ export async function POST(request: Request, props: { params: Promise<{ communit
     // Get the client secret from the subscription's invoice confirmation_secret (Clover API)
     const latestInvoice = subscription.latest_invoice as Stripe.Invoice | null;
     const confirmationSecret = (latestInvoice as any)?.confirmation_secret;
+    const amountDue = (latestInvoice as any)?.amount_due ?? null;
 
-    if (!confirmationSecret?.client_secret) {
-      console.error("No confirmation secret found:", {
+    // Normal path: there is a payment to confirm on the first invoice.
+    let clientSecret: string | null = confirmationSecret?.client_secret ?? null;
+    let requiresSetup = false;
+
+    // Fully-discounted first invoice (e.g. a 100%-off code): Stripe creates no
+    // PaymentIntent, so there is nothing to confirm. Collect a card via a
+    // SetupIntent so renewals at full price can charge later. A webhook
+    // (setup_intent.succeeded) sets it as the subscription's default method.
+    if (!clientSecret && amountDue === 0) {
+      const setupIntent = await stripe.setupIntents.create(
+        {
+          customer: customer.id,
+          usage: 'off_session',
+          payment_method_types: ['card'],
+          metadata: {
+            subscription_id: subscription.id,
+            community_id: community.id,
+            user_id: userId,
+          },
+        },
+        { stripeAccount: community.stripe_account_id! }
+      );
+      clientSecret = setupIntent.client_secret;
+      requiresSetup = true;
+    }
+
+    if (!clientSecret) {
+      console.error("No confirmation secret or setup intent for subscription:", {
         subscriptionId: subscription.id,
         latestInvoiceId: latestInvoice?.id,
-        confirmationSecret,
+        amountDue,
       });
       // Clean up - cancel the subscription since we can't complete payment
       await stripe.subscriptions.cancel(subscription.id, {
@@ -169,8 +197,6 @@ export async function POST(request: Request, props: { params: Promise<{ communit
         { status: 500 }
       );
     }
-
-    const clientSecret = confirmationSecret.client_secret;
 
     // Add member to community_members table with the platform fee percentage
     try {
@@ -218,6 +244,7 @@ export async function POST(request: Request, props: { params: Promise<{ communit
 
     return NextResponse.json({
       clientSecret,
+      requiresSetup,
       stripeAccountId: community.stripe_account_id,
       subscriptionId: subscription.id
     });

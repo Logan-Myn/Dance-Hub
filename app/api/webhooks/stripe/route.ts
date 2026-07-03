@@ -170,6 +170,23 @@ export async function POST(request: Request) {
     const { stripe_account_id } = (event.data.object as any).metadata || {};
 
     switch (event.type) {
+      case 'setup_intent.succeeded': {
+        // A promo-code join with a fully-discounted (€0) first invoice collects
+        // a card via a SetupIntent instead of a payment. Attach that card to the
+        // subscription so later full-price renewals can charge off-session.
+        const si = event.data.object as Stripe.SetupIntent;
+        const subscriptionId = si.metadata?.subscription_id;
+        if (subscriptionId && si.payment_method) {
+          try {
+            await connectedStripe.subscriptions.update(subscriptionId, {
+              default_payment_method: si.payment_method as string,
+            });
+          } catch (err) {
+            console.error('[webhook] failed to set default payment method from setup intent', err);
+          }
+        }
+        break;
+      }
       case 'payment_intent.succeeded':
         console.log('💳 Payment intent succeeded');
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
