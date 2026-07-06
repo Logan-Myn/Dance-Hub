@@ -238,11 +238,6 @@ export function useJoinCommunity(
                   </span>
                   <span className="text-sm text-muted-foreground">/year</span>
                 </span>
-                {monthlyEquivalent != null && (
-                  <span className="mt-1 text-xs text-muted-foreground">
-                    Works out to about €{monthlyEquivalent.toFixed(2)} a month.
-                  </span>
-                )}
                 {community.yearlyBenefits && (
                   <span className="mt-3 whitespace-pre-line text-sm text-foreground/80">
                     {community.yearlyBenefits}
