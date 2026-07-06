@@ -28,6 +28,7 @@ interface SubscriptionSummary {
   interval: string;
   currentPeriodEnd: number;
   defaultPaymentMethod: { brand: string; last4: string } | null;
+  upgrade: { available: boolean; yearlyAmount: number; yearlyBenefits: string | null } | null;
 }
 
 interface Payment {
@@ -144,6 +145,40 @@ function UpdateCardForm({
   );
 }
 
+function UpgradeConfirmForm({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setSubmitting(true);
+    try {
+      const { error } = await stripe.confirmPayment({ elements, redirect: "if_required" });
+      if (error) throw error;
+      onDone();
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not complete the switch.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 py-2">
+      <p className="text-sm text-muted-foreground">Your bank needs to confirm this payment.</p>
+      <PaymentElement />
+      <div className="flex gap-2 justify-end">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>Cancel</Button>
+        <Button type="submit" disabled={!stripe || submitting}>
+          {submitting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Confirming</>) : "Confirm payment"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export function ManageSubscriptionModal({
   isOpen,
   onClose,
@@ -154,10 +189,13 @@ export function ManageSubscriptionModal({
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"details" | "update">("details");
+  const [view, setView] = useState<"details" | "update" | "upgrade">("details");
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [stripePromise, setStripePromise] =
     useState<Promise<StripeClient | null> | null>(null);
+  const [upgrading, setUpgrading] = useState(false);
+  const [upgradePreview, setUpgradePreview] = useState<{ prorationAmount: number; currency: string; yearlyAmount: number } | null>(null);
+  const [upgradeSecret, setUpgradeSecret] = useState<string | null>(null);
 
   const fetchAll = React.useCallback(async () => {
     setLoading(true);
@@ -184,6 +222,8 @@ export function ManageSubscriptionModal({
     if (!isOpen) {
       setView("details");
       setClientSecret(null);
+      setUpgradePreview(null);
+      setUpgradeSecret(null);
       return;
     }
     fetchAll();
@@ -226,6 +266,39 @@ export function ManageSubscriptionModal({
     setView("details");
     setClientSecret(null);
     fetchAll();
+  };
+
+  const startUpgrade = async () => {
+    try {
+      const resp = await fetch(`/api/community/${communitySlug}/subscription/upgrade-yearly`);
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error ?? "Could not preview the upgrade.");
+      setUpgradePreview(data);
+      setView("upgrade");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not preview the upgrade.");
+    }
+  };
+
+  const confirmUpgrade = async () => {
+    setUpgrading(true);
+    try {
+      const resp = await fetch(`/api/community/${communitySlug}/subscription/upgrade-yearly`, { method: "POST" });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error ?? "Could not switch to yearly.");
+      if (data.requiresAction && data.clientSecret) {
+        setUpgradeSecret(data.clientSecret);   // hand off to the 3DS confirm step
+        return;
+      }
+      toast.success("You're on the yearly plan now.");
+      setView("details");
+      setUpgradePreview(null);
+      fetchAll();
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not switch to yearly.");
+    } finally {
+      setUpgrading(false);
+    }
   };
 
   return (
@@ -280,6 +353,32 @@ export function ManageSubscriptionModal({
                 </div>
               )}
             </section>
+
+            {summary.interval === "month" && summary.upgrade?.available && (
+              <section>
+                <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-2">
+                  Switch to yearly
+                </h3>
+                <div className="rounded-md border border-primary/40 bg-primary/5 p-3">
+                  <p className="text-sm">
+                    Pay once a year: {formatMoney(summary.upgrade.yearlyAmount, summary.currency)}/year.
+                  </p>
+                  {summary.upgrade.yearlyBenefits && (
+                    <p className="text-sm text-muted-foreground whitespace-pre-line mt-1">
+                      {summary.upgrade.yearlyBenefits}
+                    </p>
+                  )}
+                  <Button
+                    size="sm"
+                    className="mt-3"
+                    onClick={startUpgrade}
+                    disabled={summary.status !== "active"}
+                  >
+                    Switch to yearly
+                  </Button>
+                </div>
+              </section>
+            )}
 
             <section>
               <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-2">
@@ -357,6 +456,38 @@ export function ManageSubscriptionModal({
                 setView("details");
                 setClientSecret(null);
               }}
+            />
+          </Elements>
+        )}
+
+        {view === "upgrade" && upgradePreview && !upgradeSecret && (
+          <div className="space-y-4 py-2">
+            <p className="text-sm">
+              You'll pay {formatMoney(upgradePreview.prorationAmount, upgradePreview.currency)} now for the
+              rest of this period, then {formatMoney(upgradePreview.yearlyAmount, upgradePreview.currency)}/year.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setView("details"); setUpgradePreview(null); }} disabled={upgrading}>
+                Cancel
+              </Button>
+              <Button onClick={confirmUpgrade} disabled={upgrading}>
+                {upgrading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Switching</>) : "Confirm switch"}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {view === "upgrade" && upgradeSecret && stripePromise && (
+          <Elements stripe={stripePromise} options={{ clientSecret: upgradeSecret, appearance: { theme: "stripe" as const } }}>
+            <UpgradeConfirmForm
+              onDone={() => {
+                setUpgradeSecret(null);
+                setUpgradePreview(null);
+                setView("details");
+                toast.success("You're on the yearly plan now.");
+                fetchAll();
+              }}
+              onCancel={() => { setUpgradeSecret(null); setUpgradePreview(null); setView("details"); }}
             />
           </Elements>
         )}

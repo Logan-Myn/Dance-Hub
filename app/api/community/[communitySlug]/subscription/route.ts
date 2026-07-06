@@ -7,6 +7,10 @@ import type Stripe from "stripe";
 interface Community {
   id: string;
   stripe_account_id: string | null;
+  yearly_enabled: boolean | null;
+  yearly_price: number | string | null;
+  yearly_benefits: string | null;
+  stripe_yearly_price_id: string | null;
 }
 
 interface Member {
@@ -25,7 +29,7 @@ export async function GET(
   const userId = session.user.id;
 
   const community = await queryOne<Community>`
-    SELECT id, stripe_account_id
+    SELECT id, stripe_account_id, yearly_enabled, yearly_price, yearly_benefits, stripe_yearly_price_id
     FROM communities
     WHERE slug = ${params.communitySlug}
   `;
@@ -58,14 +62,25 @@ export async function GET(
     const pm = sub.default_payment_method as Stripe.PaymentMethod | null;
     const card = pm?.type === "card" ? pm.card : null;
 
+    const interval = price?.recurring?.interval ?? "month";
+    const canUpgrade =
+      interval === "month" && !!community.yearly_enabled && !!community.stripe_yearly_price_id;
+
     return NextResponse.json({
       status: sub.status,
       currency: price?.currency ?? "eur",
       amount: price?.unit_amount ?? 0,
-      interval: price?.recurring?.interval ?? "month",
+      interval,
       currentPeriodEnd: (sub as any).current_period_end as number,
       defaultPaymentMethod: card
         ? { brand: card.brand, last4: card.last4 }
+        : null,
+      upgrade: canUpgrade
+        ? {
+            available: true,
+            yearlyAmount: Math.round(Number(community.yearly_price) * 100),
+            yearlyBenefits: community.yearly_benefits ?? null,
+          }
         : null,
     });
   } catch (err) {

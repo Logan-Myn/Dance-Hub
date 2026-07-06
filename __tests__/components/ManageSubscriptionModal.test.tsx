@@ -20,6 +20,7 @@ const summaryFixture = {
   interval: "month",
   currentPeriodEnd: 1750000000,
   defaultPaymentMethod: { brand: "visa", last4: "4242" },
+  upgrade: null,
 };
 
 const paymentsFixture = {
@@ -101,6 +102,24 @@ describe("ManageSubscriptionModal", () => {
         screen.getByText(/Your last payment did not go through/)
       ).toBeInTheDocument()
     );
+  });
+
+  it("offers a yearly switch for a monthly member when yearly is available", async () => {
+    mockFetch({
+      "/subscription": {
+        ...summaryFixture,
+        interval: "month",
+        upgrade: { available: true, yearlyAmount: 20000, yearlyBenefits: "2 months free." },
+      },
+      "/subscription/payments": { invoices: [] },
+    });
+
+    render(
+      <ManageSubscriptionModal isOpen={true} onClose={() => {}} communitySlug="test" stripeAccountId="acct_test" />
+    );
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /Switch to yearly/ })).toBeInTheDocument());
+    expect(screen.getByText(/2 months free\./)).toBeInTheDocument();
   });
 
   it("shows error when summary fetch fails", async () => {
