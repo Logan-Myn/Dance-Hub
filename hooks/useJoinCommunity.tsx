@@ -185,34 +185,68 @@ export function useJoinCommunity(
     }
   };
 
+  const monthlyEquivalent =
+    community?.yearlyPrice != null ? community.yearlyPrice / 12 : null;
+  const yearlyBeatsMonthly =
+    monthlyEquivalent != null &&
+    community?.membershipPrice != null &&
+    monthlyEquivalent < community.membershipPrice;
+
   const modals = (
     <>
       {showPlanChooser && community && (
         <Dialog open onOpenChange={(open) => { if (!open) setShowPlanChooser(false); }}>
-          <DialogContent className="sm:max-w-[440px]">
+          <DialogContent className="sm:max-w-[560px]">
             <DialogHeader>
               <DialogTitle>Choose your plan</DialogTitle>
               <DialogDescription>Pick how you want to pay.</DialogDescription>
             </DialogHeader>
-            <div className="grid gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {/* Monthly */}
               <button
                 type="button"
                 onClick={() => startPaid('monthly')}
-                className="rounded-xl border border-border/60 p-4 text-left hover:border-primary transition-colors"
+                className="flex flex-col rounded-2xl border border-border/60 p-5 text-left transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
-                <div className="font-semibold">€{community.membershipPrice}/month</div>
-                <div className="text-sm text-muted-foreground">Billed monthly. Cancel anytime.</div>
+                <span className="text-sm font-medium text-muted-foreground">Monthly</span>
+                <span className="mt-2 flex items-baseline gap-1">
+                  <span className="text-3xl font-semibold text-foreground">
+                    €{community.membershipPrice}
+                  </span>
+                  <span className="text-sm text-muted-foreground">/month</span>
+                </span>
+                <span className="mt-3 text-sm text-muted-foreground">
+                  Billed monthly. Cancel anytime.
+                </span>
               </button>
+
+              {/* Yearly (highlighted) */}
               <button
                 type="button"
                 onClick={() => startPaid('yearly')}
-                className="rounded-xl border border-primary/60 bg-primary/5 p-4 text-left hover:border-primary transition-colors"
+                className="relative flex flex-col rounded-2xl border-2 border-primary bg-primary/5 p-5 text-left transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
-                <div className="font-semibold">€{community.yearlyPrice}/year</div>
+                {yearlyBeatsMonthly && (
+                  <span className="absolute -top-2.5 right-4 rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground">
+                    Best value
+                  </span>
+                )}
+                <span className="text-sm font-medium text-primary">Yearly</span>
+                <span className="mt-2 flex items-baseline gap-1">
+                  <span className="text-3xl font-semibold text-foreground">
+                    €{community.yearlyPrice}
+                  </span>
+                  <span className="text-sm text-muted-foreground">/year</span>
+                </span>
+                {monthlyEquivalent != null && (
+                  <span className="mt-1 text-xs text-muted-foreground">
+                    Works out to about €{monthlyEquivalent.toFixed(2)} a month.
+                  </span>
+                )}
                 {community.yearlyBenefits && (
-                  <div className="text-sm text-muted-foreground whitespace-pre-line mt-1">
+                  <span className="mt-3 whitespace-pre-line text-sm text-foreground/80">
                     {community.yearlyBenefits}
-                  </div>
+                  </span>
                 )}
               </button>
             </div>
