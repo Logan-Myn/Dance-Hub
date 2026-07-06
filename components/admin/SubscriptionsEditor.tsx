@@ -591,7 +591,7 @@ export function SubscriptionsEditor({
                   type="number"
                   min="0"
                   step="0.01"
-                  value={price}
+                  value={price || ''}
                   onChange={(e) => setPrice(Number(e.target.value))}
                   className="pl-8 rounded-xl border-border/50"
                   placeholder="0.00"
@@ -629,7 +629,7 @@ export function SubscriptionsEditor({
                         type="number"
                         min="0"
                         step="0.01"
-                        value={yearlyPrice}
+                        value={yearlyPrice || ''}
                         onChange={(e) => setYearlyPrice(Number(e.target.value))}
                         className="pl-8 rounded-xl border-border/50"
                         placeholder="0.00"
@@ -642,7 +642,8 @@ export function SubscriptionsEditor({
 
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      What members get with the yearly plan
+                      What members get with the yearly plan{' '}
+                      <span className="font-normal text-muted-foreground">(optional)</span>
                     </label>
                     <textarea
                       value={yearlyBenefits}

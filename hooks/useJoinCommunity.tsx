@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { Loader2 } from 'lucide-react';
 import PaymentModal from '@/components/PaymentModal';
 import { PreRegistrationPaymentModal } from '@/components/PreRegistrationPaymentModal';
 import {
@@ -194,6 +195,21 @@ export function useJoinCommunity(
 
   const modals = (
     <>
+      {/* Bridge the gap between clicking join / picking a plan and the payment
+          modal appearing (creating the subscription server-side takes a moment). */}
+      {isJoining && !paymentClientSecret && !preRegClientSecret && (
+        <Dialog open>
+          <DialogContent className="sm:max-w-[360px]">
+            <DialogHeader>
+              <DialogTitle>Preparing your checkout</DialogTitle>
+              <DialogDescription>One moment while we set up your payment.</DialogDescription>
+            </DialogHeader>
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
       {showPlanChooser && community && (
         <Dialog open onOpenChange={(open) => { if (!open) setShowPlanChooser(false); }}>
           <DialogContent className="sm:max-w-[560px]">
