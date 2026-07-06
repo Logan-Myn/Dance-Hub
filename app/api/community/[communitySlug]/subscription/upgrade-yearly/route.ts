@@ -81,6 +81,10 @@ export async function GET(_req: Request, props: { params: Promise<{ communitySlu
         subscription: ctx.subId,
         subscription_details: {
           items: [{ id: ctx.itemId, price: ctx.yearlyPriceId }],
+          // Reset the cycle to now so the preview reflects the real upgrade:
+          // the yearly plan starts today, crediting the unused part of the
+          // current month. Without this, the month->year proration inflates.
+          billing_cycle_anchor: "now",
           proration_behavior: "create_prorations",
         },
       },
@@ -107,6 +111,9 @@ export async function POST(_req: Request, props: { params: Promise<{ communitySl
       ctx.subId,
       {
         items: [{ id: ctx.itemId, price: ctx.yearlyPriceId }],
+        // Reset the billing cycle to now: the yearly plan starts today, with a
+        // credit for the unused part of the current month. Matches the preview.
+        billing_cycle_anchor: "now",
         proration_behavior: "always_invoice",
         // Store the price change as a pending update that only applies once the
         // prorated invoice is paid. If the payment needs action (e.g. 3DS) and

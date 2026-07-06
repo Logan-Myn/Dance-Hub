@@ -35,7 +35,7 @@ it('GET previews the prorated amount', async () => {
   expect(mockInvoicePreview).toHaveBeenCalledWith(
     expect.objectContaining({
       subscription: 'sub_1',
-      subscription_details: expect.objectContaining({ items: [{ id: 'si_1', price: 'price_year' }] }),
+      subscription_details: expect.objectContaining({ items: [{ id: 'si_1', price: 'price_year' }], billing_cycle_anchor: 'now' }),
     }),
     { stripeAccount: 'acct_1' },
   );
@@ -54,6 +54,7 @@ it('POST switches to yearly and reports success when the invoice is paid', async
     'sub_1',
     expect.objectContaining({
       items: [{ id: 'si_1', price: 'price_year' }],
+      billing_cycle_anchor: 'now',
       payment_behavior: 'pending_if_incomplete',
       proration_behavior: 'always_invoice',
     }),
