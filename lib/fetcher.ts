@@ -31,6 +31,9 @@ export const fetcher = async (key: string) => {
       customLinks: Array.isArray(data.custom_links) ? data.custom_links : [],
       membershipEnabled: data.membership_enabled || false,
       membershipPrice: data.membership_price || 0,
+      yearlyEnabled: data.yearly_enabled || false,
+      yearlyPrice: Number(data.yearly_price ?? 0),
+      yearlyBenefits: data.yearly_benefits ?? "",
       stripeAccountId: data.stripe_account_id || null,
     };
   }
@@ -117,6 +120,9 @@ export interface Community {
   customLinks?: CustomLink[];
   membershipEnabled?: boolean;
   membershipPrice?: number;
+  yearlyEnabled?: boolean;
+  yearlyPrice?: number;
+  yearlyBenefits?: string;
   stripeAccountId?: string | null;
   isMember?: boolean;
   status?: 'active' | 'pre_registration' | 'inactive';

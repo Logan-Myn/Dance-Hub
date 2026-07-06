@@ -20,6 +20,9 @@ interface CommunityWithMembersCount {
   currency: string | null;
   membership_enabled: boolean;
   membership_price: number | null;
+  yearly_enabled: boolean | null;
+  yearly_price: number | string | null;
+  yearly_benefits: string | null;
   stripe_account_id: string | null;
   stripe_price_id: string | null;
   stripe_onboarding_type: string | null;
@@ -53,6 +56,9 @@ export async function GET(request: Request, props: { params: Promise<{ community
         c.currency,
         c.membership_enabled,
         c.membership_price,
+        c.yearly_enabled,
+        c.yearly_price,
+        c.yearly_benefits,
         c.stripe_account_id,
         c.stripe_price_id,
         c.stripe_onboarding_type,
