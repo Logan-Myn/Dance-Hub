@@ -855,12 +855,26 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Missing metadata' }, { status: 400 });
           }
 
-          // Update member subscription status to reflect payment failure
+          // A failed 'subscription_update' invoice is a pending upgrade proration
+          // (e.g. an abandoned 3DS on switch-to-yearly). With pending_if_incomplete
+          // the base subscription is untouched, so it must NOT be flagged past_due.
+          // Only a failed renewal ('subscription_cycle') reflects real trouble — and
+          // in every case we write Stripe's actual subscription status rather than
+          // assuming past_due, so the DB matches Stripe's source of truth.
+          const failedBillingReason = (failedInvoice as any).billing_reason;
+          if (failedBillingReason === 'subscription_update') {
+            console.log(
+              `⏭️ invoice.payment_failed for a subscription_update proration (sub ${failedSubscription.id}); leaving base status ${failedSubscription.status} untouched`
+            );
+            break;
+          }
+
+          // Update member subscription status to reflect Stripe's real status.
           try {
             await sql`
               UPDATE community_members
               SET
-                subscription_status = 'past_due'
+                subscription_status = ${failedSubscription.status}
               WHERE community_id = ${failedSubscription.metadata.community_id}
                 AND user_id = ${failedSubscription.metadata.user_id}
             `;
