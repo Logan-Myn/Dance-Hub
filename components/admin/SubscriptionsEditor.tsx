@@ -72,6 +72,9 @@ interface SubscriptionsEditorProps {
   initialStripeAccountId: string | null;
   initialMembershipEnabled: boolean;
   initialMembershipPrice: number;
+  initialYearlyEnabled: boolean;
+  initialYearlyPrice: number;
+  initialYearlyBenefits: string;
   communityCreatedAt: string;
 }
 
@@ -97,6 +100,9 @@ export function SubscriptionsEditor({
   initialStripeAccountId,
   initialMembershipEnabled,
   initialMembershipPrice,
+  initialYearlyEnabled,
+  initialYearlyPrice,
+  initialYearlyBenefits,
   communityCreatedAt,
 }: SubscriptionsEditorProps) {
   const promoDaysLeft = daysLeftInPromo(communityCreatedAt);
@@ -114,6 +120,9 @@ export function SubscriptionsEditor({
     initialMembershipEnabled
   );
   const [price, setPrice] = useState(initialMembershipPrice);
+  const [isYearlyEnabled, setIsYearlyEnabled] = useState(initialYearlyEnabled);
+  const [yearlyPrice, setYearlyPrice] = useState(initialYearlyPrice);
+  const [yearlyBenefits, setYearlyBenefits] = useState(initialYearlyBenefits);
 
   // Live Stripe state — fetched client-side on mount + whenever stripeAccountId
   // changes (ported from modal lines 299-358). Server-side RSC cannot cache
@@ -431,6 +440,9 @@ export function SubscriptionsEditor({
           body: JSON.stringify({
             price,
             enabled: isMembershipEnabled,
+            yearlyEnabled: isYearlyEnabled,
+            yearlyPrice,
+            yearlyBenefits,
           }),
         }
       );
@@ -450,7 +462,7 @@ export function SubscriptionsEditor({
         error instanceof Error ? error.message : "Failed to update price"
       );
     }
-  }, [communitySlug, price, isMembershipEnabled, router]);
+  }, [communitySlug, price, isMembershipEnabled, isYearlyEnabled, yearlyPrice, yearlyBenefits, router]);
 
   // --- Render helpers ported from modal ---
 
@@ -588,6 +600,63 @@ export function SubscriptionsEditor({
               <p className="mt-1.5 text-xs text-muted-foreground">
                 Set the monthly price for your community membership
               </p>
+            </div>
+
+            <div className="pt-4 border-t border-border/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block text-sm font-medium text-foreground">
+                    Offer a yearly plan
+                  </label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Add an annual option members can pick instead of paying monthly.
+                  </p>
+                </div>
+                <Switch checked={isYearlyEnabled} onCheckedChange={setIsYearlyEnabled} />
+              </div>
+
+              {isYearlyEnabled && (
+                <div className="space-y-4 mt-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Yearly Membership Price
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <span className="text-muted-foreground font-medium">€</span>
+                      </div>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={yearlyPrice}
+                        onChange={(e) => setYearlyPrice(Number(e.target.value))}
+                        className="pl-8 rounded-xl border-border/50"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      Tip: pricing the year at about 10x the monthly price gives members roughly 2 months free.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      What members get with the yearly plan
+                    </label>
+                    <textarea
+                      value={yearlyBenefits}
+                      onChange={(e) => setYearlyBenefits(e.target.value)}
+                      rows={3}
+                      className="w-full rounded-xl border border-border/50 bg-background p-3 text-sm"
+                      placeholder="e.g. 2 months free plus one private class."
+                    />
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      Shown to members when they choose a plan.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
