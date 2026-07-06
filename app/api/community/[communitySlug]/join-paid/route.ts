@@ -8,6 +8,8 @@ interface Community {
   membership_price: number | null;
   stripe_account_id: string | null;
   stripe_price_id: string | null;
+  stripe_yearly_price_id: string | null;
+  yearly_enabled: boolean | null;
   active_member_count: number | null;
   created_at: string;
   promotional_fee_percentage: number | null;
@@ -23,11 +25,11 @@ interface ExistingMember {
 export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
   try {
-    const { userId, email, promotionCodeId } = await request.json();
+    const { userId, email, promotionCodeId, plan } = await request.json();
 
     // Get community with its membership price and stripe account
     const community = await queryOne<Community>`
-      SELECT id, membership_price, stripe_account_id, stripe_price_id, active_member_count, created_at, promotional_fee_percentage
+      SELECT id, membership_price, stripe_account_id, stripe_price_id, stripe_yearly_price_id, yearly_enabled, active_member_count, created_at, promotional_fee_percentage
       FROM communities
       WHERE slug = ${params.communitySlug}
     `;
@@ -39,7 +41,15 @@ export async function POST(request: Request, props: { params: Promise<{ communit
       );
     }
 
-    if (!community.stripe_price_id) {
+    const useYearly = plan === 'yearly';
+    if (useYearly && (!community.yearly_enabled || !community.stripe_yearly_price_id)) {
+      return NextResponse.json(
+        { error: "Yearly membership is not available for this community" },
+        { status: 400 }
+      );
+    }
+    const selectedPriceId = useYearly ? community.stripe_yearly_price_id : community.stripe_price_id;
+    if (!selectedPriceId) {
       return NextResponse.json(
         { error: "Community membership price not configured" },
         { status: 400 }
@@ -131,7 +141,7 @@ export async function POST(request: Request, props: { params: Promise<{ communit
     const subscription = await stripe.subscriptions.create(
       {
         customer: customer.id,
-        items: [{ price: community.stripe_price_id }],
+        items: [{ price: selectedPriceId }],
         payment_behavior: 'default_incomplete',
         payment_settings: {
           payment_method_types: ['card'],
