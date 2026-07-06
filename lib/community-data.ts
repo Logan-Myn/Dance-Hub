@@ -14,6 +14,9 @@ export interface CommunityRow {
   slug: string;
   membership_enabled?: boolean | null;
   membership_price?: number | string | null;
+  yearly_enabled?: boolean | null;
+  yearly_price?: number | string | null;
+  yearly_benefits?: string | null;
   stripe_account_id?: string | null;
   thread_categories?: unknown;
   custom_links?: unknown;

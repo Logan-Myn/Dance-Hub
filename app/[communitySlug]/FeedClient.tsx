@@ -26,6 +26,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { ThreadCategory } from "@/types/community";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
@@ -92,6 +99,10 @@ interface Community {
   membershipEnabled?: boolean;
   membershipPrice?: number;
   membership_price?: number;
+  yearlyEnabled?: boolean;
+  yearlyPrice?: number;
+  yearly_price?: number;
+  yearlyBenefits?: string;
   threadCategories?: ThreadCategory[];
   stripeAccountId?: string | null;
   status?: 'active' | 'pre_registration' | 'inactive';
@@ -170,6 +181,8 @@ export default function FeedClient({
   );
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'payment' | 'setup'>('payment');
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('monthly');
+  const [showPlanChooser, setShowPlanChooser] = useState(false);
   const [showPreRegistrationModal, setShowPreRegistrationModal] = useState(false);
   const [preRegistrationClientSecret, setPreRegistrationClientSecret] = useState<string | null>(null);
   const [preRegistrationOpeningDate, setPreRegistrationOpeningDate] = useState<string | null>(null);
@@ -302,19 +315,20 @@ export default function FeedClient({
     }
   }, [membersData, currentUser]);
 
-  const startPaidJoin = async () => {
+  const startPaidJoin = async (plan: 'monthly' | 'yearly' = 'monthly') => {
     if (!currentUser) return;
     try {
       const response = await fetch(`/api/community/${communitySlug}/join-paid`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: currentUser.id, email: currentUser.email }),
+        body: JSON.stringify({ userId: currentUser.id, email: currentUser.email, plan }),
       });
       if (!response.ok) throw new Error("Failed to create payment");
       const { clientSecret, requiresSetup, stripeAccountId } = await response.json();
       setPaymentClientSecret(clientSecret);
       setStripeAccountId(stripeAccountId);
       setPaymentMode(requiresSetup ? 'setup' : 'payment');
+      setSelectedPlan(plan);
       setShowPaymentModal(true);
     } catch (err) {
       console.error(err);
@@ -362,7 +376,11 @@ export default function FeedClient({
         community.membershipPrice > 0
       ) {
         // Handle paid membership. The promo-code entry lives in the payment modal.
-        await startPaidJoin();
+        if (community?.yearlyEnabled && (community?.yearlyPrice ?? 0) > 0) {
+          setShowPlanChooser(true); // let the member pick monthly vs yearly
+          return;
+        }
+        await startPaidJoin('monthly');
       } else {
         // Handle free membership
         const response = await fetch(`/api/community/${communitySlug}/join`, {
@@ -815,12 +833,44 @@ export default function FeedClient({
         );
       })()}
 
+      <Dialog open={showPlanChooser} onOpenChange={setShowPlanChooser}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Choose your plan</DialogTitle>
+            <DialogDescription>Pick how you want to pay.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <button
+              type="button"
+              onClick={() => { setShowPlanChooser(false); startPaidJoin('monthly'); }}
+              className="rounded-xl border border-border/60 p-4 text-left hover:border-primary transition-colors"
+            >
+              <div className="font-semibold">€{community.membershipPrice}/month</div>
+              <div className="text-sm text-muted-foreground">Billed monthly. Cancel anytime.</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowPlanChooser(false); startPaidJoin('yearly'); }}
+              className="rounded-xl border border-primary/60 bg-primary/5 p-4 text-left hover:border-primary transition-colors"
+            >
+              <div className="font-semibold">€{community.yearlyPrice}/year</div>
+              {community.yearlyBenefits && (
+                <div className="text-sm text-muted-foreground whitespace-pre-line mt-1">
+                  {community.yearlyBenefits}
+                </div>
+              )}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <PaymentModal
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
         clientSecret={paymentClientSecret}
         stripeAccountId={stripeAccountId}
-        price={community.membershipPrice || 0}
+        price={selectedPlan === 'yearly' ? (community.yearlyPrice || 0) : (community.membershipPrice || 0)}
+        plan={selectedPlan}
         mode={paymentMode}
         onSuccess={() => {
           setIsMember(true);

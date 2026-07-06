@@ -13,10 +13,11 @@ interface PaymentFormProps {
   communitySlug: string;
   price: number;
   mode: 'payment' | 'setup';
+  plan?: 'monthly' | 'yearly';
   onSuccess: () => void;
 }
 
-function PaymentForm({ communitySlug, price, mode, onSuccess }: PaymentFormProps) {
+function PaymentForm({ communitySlug, price, mode, plan, onSuccess }: PaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [isLoading, setIsLoading] = useState(false);
@@ -117,7 +118,7 @@ function PaymentForm({ communitySlug, price, mode, onSuccess }: PaymentFormProps
             <span>Processing payment...</span>
           </div>
         ) : (
-          mode === 'setup' ? 'Save card and join' : `Pay €${price}/month`
+          mode === 'setup' ? 'Save card and join' : `Pay €${price}/${plan === 'yearly' ? 'year' : 'month'}`
         )}
       </Button>
     </form>
@@ -185,6 +186,7 @@ interface PaymentModalProps {
   communitySlug: string;
   price: number;
   mode?: 'payment' | 'setup';
+  plan?: 'monthly' | 'yearly';
   onSuccess: () => void;
 }
 
@@ -196,6 +198,7 @@ export default function PaymentModal({
   communitySlug,
   price,
   mode: initialMode = 'payment',
+  plan,
   onSuccess
 }: PaymentModalProps) {
   const { user } = useAuth();
@@ -244,7 +247,7 @@ export default function PaymentModal({
       const jRes = await fetch(`/api/community/${communitySlug}/join-paid`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, email: user.email, promotionCodeId: v.promotionCodeId }),
+        body: JSON.stringify({ userId: user.id, email: user.email, promotionCodeId: v.promotionCodeId, plan }),
       });
       if (!jRes.ok) {
         toast.error('Could not apply the code. Please try again.');
@@ -290,6 +293,7 @@ export default function PaymentModal({
             communitySlug={communitySlug}
             price={price}
             mode={activeMode}
+            plan={plan}
             onSuccess={onSuccess}
           />
         </Elements>

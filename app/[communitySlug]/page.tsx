@@ -69,6 +69,9 @@ export default async function CommunityFeedPage(
     customLinks: Array.isArray(community.custom_links) ? community.custom_links : [],
     membershipEnabled: community.membership_enabled ?? false,
     membershipPrice: community.membership_price ?? 0,
+    yearlyEnabled: community.yearly_enabled ?? false,
+    yearlyPrice: Number(community.yearly_price ?? 0),
+    yearlyBenefits: community.yearly_benefits ?? "",
     stripeAccountId: community.stripe_account_id ?? null,
     opening_date:
       community.opening_date instanceof Date
