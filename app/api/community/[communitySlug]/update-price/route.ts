@@ -63,7 +63,7 @@ export async function POST(request: Request, props: { params: Promise<{ communit
       const stripePrice = await stripe.prices.create(
         {
           product: product_id,
-          unit_amount: price * 100, // Convert to cents
+          unit_amount: Math.round(price * 100), // Convert to cents (avoid float error)
           currency: "eur",
           recurring: { interval: "month" },
         },
@@ -93,32 +93,47 @@ export async function POST(request: Request, props: { params: Promise<{ communit
         stripe_yearly_price_id = yearlyStripePrice.id;
       }
 
-      // Update community with both product and price IDs
-      await sql`
-        UPDATE communities
-        SET
-          membership_enabled = ${enabled},
-          membership_price = ${price},
-          stripe_product_id = ${product_id},
-          stripe_price_id = ${stripe_price_id},
-          yearly_enabled = ${!!yearlyEnabled && !!stripe_yearly_price_id},
-          yearly_price = ${yearlyEnabled ? yearlyPrice : null},
-          stripe_yearly_price_id = ${stripe_yearly_price_id ?? null},
-          yearly_benefits = ${yearlyBenefits ?? null},
-          updated_at = NOW()
-        WHERE id = ${community.id}
-      `;
+      if (stripe_yearly_price_id) {
+        // A new yearly price was created this request: write all yearly columns.
+        await sql`
+          UPDATE communities
+          SET
+            membership_enabled = ${enabled},
+            membership_price = ${price},
+            stripe_product_id = ${product_id},
+            stripe_price_id = ${stripe_price_id},
+            yearly_enabled = true,
+            yearly_price = ${yearlyPrice},
+            stripe_yearly_price_id = ${stripe_yearly_price_id},
+            yearly_benefits = ${yearlyBenefits ?? null},
+            updated_at = NOW()
+          WHERE id = ${community.id}
+        `;
+      } else {
+        // Yearly not (re)configured this request: only flip yearly off and
+        // PRESERVE the stored yearly price id / price / benefits for reuse
+        // (spec §2) instead of nulling them out.
+        await sql`
+          UPDATE communities
+          SET
+            membership_enabled = ${enabled},
+            membership_price = ${price},
+            stripe_product_id = ${product_id},
+            stripe_price_id = ${stripe_price_id},
+            yearly_enabled = false,
+            updated_at = NOW()
+          WHERE id = ${community.id}
+        `;
+      }
     } else {
-      // If disabling membership or price is 0, just update the membership status
+      // If disabling membership or price is 0, just update the membership status.
+      // Leave the stored yearly config in place (only flip yearly_enabled off).
       await sql`
         UPDATE communities
         SET
           membership_enabled = ${enabled},
           membership_price = ${price},
-          yearly_enabled = ${!!yearlyEnabled && !!stripe_yearly_price_id},
-          yearly_price = ${yearlyEnabled ? yearlyPrice : null},
-          stripe_yearly_price_id = ${stripe_yearly_price_id ?? null},
-          yearly_benefits = ${yearlyBenefits ?? null},
+          yearly_enabled = false,
           updated_at = NOW()
         WHERE id = ${community.id}
       `;

@@ -52,7 +52,11 @@ it('POST switches to yearly and reports success when the invoice is paid', async
   expect(await res.json()).toEqual({ status: 'succeeded' });
   expect(mockSubUpdate).toHaveBeenCalledWith(
     'sub_1',
-    expect.objectContaining({ items: [{ id: 'si_1', price: 'price_year' }], proration_behavior: 'always_invoice' }),
+    expect.objectContaining({
+      items: [{ id: 'si_1', price: 'price_year' }],
+      payment_behavior: 'pending_if_incomplete',
+      proration_behavior: 'always_invoice',
+    }),
     { stripeAccount: 'acct_1' },
   );
 });
@@ -66,10 +70,43 @@ it('POST returns requiresAction with a client secret when 3DS is needed', async 
   const res = await POST(new Request('http://x', { method: 'POST' }), { params });
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ requiresAction: true, clientSecret: 'pi_secret' });
+  expect(mockSubUpdate).toHaveBeenCalledWith(
+    'sub_1',
+    expect.objectContaining({ payment_behavior: 'pending_if_incomplete', proration_behavior: 'always_invoice' }),
+    { stripeAccount: 'acct_1' },
+  );
 });
 
 it('POST returns 401 without a session', async () => {
   mockGetSession.mockResolvedValueOnce(null);
   const res = await POST(new Request('http://x', { method: 'POST' }), { params });
   expect(res.status).toBe(401);
+});
+
+it('POST returns 400 when the subscription is already yearly', async () => {
+  mockGetSession.mockResolvedValueOnce({ user: { id: 'u1' } });
+  mockQueryOne.mockResolvedValueOnce(community).mockResolvedValueOnce(member);
+  mockSubRetrieve.mockResolvedValueOnce({ items: { data: [{ id: 'si_1', price: { recurring: { interval: 'year' } } }] } });
+
+  const res = await POST(new Request('http://x', { method: 'POST' }), { params });
+  expect(res.status).toBe(400);
+  expect(mockSubUpdate).not.toHaveBeenCalled();
+});
+
+it('POST returns 404 when the member has no subscription', async () => {
+  mockGetSession.mockResolvedValueOnce({ user: { id: 'u1' } });
+  mockQueryOne.mockResolvedValueOnce(community).mockResolvedValueOnce(null);
+
+  const res = await POST(new Request('http://x', { method: 'POST' }), { params });
+  expect(res.status).toBe(404);
+  expect(mockSubUpdate).not.toHaveBeenCalled();
+});
+
+it('POST returns 400 when the community does not have yearly enabled', async () => {
+  mockGetSession.mockResolvedValueOnce({ user: { id: 'u1' } });
+  mockQueryOne.mockResolvedValueOnce({ ...community, yearly_enabled: false });
+
+  const res = await POST(new Request('http://x', { method: 'POST' }), { params });
+  expect(res.status).toBe(400);
+  expect(mockSubUpdate).not.toHaveBeenCalled();
 });

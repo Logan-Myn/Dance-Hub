@@ -108,6 +108,10 @@ export async function POST(_req: Request, props: { params: Promise<{ communitySl
       {
         items: [{ id: ctx.itemId, price: ctx.yearlyPriceId }],
         proration_behavior: "always_invoice",
+        // Store the price change as a pending update that only applies once the
+        // prorated invoice is paid. If the payment needs action (e.g. 3DS) and
+        // the member abandons it, the subscription stays on monthly (spec §4).
+        payment_behavior: "pending_if_incomplete",
         expand: ["latest_invoice.confirmation_secret"],
       },
       { stripeAccount: ctx.stripeAccount },

@@ -145,37 +145,71 @@ function UpdateCardForm({
   );
 }
 
-function UpgradeConfirmForm({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
-  const stripe = useStripe();
-  const elements = useElements();
+function UpgradeConfirmForm({
+  stripePromise,
+  clientSecret,
+  onDone,
+  onCancel,
+}: {
+  stripePromise: Promise<StripeClient | null>;
+  clientSecret: string;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [stripe, setStripe] = useState<StripeClient | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!stripe || !elements) return;
+  useEffect(() => {
+    let active = true;
+    stripePromise.then((s) => {
+      if (active) setStripe(s);
+    });
+    return () => {
+      active = false;
+    };
+  }, [stripePromise]);
+
+  const handleConfirm = async () => {
+    if (!stripe) return;
     setSubmitting(true);
     try {
-      const { error } = await stripe.confirmPayment({ elements, redirect: "if_required" });
+      // The saved default card is already attached to the invoice's PaymentIntent.
+      // Just clear the pending "requires_action" (e.g. 3DS) on it, no new card needed.
+      const { error, paymentIntent } = await stripe.handleNextAction({ clientSecret });
       if (error) throw error;
-      onDone();
+      if (paymentIntent?.status === "succeeded") {
+        onDone();
+      } else {
+        throw new Error("The payment was not confirmed. Please try again.");
+      }
     } catch (err: any) {
-      toast.error(err?.message ?? "Could not complete the switch.");
+      toast.error(err?.message ?? "Could not confirm the payment.");
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 py-2">
-      <p className="text-sm text-muted-foreground">Your bank needs to confirm this payment.</p>
-      <PaymentElement />
+    <div className="space-y-4 py-2">
+      <p className="text-sm text-muted-foreground">
+        Your bank needs to confirm this payment before we finish switching you to the yearly plan.
+      </p>
       <div className="flex gap-2 justify-end">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>Cancel</Button>
-        <Button type="submit" disabled={!stripe || submitting}>
-          {submitting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Confirming</>) : "Confirm payment"}
+        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={handleConfirm} disabled={!stripe || submitting}>
+          {submitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Confirming
+            </>
+          ) : (
+            "Confirm with your bank"
+          )}
         </Button>
       </div>
-    </form>
+    </div>
   );
 }
 
@@ -309,7 +343,9 @@ export function ManageSubscriptionModal({
           <DialogDescription>
             {view === "details"
               ? "View your plan and update the card on file."
-              : "Enter a new card. The old one will be replaced."}
+              : view === "upgrade"
+                ? "Review your switch to the yearly plan."
+                : "Enter a new card. The old one will be replaced."}
           </DialogDescription>
         </DialogHeader>
 
@@ -478,18 +514,18 @@ export function ManageSubscriptionModal({
         )}
 
         {view === "upgrade" && upgradeSecret && stripePromise && (
-          <Elements stripe={stripePromise} options={{ clientSecret: upgradeSecret, appearance: { theme: "stripe" as const } }}>
-            <UpgradeConfirmForm
-              onDone={() => {
-                setUpgradeSecret(null);
-                setUpgradePreview(null);
-                setView("details");
-                toast.success("You're on the yearly plan now.");
-                fetchAll();
-              }}
-              onCancel={() => { setUpgradeSecret(null); setUpgradePreview(null); setView("details"); }}
-            />
-          </Elements>
+          <UpgradeConfirmForm
+            stripePromise={stripePromise}
+            clientSecret={upgradeSecret}
+            onDone={() => {
+              setUpgradeSecret(null);
+              setUpgradePreview(null);
+              setView("details");
+              toast.success("You're on the yearly plan now.");
+              fetchAll();
+            }}
+            onCancel={() => { setUpgradeSecret(null); setUpgradePreview(null); setView("details"); }}
+          />
         )}
       </DialogContent>
     </Dialog>
