@@ -15,6 +15,9 @@ interface InitialCommunity {
   created_by: string;
   membership_enabled?: boolean;
   membership_price?: number;
+  yearly_enabled?: boolean;
+  yearly_price?: number;
+  yearly_benefits?: string;
   stripe_account_id?: string | null;
   status?: 'active' | 'pre_registration' | 'inactive';
   opening_date?: string | null;
@@ -99,6 +102,9 @@ export default function AboutClient({
           name: community.name,
           membershipEnabled: community.membership_enabled,
           membershipPrice: community.membership_price,
+          yearlyEnabled: community.yearly_enabled,
+          yearlyPrice: community.yearly_price,
+          yearlyBenefits: community.yearly_benefits,
           stripeAccountId: community.stripe_account_id,
           isMember,
           status: community.status,

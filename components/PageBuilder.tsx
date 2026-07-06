@@ -147,6 +147,9 @@ interface PageBuilderProps {
     name: string;
     membershipEnabled?: boolean;
     membershipPrice?: number;
+    yearlyEnabled?: boolean;
+    yearlyPrice?: number;
+    yearlyBenefits?: string;
     stripeAccountId?: string | null;
     isMember?: boolean;
     status?: 'active' | 'pre_registration' | 'inactive';

@@ -38,6 +38,12 @@ export default async function AboutPage(
       typeof community.membership_price === 'string'
         ? parseFloat(community.membership_price)
         : community.membership_price ?? undefined,
+    yearly_enabled: community.yearly_enabled ?? undefined,
+    yearly_price:
+      typeof community.yearly_price === 'string'
+        ? parseFloat(community.yearly_price)
+        : community.yearly_price ?? undefined,
+    yearly_benefits: community.yearly_benefits ?? undefined,
     stripe_account_id: community.stripe_account_id ?? null,
     status: (community.status ?? undefined) as 'active' | 'pre_registration' | 'inactive' | undefined,
     opening_date:
