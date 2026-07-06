@@ -58,9 +58,16 @@ export async function GET(
       { stripeAccount: community.stripe_account_id }
     );
 
-    const price = sub.items.data[0]?.price;
+    const item = sub.items.data[0];
+    const price = item?.price;
     const pm = sub.default_payment_method as Stripe.PaymentMethod | null;
     const card = pm?.type === "card" ? pm.card : null;
+
+    // In the Clover API `current_period_end` lives on the subscription item,
+    // not the subscription. Fall back to the subscription for older shapes.
+    const currentPeriodEnd =
+      ((item as any)?.current_period_end ??
+        (sub as any).current_period_end) as number;
 
     const interval = price?.recurring?.interval ?? "month";
     const canUpgrade =
@@ -71,7 +78,7 @@ export async function GET(
       currency: price?.currency ?? "eur",
       amount: price?.unit_amount ?? 0,
       interval,
-      currentPeriodEnd: (sub as any).current_period_end as number,
+      currentPeriodEnd,
       defaultPaymentMethod: card
         ? { brand: card.brand, last4: card.last4 }
         : null,
