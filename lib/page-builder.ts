@@ -14,6 +14,8 @@ interface JoinButtonLabelData {
   status?: 'active' | 'pre_registration' | 'inactive';
   membershipEnabled?: boolean;
   membershipPrice?: number;
+  yearlyEnabled?: boolean;
+  yearlyPrice?: number;
 }
 
 export function getJoinButtonLabel(
@@ -25,10 +27,14 @@ export function getJoinButtonLabel(
 
   const price = data?.membershipPrice;
   const isPaid = Boolean(data?.membershipEnabled && price && price > 0);
+  const hasYearly = Boolean(data?.yearlyEnabled && (data?.yearlyPrice ?? 0) > 0);
 
   if (data?.status === 'pre_registration') {
     return isPaid ? `Pre-Register for €${price}/month` : 'Pre-Register for free';
   }
+  // With a yearly plan too, the join click opens a plan chooser, so a single
+  // monthly price on the button would be misleading. Keep it generic.
+  if (isPaid && hasYearly) return 'Join community';
   return isPaid ? `Join for €${price}/month` : 'Join for free';
 }
 
