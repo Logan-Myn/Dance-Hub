@@ -276,6 +276,7 @@ export async function POST(request: Request, props: { params: Promise<{ communit
     return NextResponse.json({
       clientSecret,
       requiresSetup,
+      amountDue,
       stripeAccountId: community.stripe_account_id,
       subscriptionId: subscription.id
     });

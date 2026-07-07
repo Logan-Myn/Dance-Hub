@@ -8,16 +8,18 @@ import { useState, useEffect, useMemo } from "react";
 import { toast } from "react-hot-toast";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { payButtonDisplay } from "@/lib/pay-button-label";
 
 interface PaymentFormProps {
   communitySlug: string;
   price: number;
   mode: 'payment' | 'setup';
   plan?: 'monthly' | 'yearly';
+  dueTodayCents?: number | null;
   onSuccess: () => void;
 }
 
-function PaymentForm({ communitySlug, price, mode, plan, onSuccess }: PaymentFormProps) {
+function PaymentForm({ communitySlug, price, mode, plan, dueTodayCents, onSuccess }: PaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [isLoading, setIsLoading] = useState(false);
@@ -119,22 +121,30 @@ function PaymentForm({ communitySlug, price, mode, plan, onSuccess }: PaymentFor
         )}
         <PaymentElement onReady={() => setIsFormReady(true)} />
       </div>
-      {isFormReady && (
-        <Button
-          type="submit"
-          disabled={!stripe || isLoading}
-          className="w-full"
-        >
-          {isLoading ? (
-            <div className="flex items-center space-x-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Processing payment...</span>
-            </div>
-          ) : (
-            mode === 'setup' ? 'Save card and join' : `Pay €${price}/${plan === 'yearly' ? 'year' : 'month'}`
-          )}
-        </Button>
-      )}
+      {isFormReady && (() => {
+        const display = payButtonDisplay({ mode, dueTodayCents: dueTodayCents ?? null, price, plan });
+        return (
+          <div className="space-y-2">
+            <Button
+              type="submit"
+              disabled={!stripe || isLoading}
+              className="w-full"
+            >
+              {isLoading ? (
+                <div className="flex items-center space-x-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Processing payment...</span>
+                </div>
+              ) : (
+                display.label
+              )}
+            </Button>
+            {display.caption && (
+              <p className="text-center text-xs text-muted-foreground">{display.caption}</p>
+            )}
+          </div>
+        );
+      })()}
     </form>
   );
 }
@@ -226,12 +236,16 @@ export function PaymentModalBody({
   const [activeMode, setActiveMode] = useState<'payment' | 'setup'>(initialMode);
   const [applied, setApplied] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
+  // Amount actually charged on the first invoice once a promo is applied (minor
+  // units). Null means show the plain recurring price on the button.
+  const [dueTodayCents, setDueTodayCents] = useState<number | null>(null);
 
   // Reset when the parent hands us a fresh join (new client secret).
   useEffect(() => {
     setActiveSecret(clientSecret);
     setActiveMode(initialMode);
     setApplied(null);
+    setDueTodayCents(null);
   }, [clientSecret, initialMode]);
 
   const stripePromise = useMemo(
@@ -270,9 +284,10 @@ export function PaymentModalBody({
         toast.error('Could not apply the code. Please try again.');
         return;
       }
-      const { clientSecret: newSecret, requiresSetup } = await jRes.json();
+      const { clientSecret: newSecret, requiresSetup, amountDue } = await jRes.json();
       setActiveSecret(newSecret);
       setActiveMode(requiresSetup ? 'setup' : 'payment');
+      setDueTodayCents(typeof amountDue === 'number' ? amountDue : null);
       setApplied(v.preview.label);
       toast.success(`Promo applied: ${v.preview.label}`);
     } catch {
@@ -320,6 +335,7 @@ export function PaymentModalBody({
               price={price}
               mode={activeMode}
               plan={plan}
+              dueTodayCents={dueTodayCents}
               onSuccess={onSuccess}
             />
           </Elements>
