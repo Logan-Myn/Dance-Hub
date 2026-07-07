@@ -3,15 +3,16 @@
 import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
-import type { PromoCodeWithUsage, CreatePromoCodeInput } from '@/lib/promo-codes/types';
+import type { PromoCodeWithUsage, CreatePromoCodeInput, AppliesToPlan } from '@/lib/promo-codes/types';
 import { formatDiscountLabel, formatDurationLabel } from '@/lib/promo-codes/format';
 
 const EMPTY: CreatePromoCodeInput = {
   code: '', discountType: 'percent', discountValue: 20,
   duration: 'once', durationInMonths: 3, maxRedemptions: null, expiresAt: null,
+  appliesToPlan: 'both',
 };
 
-export function PromoCodesManager({ communitySlug }: { communitySlug: string }) {
+export function PromoCodesManager({ communitySlug, yearlyEnabled }: { communitySlug: string; yearlyEnabled: boolean }) {
   const [codes, setCodes] = useState<PromoCodeWithUsage[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<CreatePromoCodeInput>(EMPTY);
@@ -148,6 +149,21 @@ export function PromoCodesManager({ communitySlug }: { communitySlug: string }) 
           </div>
         </div>
 
+        {yearlyEnabled && (
+          <div className="grid gap-1">
+            <label className="text-sm font-medium">Which plan can use this code?</label>
+            <select
+              className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={form.appliesToPlan ?? 'both'}
+              onChange={(e) => setForm({ ...form, appliesToPlan: e.target.value as AppliesToPlan })}
+            >
+              <option value="both">Monthly and yearly</option>
+              <option value="monthly">Monthly only</option>
+              <option value="yearly">Yearly only</option>
+            </select>
+          </div>
+        )}
+
         <Button type="submit" disabled={saving}>{saving ? 'Creating...' : 'Create code'}</Button>
       </form>
 
@@ -169,6 +185,7 @@ export function PromoCodesManager({ communitySlug }: { communitySlug: string }) 
                     {formatDurationLabel({ duration: c.duration, durationInMonths: c.durationInMonths })}
                     {c.maxRedemptions != null ? ` · ${c.timesRedeemed}/${c.maxRedemptions} used` : ` · ${c.timesRedeemed} used`}
                     {c.expiresAt ? ` · expires ${new Date(c.expiresAt).toLocaleDateString()}` : ''}
+                    {c.appliesToPlan === 'yearly' ? ' · yearly only' : c.appliesToPlan === 'monthly' ? ' · monthly only' : ''}
                     {c.active ? '' : ' · paused'}
                   </p>
                 </div>

@@ -10,12 +10,13 @@ interface Row {
   membership_price: number | null;
   stripe_account_id: string | null;
   stripe_price_id: string | null;
+  yearly_enabled: boolean | null;
 }
 
 export default async function PromoCodesPage(props: { params: Promise<{ communitySlug: string }> }) {
   const { communitySlug } = await props.params;
   const community = await queryOne<Row>`
-    SELECT id, membership_enabled, membership_price, stripe_account_id, stripe_price_id
+    SELECT id, membership_enabled, membership_price, stripe_account_id, stripe_price_id, yearly_enabled
     FROM communities WHERE slug = ${communitySlug}
   `;
   if (!community) return null;
@@ -32,7 +33,7 @@ export default async function PromoCodesPage(props: { params: Promise<{ communit
       </header>
 
       {ready ? (
-        <PromoCodesManager communitySlug={communitySlug} />
+        <PromoCodesManager communitySlug={communitySlug} yearlyEnabled={Boolean(community.yearly_enabled)} />
       ) : (
         <p className="text-sm text-muted-foreground">
           Set up payments and a membership price before creating promo codes.
