@@ -22,6 +22,10 @@ function PaymentForm({ communitySlug, price, mode, plan, onSuccess }: PaymentFor
   const elements = useElements();
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  // The payment form iframe takes a moment to initialise after the modal
+  // opens. Track when it is fully rendered so we can keep the branded spinner
+  // up until then (instead of flashing a blank / secondary loading state).
+  const [isFormReady, setIsFormReady] = useState(false);
   const { user } = useAuth();
 
   // Check payment status periodically
@@ -106,21 +110,31 @@ function PaymentForm({ communitySlug, price, mode, plan, onSuccess }: PaymentFor
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <PaymentElement />
-      <Button
-        type="submit"
-        disabled={!stripe || isLoading}
-        className="w-full"
-      >
-        {isLoading ? (
-          <div className="flex items-center space-x-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Processing payment...</span>
+      <div className="relative min-h-[80px]">
+        {!isFormReady && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center space-y-3 bg-background">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Loading payment details...</p>
           </div>
-        ) : (
-          mode === 'setup' ? 'Save card and join' : `Pay €${price}/${plan === 'yearly' ? 'year' : 'month'}`
         )}
-      </Button>
+        <PaymentElement onReady={() => setIsFormReady(true)} />
+      </div>
+      {isFormReady && (
+        <Button
+          type="submit"
+          disabled={!stripe || isLoading}
+          className="w-full"
+        >
+          {isLoading ? (
+            <div className="flex items-center space-x-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Processing payment...</span>
+            </div>
+          ) : (
+            mode === 'setup' ? 'Save card and join' : `Pay €${price}/${plan === 'yearly' ? 'year' : 'month'}`
+          )}
+        </Button>
+      )}
     </form>
   );
 }
