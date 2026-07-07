@@ -1,5 +1,6 @@
 export type DiscountType = 'percent' | 'amount';
 export type PromoDuration = 'once' | 'repeating';
+export type AppliesToPlan = 'monthly' | 'yearly' | 'both';
 
 export interface CreatePromoCodeInput {
   code: string;
@@ -9,6 +10,7 @@ export interface CreatePromoCodeInput {
   durationInMonths: number | null; // required when duration === 'repeating'
   maxRedemptions: number | null; // null = unlimited
   expiresAt: string | null; // ISO date string, or null
+  appliesToPlan?: AppliesToPlan; // which plan(s) the code applies to; defaults to 'both'
 }
 
 export interface PromoCodeRecord {
@@ -23,6 +25,7 @@ export interface PromoCodeRecord {
   durationInMonths: number | null;
   maxRedemptions: number | null;
   expiresAt: string | null;
+  appliesToPlan: AppliesToPlan;
   active: boolean;
   createdBy: string;
   createdAt: string;

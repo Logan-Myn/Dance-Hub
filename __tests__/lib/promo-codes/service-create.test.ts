@@ -87,3 +87,44 @@ it('rejects invalid input before calling Stripe', async () => {
     .rejects.toThrow(/code/i);
   expect(mockCouponsCreate).not.toHaveBeenCalled();
 });
+
+it('persists the plan scope and reflects it on the record', async () => {
+  mockCouponsCreate.mockResolvedValueOnce({ id: 'coupon_3' });
+  mockPromoCreate.mockResolvedValueOnce({ id: 'promo_3' });
+  mockQueryOne.mockResolvedValueOnce({
+    id: 'row_3', community_id: 'c1', code: 'YEARONLY',
+    stripe_coupon_id: 'coupon_3', stripe_promotion_code_id: 'promo_3',
+    discount_type: 'percent', discount_value: 20, duration: 'once',
+    duration_in_months: null, max_redemptions: null, expires_at: null,
+    active: true, created_by: 'user_1', created_at: '2026-07-07T00:00:00.000Z',
+    applies_to_plan: 'yearly',
+  });
+
+  const rec = await createPromoCode({
+    ...args,
+    input: { ...args.input, duration: 'once', durationInMonths: null, appliesToPlan: 'yearly' },
+  });
+
+  expect(rec.appliesToPlan).toBe('yearly');
+  // the scope value is passed into the INSERT tagged-template call
+  expect(mockQueryOne.mock.calls[0]).toContain('yearly');
+});
+
+it('defaults appliesToPlan to both when the row has none', async () => {
+  mockCouponsCreate.mockResolvedValueOnce({ id: 'coupon_4' });
+  mockPromoCreate.mockResolvedValueOnce({ id: 'promo_4' });
+  mockQueryOne.mockResolvedValueOnce({
+    id: 'row_4', community_id: 'c1', code: 'PLAIN',
+    stripe_coupon_id: 'coupon_4', stripe_promotion_code_id: 'promo_4',
+    discount_type: 'percent', discount_value: 20, duration: 'once',
+    duration_in_months: null, max_redemptions: null, expires_at: null,
+    active: true, created_by: 'user_1', created_at: '2026-07-07T00:00:00.000Z',
+  });
+
+  const rec = await createPromoCode({
+    ...args,
+    input: { ...args.input, duration: 'once', durationInMonths: null },
+  });
+
+  expect(rec.appliesToPlan).toBe('both');
+});

@@ -17,6 +17,10 @@ export function validateCreateInput(input: CreatePromoCodeInput): string | null 
   if (input.maxRedemptions != null && !(input.maxRedemptions >= 1)) {
     return 'Max redemptions must be at least 1';
   }
+  if (input.appliesToPlan != null &&
+      !['monthly', 'yearly', 'both'].includes(input.appliesToPlan)) {
+    return 'Invalid plan scope';
+  }
   return null;
 }
 

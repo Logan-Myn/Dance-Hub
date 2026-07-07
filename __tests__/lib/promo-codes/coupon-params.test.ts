@@ -28,6 +28,13 @@ describe('validateCreateInput', () => {
   it('rejects repeating without months', () => {
     expect(validateCreateInput({ ...base, durationInMonths: null })).toMatch(/months/i);
   });
+  it('accepts a valid plan scope', () => {
+    expect(validateCreateInput({ ...base, appliesToPlan: 'yearly' })).toBeNull();
+  });
+  it('rejects an invalid plan scope', () => {
+    expect(validateCreateInput({ ...base, appliesToPlan: 'weekly' as unknown as 'both' }))
+      .toMatch(/plan/i);
+  });
 });
 
 describe('buildCouponParams', () => {

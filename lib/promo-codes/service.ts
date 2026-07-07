@@ -3,6 +3,7 @@ import { sql, queryOne } from '@/lib/db';
 import { buildCouponParams, buildPromotionCodeParams, validateCreateInput } from './coupon-params';
 import { buildPreview } from './format';
 import type {
+  AppliesToPlan,
   CreatePromoCodeInput,
   PromoCodeRecord,
   PromoCodeWithUsage,
@@ -21,6 +22,7 @@ export interface PromoCodeRow {
   duration_in_months: number | null;
   max_redemptions: number | null;
   expires_at: string | null;
+  applies_to_plan: AppliesToPlan;
   active: boolean;
   created_by: string;
   created_at: string;
@@ -39,6 +41,7 @@ export function rowToRecord(row: PromoCodeRow): PromoCodeRecord {
     durationInMonths: row.duration_in_months,
     maxRedemptions: row.max_redemptions,
     expiresAt: row.expires_at,
+    appliesToPlan: (row.applies_to_plan ?? 'both') as AppliesToPlan,
     active: row.active,
     createdBy: row.created_by,
     createdAt: row.created_at,
@@ -77,12 +80,12 @@ export async function createPromoCode(args: {
     INSERT INTO community_promo_codes (
       community_id, code, stripe_coupon_id, stripe_promotion_code_id,
       discount_type, discount_value, duration, duration_in_months,
-      max_redemptions, expires_at, active, created_by
+      max_redemptions, expires_at, active, created_by, applies_to_plan
     ) VALUES (
       ${args.communityId}, ${args.input.code.trim()}, ${coupon.id}, ${promo.id},
       ${args.input.discountType}, ${args.input.discountValue}, ${args.input.duration},
       ${args.input.durationInMonths}, ${args.input.maxRedemptions},
-      ${args.input.expiresAt}, true, ${args.createdBy}
+      ${args.input.expiresAt}, true, ${args.createdBy}, ${args.input.appliesToPlan ?? 'both'}
     )
     RETURNING *
   `;
