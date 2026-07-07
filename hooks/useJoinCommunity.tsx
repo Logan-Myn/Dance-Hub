@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
-import PaymentModal from '@/components/PaymentModal';
+import { PaymentModalBody } from '@/components/PaymentModal';
 import { PreRegistrationPaymentModal } from '@/components/PreRegistrationPaymentModal';
 import {
   Dialog,
@@ -220,75 +220,87 @@ export function useJoinCommunity(
           </DialogContent>
         </Dialog>
       )}
-      {showPlanChooser && community && (
-        <Dialog open onOpenChange={(open) => { if (!open) setShowPlanChooser(false); }}>
+      {/* One dialog for the whole paid flow: the plan chooser is the first step
+          and picking a plan swaps its content to the checkout in place, so the
+          same dialog stays open throughout (no second modal flashing open). */}
+      {(showPlanChooser || paidCheckoutOpen) && community && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowPlanChooser(false);
+              closePayment();
+            }
+          }}
+        >
           <DialogContent className="sm:max-w-[560px]">
-            <DialogHeader>
-              <DialogTitle>Choose your plan</DialogTitle>
-              <DialogDescription>Pick how you want to pay.</DialogDescription>
-            </DialogHeader>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              {/* Monthly */}
-              <button
-                type="button"
-                onClick={() => startPaid('monthly')}
-                className="flex flex-col rounded-2xl border border-border/60 p-5 text-left transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              >
-                <span className="text-sm font-medium text-muted-foreground">Monthly</span>
-                <span className="mt-2 flex items-baseline gap-1">
-                  <span className="text-3xl font-semibold text-foreground">
-                    €{community.membershipPrice}
-                  </span>
-                  <span className="text-sm text-muted-foreground">/month</span>
-                </span>
-                <span className="mt-3 text-sm text-muted-foreground">
-                  Billed monthly. Cancel anytime.
-                </span>
-              </button>
+            {paidCheckoutOpen ? (
+              <PaymentModalBody
+                clientSecret={paymentClientSecret}
+                stripeAccountId={community.stripeAccountId || null}
+                price={
+                  selectedPlan === 'yearly'
+                    ? community.yearlyPrice || 0
+                    : community.membershipPrice || 0
+                }
+                plan={selectedPlan}
+                communitySlug={community.slug}
+                onSuccess={onJoinSuccess}
+              />
+            ) : (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Choose your plan</DialogTitle>
+                  <DialogDescription>Pick how you want to pay.</DialogDescription>
+                </DialogHeader>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {/* Monthly */}
+                  <button
+                    type="button"
+                    onClick={() => startPaid('monthly')}
+                    className="flex flex-col rounded-2xl border border-border/60 p-5 text-left transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  >
+                    <span className="text-sm font-medium text-muted-foreground">Monthly</span>
+                    <span className="mt-2 flex items-baseline gap-1">
+                      <span className="text-3xl font-semibold text-foreground">
+                        €{community.membershipPrice}
+                      </span>
+                      <span className="text-sm text-muted-foreground">/month</span>
+                    </span>
+                    <span className="mt-3 text-sm text-muted-foreground">
+                      Billed monthly. Cancel anytime.
+                    </span>
+                  </button>
 
-              {/* Yearly (highlighted) */}
-              <button
-                type="button"
-                onClick={() => startPaid('yearly')}
-                className="relative flex flex-col rounded-2xl border-2 border-primary bg-primary/5 p-5 text-left transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              >
-                {yearlyBeatsMonthly && (
-                  <span className="absolute -top-2.5 right-4 rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground">
-                    Best value
-                  </span>
-                )}
-                <span className="text-sm font-medium text-primary">Yearly</span>
-                <span className="mt-2 flex items-baseline gap-1">
-                  <span className="text-3xl font-semibold text-foreground">
-                    €{community.yearlyPrice}
-                  </span>
-                  <span className="text-sm text-muted-foreground">/year</span>
-                </span>
-                {community.yearlyBenefits && (
-                  <span className="mt-3 whitespace-pre-line text-sm text-foreground/80">
-                    {community.yearlyBenefits}
-                  </span>
-                )}
-              </button>
-            </div>
+                  {/* Yearly (highlighted) */}
+                  <button
+                    type="button"
+                    onClick={() => startPaid('yearly')}
+                    className="relative flex flex-col rounded-2xl border-2 border-primary bg-primary/5 p-5 text-left transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  >
+                    {yearlyBeatsMonthly && (
+                      <span className="absolute -top-2.5 right-4 rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground">
+                        Best value
+                      </span>
+                    )}
+                    <span className="text-sm font-medium text-primary">Yearly</span>
+                    <span className="mt-2 flex items-baseline gap-1">
+                      <span className="text-3xl font-semibold text-foreground">
+                        €{community.yearlyPrice}
+                      </span>
+                      <span className="text-sm text-muted-foreground">/year</span>
+                    </span>
+                    {community.yearlyBenefits && (
+                      <span className="mt-3 whitespace-pre-line text-sm text-foreground/80">
+                        {community.yearlyBenefits}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </DialogContent>
         </Dialog>
-      )}
-      {paidCheckoutOpen && community && (
-        <PaymentModal
-          isOpen={paidCheckoutOpen}
-          onClose={closePayment}
-          clientSecret={paymentClientSecret}
-          stripeAccountId={community.stripeAccountId || null}
-          price={
-            selectedPlan === 'yearly'
-              ? community.yearlyPrice || 0
-              : community.membershipPrice || 0
-          }
-          plan={selectedPlan}
-          communitySlug={community.slug}
-          onSuccess={onJoinSuccess}
-        />
       )}
       {preRegClientSecret && preRegStripeAccountId && preRegOpeningDate && community && (
         <PreRegistrationPaymentModal

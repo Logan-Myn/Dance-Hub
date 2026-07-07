@@ -192,9 +192,7 @@ function PromoCodeEntry({
   );
 }
 
-interface PaymentModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface PaymentModalBodyProps {
   clientSecret: string | null;
   stripeAccountId: string | null;
   communitySlug: string;
@@ -204,17 +202,22 @@ interface PaymentModalProps {
   onSuccess: () => void;
 }
 
-export default function PaymentModal({
-  isOpen,
-  onClose,
+/**
+ * Inner content of the checkout (header + loading spinner + payment form),
+ * without a Dialog wrapper. Render it inside an existing DialogContent so the
+ * join flow's plan chooser and the checkout can share ONE dialog (the chooser
+ * swaps to this in place, so there is no second modal to flash open). The
+ * PaymentModal default export wraps this in its own dialog for other callers.
+ */
+export function PaymentModalBody({
   clientSecret,
   stripeAccountId,
   communitySlug,
   price,
   mode: initialMode = 'payment',
   plan,
-  onSuccess
-}: PaymentModalProps) {
+  onSuccess,
+}: PaymentModalBodyProps) {
   const { user } = useAuth();
 
   // Local copies so applying a promo can swap in a new subscription's client
@@ -286,43 +289,56 @@ export default function PaymentModal({
     : undefined;
 
   return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Join Community</DialogTitle>
+        <DialogDescription>
+          Complete your payment to join this community
+        </DialogDescription>
+      </DialogHeader>
+
+      {!activeSecret ? (
+        // The subscription is still being created server-side. Keep this same
+        // dialog open with a spinner (rather than a separate loading dialog
+        // that would flash as it hands off), and swap in the payment form in
+        // place once the client secret arrives.
+        <div className="flex flex-col items-center justify-center space-y-3 py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Setting up your payment...</p>
+        </div>
+      ) : (
+        <>
+          <div className="mb-4">
+            <PromoCodeEntry applied={applied} applying={applying} onApply={applyPromo} />
+          </div>
+
+          {/* key on the client secret so Elements re-mounts with the discounted
+              amount after a promo is applied. */}
+          <Elements key={activeSecret} stripe={stripePromise} options={options}>
+            <PaymentForm
+              communitySlug={communitySlug}
+              price={price}
+              mode={activeMode}
+              plan={plan}
+              onSuccess={onSuccess}
+            />
+          </Elements>
+        </>
+      )}
+    </>
+  );
+}
+
+interface PaymentModalProps extends PaymentModalBodyProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export default function PaymentModal({ isOpen, onClose, ...body }: PaymentModalProps) {
+  return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Join Community</DialogTitle>
-          <DialogDescription>
-            Complete your payment to join this community
-          </DialogDescription>
-        </DialogHeader>
-
-        {!activeSecret ? (
-          // The subscription is still being created server-side. Keep this same
-          // dialog open with a spinner (rather than a separate loading dialog
-          // that would flash as it hands off), and swap in the payment form in
-          // place once the client secret arrives.
-          <div className="flex flex-col items-center justify-center space-y-3 py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Setting up your payment...</p>
-          </div>
-        ) : (
-          <>
-            <div className="mb-4">
-              <PromoCodeEntry applied={applied} applying={applying} onApply={applyPromo} />
-            </div>
-
-            {/* key on the client secret so Elements re-mounts with the discounted
-                amount after a promo is applied. */}
-            <Elements key={activeSecret} stripe={stripePromise} options={options}>
-              <PaymentForm
-                communitySlug={communitySlug}
-                price={price}
-                mode={activeMode}
-                plan={plan}
-                onSuccess={onSuccess}
-              />
-            </Elements>
-          </>
-        )}
+        <PaymentModalBody {...body} />
       </DialogContent>
     </Dialog>
   );
