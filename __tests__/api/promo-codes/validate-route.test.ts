@@ -9,12 +9,19 @@ const params = Promise.resolve({ communitySlug: 'salsa' });
 beforeEach(() => { mockQueryOne.mockReset(); mockValidate.mockReset(); });
 
 it('returns the validation result for a known community', async () => {
-  mockQueryOne.mockResolvedValueOnce({ stripe_account_id: 'acct_1' });
+  mockQueryOne.mockResolvedValueOnce({ id: 'c1', stripe_account_id: 'acct_1' });
   mockValidate.mockResolvedValueOnce({ valid: true, promotionCodeId: 'promo_1', preview: { label: '20% off for 3 months' } });
-  const res = await POST(new Request('http://x', { method: 'POST', body: JSON.stringify({ code: 'MARCELA20' }) }), { params });
+  const res = await POST(new Request('http://x', { method: 'POST', body: JSON.stringify({ code: 'MARCELA20', plan: 'yearly' }) }), { params });
   expect(res.status).toBe(200);
   expect(await res.json()).toMatchObject({ valid: true, promotionCodeId: 'promo_1' });
-  expect(mockValidate).toHaveBeenCalledWith({ stripeAccountId: 'acct_1', code: 'MARCELA20' });
+  expect(mockValidate).toHaveBeenCalledWith({ stripeAccountId: 'acct_1', code: 'MARCELA20', communityId: 'c1', plan: 'yearly' });
+});
+
+it('defaults the plan to monthly when the body omits it', async () => {
+  mockQueryOne.mockResolvedValueOnce({ id: 'c1', stripe_account_id: 'acct_1' });
+  mockValidate.mockResolvedValueOnce({ valid: true, promotionCodeId: 'promo_1', preview: { label: 'x' } });
+  await POST(new Request('http://x', { method: 'POST', body: JSON.stringify({ code: 'X' }) }), { params });
+  expect(mockValidate).toHaveBeenCalledWith({ stripeAccountId: 'acct_1', code: 'X', communityId: 'c1', plan: 'monthly' });
 });
 
 it('returns a generic invalid result when the community has no payments set up', async () => {

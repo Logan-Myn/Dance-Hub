@@ -251,7 +251,7 @@ export function PaymentModalBody({
       const vRes = await fetch(`/api/community/${communitySlug}/promo-codes/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: rawCode }),
+        body: JSON.stringify({ code: rawCode, plan }),
       });
       const v = await vRes.json();
       if (!v.valid) {
