@@ -279,12 +279,11 @@ export default function PaymentModal({
     }
   };
 
-  if (!activeSecret || !stripeAccountId || !stripePromise) return null;
+  if (!stripeAccountId || !stripePromise) return null;
 
-  const options: StripeElementsOptions = {
-    clientSecret: activeSecret,
-    appearance: { theme: 'stripe' as const },
-  };
+  const options: StripeElementsOptions | undefined = activeSecret
+    ? { clientSecret: activeSecret, appearance: { theme: 'stripe' as const } }
+    : undefined;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -296,21 +295,34 @@ export default function PaymentModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mb-4">
-          <PromoCodeEntry applied={applied} applying={applying} onApply={applyPromo} />
-        </div>
+        {!activeSecret ? (
+          // The subscription is still being created server-side. Keep this same
+          // dialog open with a spinner (rather than a separate loading dialog
+          // that would flash as it hands off), and swap in the payment form in
+          // place once the client secret arrives.
+          <div className="flex flex-col items-center justify-center space-y-3 py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Setting up your payment...</p>
+          </div>
+        ) : (
+          <>
+            <div className="mb-4">
+              <PromoCodeEntry applied={applied} applying={applying} onApply={applyPromo} />
+            </div>
 
-        {/* key on the client secret so Elements re-mounts with the discounted
-            amount after a promo is applied. */}
-        <Elements key={activeSecret} stripe={stripePromise} options={options}>
-          <PaymentForm
-            communitySlug={communitySlug}
-            price={price}
-            mode={activeMode}
-            plan={plan}
-            onSuccess={onSuccess}
-          />
-        </Elements>
+            {/* key on the client secret so Elements re-mounts with the discounted
+                amount after a promo is applied. */}
+            <Elements key={activeSecret} stripe={stripePromise} options={options}>
+              <PaymentForm
+                communitySlug={communitySlug}
+                price={price}
+                mode={activeMode}
+                plan={plan}
+                onSuccess={onSuccess}
+              />
+            </Elements>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

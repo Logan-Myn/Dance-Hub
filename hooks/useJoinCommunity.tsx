@@ -53,6 +53,7 @@ export function useJoinCommunity(
   const router = useRouter();
 
   const [isJoining, setIsJoining] = useState(false);
+  const [paidCheckoutOpen, setPaidCheckoutOpen] = useState(false);
   const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('monthly');
   const [showPlanChooser, setShowPlanChooser] = useState(false);
@@ -60,7 +61,10 @@ export function useJoinCommunity(
   const [preRegStripeAccountId, setPreRegStripeAccountId] = useState<string | null>(null);
   const [preRegOpeningDate, setPreRegOpeningDate] = useState<string | null>(null);
 
-  const closePayment = () => setPaymentClientSecret(null);
+  const closePayment = () => {
+    setPaidCheckoutOpen(false);
+    setPaymentClientSecret(null);
+  };
   const closePreReg = () => {
     setPreRegClientSecret(null);
     setPreRegStripeAccountId(null);
@@ -86,6 +90,10 @@ export function useJoinCommunity(
     if (!user || !community) return;
     setShowPlanChooser(false);
     setSelectedPlan(plan);
+    // Open the checkout dialog right away so its own spinner covers the
+    // subscription-creation wait, then swaps to the payment form in place.
+    // This keeps a single dialog open throughout (no flash between dialogs).
+    setPaidCheckoutOpen(true);
     setIsJoining(true);
     try {
       const response = await fetch(`/api/community/${community.slug}/join-paid`, {
@@ -102,6 +110,7 @@ export function useJoinCommunity(
     } catch (error) {
       console.error('Error joining community:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to join community');
+      setPaidCheckoutOpen(false);
     } finally {
       setIsJoining(false);
     }
@@ -195,9 +204,10 @@ export function useJoinCommunity(
 
   const modals = (
     <>
-      {/* Bridge the gap between clicking join / picking a plan and the payment
-          modal appearing (creating the subscription server-side takes a moment). */}
-      {isJoining && !paymentClientSecret && !preRegClientSecret && (
+      {/* Loading bridge for the free-join and pre-registration flows. The paid
+          flow shows its own spinner inside PaymentModal (see paidCheckoutOpen),
+          so it is excluded here to avoid a second dialog flashing in. */}
+      {isJoining && !paidCheckoutOpen && !paymentClientSecret && !preRegClientSecret && (
         <Dialog open>
           <DialogContent className="sm:max-w-[360px]">
             <DialogHeader>
@@ -264,9 +274,9 @@ export function useJoinCommunity(
           </DialogContent>
         </Dialog>
       )}
-      {paymentClientSecret && community && (
+      {paidCheckoutOpen && community && (
         <PaymentModal
-          isOpen
+          isOpen={paidCheckoutOpen}
           onClose={closePayment}
           clientSecret={paymentClientSecret}
           stripeAccountId={community.stripeAccountId || null}
