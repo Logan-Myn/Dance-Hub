@@ -69,6 +69,21 @@ it('returns requiresSetup with a SetupIntent secret when the first invoice is â‚
   );
 });
 
+it('rejects a code scoped to a different plan before creating anything in Stripe', async () => {
+  // community, then no existing member, then the mirror row scoped to 'yearly'
+  mockQueryOne
+    .mockResolvedValueOnce(community)
+    .mockResolvedValueOnce(null)
+    .mockResolvedValueOnce({ applies_to_plan: 'yearly' });
+
+  const res = await POST(req({ userId: 'u1', email: 'u1@x.com', plan: 'monthly', promotionCodeId: 'promo_yr' }), { params });
+
+  expect(res.status).toBe(400);
+  expect(await res.json()).toMatchObject({ error: 'This code does not apply to the selected plan.' });
+  expect(mockCustomersCreate).not.toHaveBeenCalled();
+  expect(mockSubscriptionsCreate).not.toHaveBeenCalled();
+});
+
 it('does not attach discounts when no promotion code is given', async () => {
   mockQueryOne.mockResolvedValueOnce(community).mockResolvedValueOnce(null);
   mockCustomersCreate.mockResolvedValueOnce({ id: 'cus_1' });

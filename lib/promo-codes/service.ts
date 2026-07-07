@@ -187,7 +187,7 @@ export async function validatePromoCode(args: {
     const plan = args.plan ?? 'monthly';
     const mirror = await queryOne<{ applies_to_plan: string }>`
       SELECT applies_to_plan FROM community_promo_codes
-      WHERE community_id = ${args.communityId} AND lower(code) = lower(${trimmed})
+      WHERE community_id = ${args.communityId} AND stripe_promotion_code_id = ${promo.id}
       LIMIT 1
     `;
     const scope = mirror?.applies_to_plan ?? 'both';

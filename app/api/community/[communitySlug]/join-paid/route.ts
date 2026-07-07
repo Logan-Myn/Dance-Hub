@@ -90,6 +90,27 @@ export async function POST(request: Request, props: { params: Promise<{ communit
       );
     }
 
+    // Enforce the promo code's per-plan scope on the money path too. Validation
+    // is bypassable via a direct request, and because monthly and yearly reuse
+    // one Stripe product we cannot rely on Stripe to scope the coupon. A missing
+    // mirror row is treated as unrestricted ('both'). Reject before creating any
+    // Stripe objects.
+    if (promotionCodeId) {
+      const scopeRow = await queryOne<{ applies_to_plan: string }>`
+        SELECT applies_to_plan FROM community_promo_codes
+        WHERE community_id = ${community.id}
+          AND stripe_promotion_code_id = ${promotionCodeId}
+        LIMIT 1
+      `;
+      const scope = scopeRow?.applies_to_plan ?? 'both';
+      if (scope !== 'both' && scope !== (useYearly ? 'yearly' : 'monthly')) {
+        return NextResponse.json(
+          { error: 'This code does not apply to the selected plan.' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Cleanup of any prior non-active membership (incomplete signup,
     // left/auto-cancelled, grace-period 'canceling') runs in parallel with the
     // new Stripe customer creation — they're independent, and the next call
