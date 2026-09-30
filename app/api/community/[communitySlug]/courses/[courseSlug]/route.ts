@@ -13,6 +13,7 @@ import {
   extractKeyFromUrl,
 } from "@/lib/storage";
 import { deleteMuxAsset } from "@/lib/mux";
+import { isMuxAssetUsedElsewhere } from "@/lib/mux-asset-usage";
 
 interface Course {
   id: string;
@@ -339,16 +340,19 @@ export async function DELETE(
 
     // Videos live in Mux, not in our database, so cascading the row delete is
     // not enough — collect the assets while the rows still exist.
-    const lessons = await query<{ video_asset_id: string | null }>`
-      SELECT l.video_asset_id
+    const lessons = await query<{ id: string; video_asset_id: string | null }>`
+      SELECT l.id, l.video_asset_id
       FROM lessons l
       JOIN chapters c ON c.id = l.chapter_id
       WHERE c.course_id = ${course.id}
         AND l.video_asset_id IS NOT NULL
     `;
+    const courseLessonIds = lessons.map((l) => l.id);
 
     for (const lesson of lessons) {
       const assetId = lesson.video_asset_id!;
+      // Keep videos that something outside this course still plays.
+      if (await isMuxAssetUsedElsewhere(assetId, courseLessonIds)) continue;
       try {
         await deleteMuxAsset(assetId);
       } catch (muxError) {

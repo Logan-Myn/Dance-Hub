@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
 import { requireCommunityManager } from "@/lib/community-auth";
-import { deleteMuxAsset } from "@/lib/mux";
+import { deleteMuxAsset, Video } from "@/lib/mux";
+import { isMuxAssetUsedElsewhere } from "@/lib/mux-asset-usage";
 import { deleteFile } from "@/lib/storage";
 
 interface Lesson {
@@ -28,8 +29,13 @@ type LessonParams = {
  * course (by slug) -> community. Anything else is a 404.
  */
 async function findScopedLesson(params: LessonParams, communityId: string) {
-  return queryOne<{ id: string; chapter_id: string; video_asset_id: string | null }>`
-    SELECT l.id, l.chapter_id, l.video_asset_id
+  return queryOne<{
+    id: string;
+    chapter_id: string;
+    video_asset_id: string | null;
+    playback_id: string | null;
+  }>`
+    SELECT l.id, l.chapter_id, l.video_asset_id, l.playback_id
     FROM lessons l
     JOIN chapters ch ON ch.id = l.chapter_id
     JOIN courses co ON co.id = ch.course_id
@@ -111,6 +117,20 @@ export async function PUT(
       }
     }
 
+    // A new playback id must come with its video and actually belong to it,
+    // otherwise a lesson could play another community's video.
+    if (playbackId != null && playbackId !== currentLesson.playback_id) {
+      const assetId = videoAssetId ?? currentLesson.video_asset_id;
+      const asset = assetId ? await Video.assets.retrieve(assetId).catch(() => null) : null;
+      const belongs = asset?.playback_ids?.some((p) => p.id === playbackId);
+      if (!belongs) {
+        return NextResponse.json(
+          { error: "This video cannot be used for this lesson" },
+          { status: 403 }
+        );
+      }
+    }
+
     // Update the lesson using COALESCE for partial updates
     const updatedLesson = await queryOne<Lesson>`
       UPDATE lessons
@@ -173,19 +193,7 @@ export async function DELETE(
     // Keep the Mux asset if something else still plays it (another lesson or
     // an About page); deleting it would break that video too.
     const assetStillInUse = lesson.video_asset_id
-      ? Boolean(
-          await queryOne<{ one: number }>`
-            SELECT 1 AS one
-            WHERE EXISTS (
-              SELECT 1 FROM lessons
-              WHERE video_asset_id = ${lesson.video_asset_id} AND id <> ${lesson.id}
-            )
-            OR EXISTS (
-              SELECT 1 FROM communities
-              WHERE about_page::text LIKE ${`%${lesson.video_asset_id}%`}
-            )
-          `
-        )
+      ? await isMuxAssetUsedElsewhere(lesson.video_asset_id, [lesson.id])
       : false;
 
     if (lesson.video_asset_id && !assetStillInUse) {

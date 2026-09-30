@@ -39,6 +39,8 @@ export default async function CourseDetailPage(
     session.user.id,
   );
   if (!initialCourse) notFound();
+  // Drafts are for the owner (and admins) only, even to members who know the URL.
+  if (!initialCourse.is_public && !isCreator && !isAdmin) notFound();
 
   return (
     <CourseDetailClient

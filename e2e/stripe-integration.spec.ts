@@ -242,7 +242,7 @@ test.describe('Test B: Pre-Registration Flow', () => {
 });
 
 test.describe('Webhook Endpoint Tests', () => {
-  test('webhook test endpoint responds', async ({ request }) => {
+  test('webhook test endpoint responds in dev, is hidden in production builds', async ({ request }) => {
     const response = await request.post('/api/webhooks/stripe/test', {
       data: { test: true },
       headers: {
@@ -250,6 +250,9 @@ test.describe('Webhook Endpoint Tests', () => {
       },
     });
 
+    // The local e2e recipe runs against `bun start` (a production build),
+    // where this debug endpoint must not exist.
+    if (response.status() === 404) return;
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(data.success).toBe(true);

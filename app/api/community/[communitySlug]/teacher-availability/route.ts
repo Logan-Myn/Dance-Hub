@@ -193,7 +193,9 @@ export async function POST(
     const guard = await requireCommunityManager(params.communitySlug);
     if (!guard.ok) return guard.response;
     const { community } = guard;
-    const user = guard.session.user;
+    // Slots belong to the teacher (the owner) even when an admin adds them;
+    // the booking modal lists slots by the lesson's teacher_id.
+    const teacherId = community.created_by;
 
     const body = await request.json();
     const { date, start_time, end_time } = body;
@@ -236,7 +238,7 @@ export async function POST(
     const existingSlots = await query<AvailabilitySlot>`
       SELECT *
       FROM teacher_availability_slots
-      WHERE teacher_id = ${user.id}
+      WHERE teacher_id = ${teacherId}
         AND community_id = ${community.id}
         AND availability_date = ${date}
         AND is_active = true
@@ -267,7 +269,7 @@ export async function POST(
         end_time,
         is_active
       ) VALUES (
-        ${user.id},
+        ${teacherId},
         ${community.id},
         ${date},
         ${start_time},

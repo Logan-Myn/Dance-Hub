@@ -29,6 +29,7 @@ const mockSetupIntentsCreate = jest.fn();
 const mockSetupIntentsRetrieve = jest.fn();
 const mockSubscriptionsCreate = jest.fn();
 const mockSubscriptionsUpdate = jest.fn();
+const mockSubscriptionsRetrieve = jest.fn();
 const mockSubscriptionsCancel = jest.fn();
 jest.mock('@/lib/stripe', () => ({
   stripe: {
@@ -40,8 +41,8 @@ jest.mock('@/lib/stripe', () => ({
     subscriptions: {
       create: (...a: unknown[]) => mockSubscriptionsCreate(...a),
       update: (...a: unknown[]) => mockSubscriptionsUpdate(...a),
+      retrieve: (...a: unknown[]) => mockSubscriptionsRetrieve(...a),
       cancel: (...a: unknown[]) => mockSubscriptionsCancel(...a),
-      retrieve: jest.fn(),
     },
     invoices: { voidInvoice: jest.fn() },
     paymentMethods: { detach: jest.fn() },
@@ -69,7 +70,7 @@ const queryValues = () => mockQueryOne.mock.calls.flatMap((c) => c.slice(1));
 beforeEach(() => {
   [
     mockGetSession, mockSql, mockQueryOne, mockCustomersCreate, mockSetupIntentsCreate,
-    mockSetupIntentsRetrieve, mockSubscriptionsCreate, mockSubscriptionsUpdate, mockSubscriptionsCancel,
+    mockSetupIntentsRetrieve, mockSubscriptionsCreate, mockSubscriptionsUpdate, mockSubscriptionsRetrieve, mockSubscriptionsCancel,
   ].forEach((m) => m.mockReset());
   mockGetSession.mockResolvedValue(SESSION);
   mockSql.mockResolvedValue([]);
@@ -243,9 +244,11 @@ describe('reactivate', () => {
 
   it.each(['active', 'trialing'])('restores access when the subscription is %s', async (status) => {
     setup();
+    mockSubscriptionsRetrieve.mockResolvedValueOnce({ id: 'sub_1', status });
     mockSubscriptionsUpdate.mockResolvedValueOnce({ id: 'sub_1', status });
     const res = await reactivatePOST(req({ userId: 'victim' }), { params });
     expect(res.status).toBe(200);
+    expect(mockSubscriptionsUpdate).toHaveBeenCalledTimes(1);
     expect(mockSql).toHaveBeenCalledTimes(1);
     expect(sqlValues()).toContain('u1');
     expect([...sqlValues(), ...queryValues()]).not.toContain('victim');
@@ -253,10 +256,12 @@ describe('reactivate', () => {
 
   it.each(['past_due', 'unpaid', 'incomplete'])('does not mark the member active when the subscription is %s', async (status) => {
     setup();
-    mockSubscriptionsUpdate.mockResolvedValueOnce({ id: 'sub_1', status });
+    mockSubscriptionsRetrieve.mockResolvedValueOnce({ id: 'sub_1', status });
     const res = await reactivatePOST(req({}), { params });
     expect(res.status).toBe(409);
     expect(mockSql).not.toHaveBeenCalled();
+    // Refused before touching the subscription, so it stays cancelled.
+    expect(mockSubscriptionsUpdate).not.toHaveBeenCalled();
   });
 });
 

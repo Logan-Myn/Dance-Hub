@@ -53,20 +53,15 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
     }
 
     if (member.stripe_subscription_id && community.stripe_account_id) {
-      // Reactivate Stripe subscription by removing the cancellation
-      const subscription = await stripe.subscriptions.update(
+      // Check standing BEFORE touching the subscription: un-cancelling a
+      // past_due / unpaid one would let the next retry charge and renew it
+      // while we tell the member it failed.
+      const subscription = await stripe.subscriptions.retrieve(
         member.stripe_subscription_id,
-        {
-          cancel_at_period_end: false,
-        },
-        {
-          stripeAccount: community.stripe_account_id,
-        }
+        {},
+        { stripeAccount: community.stripe_account_id }
       );
 
-      // Only grant access back when the subscription is actually in good
-      // standing. A past_due / unpaid / incomplete subscription must not flip
-      // the member to active; the webhook keeps subscription_status in sync.
       if (subscription.status !== 'active' && subscription.status !== 'trialing') {
         console.warn('Reactivate refused, subscription not in good standing:', {
           subscriptionId: member.stripe_subscription_id,
@@ -77,6 +72,13 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
           { status: 409 }
         );
       }
+
+      // Reactivate by removing the scheduled cancellation.
+      await stripe.subscriptions.update(
+        member.stripe_subscription_id,
+        { cancel_at_period_end: false },
+        { stripeAccount: community.stripe_account_id }
+      );
 
       // Update member status back to active
       await sql`
