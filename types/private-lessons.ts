@@ -42,13 +42,6 @@ export interface LessonBooking {
   // LiveKit room
   livekit_room_name?: string;
 
-  // Daily.co video room information (legacy)
-  daily_room_name?: string;
-  daily_room_url?: string;
-  daily_room_created_at?: string;
-  daily_room_expires_at?: string;
-  teacher_daily_token?: string;
-  student_daily_token?: string;
   teacher_joined_at?: string;
   student_joined_at?: string;
   session_started_at?: string;
@@ -72,7 +65,6 @@ export interface LessonBookingWithDetails extends LessonBooking {
   viewer_role: 'student' | 'teacher';
 }
 
-// Daily.co utility types
 export interface VideoCallParticipant {
   user_id: string;
   user_name: string;

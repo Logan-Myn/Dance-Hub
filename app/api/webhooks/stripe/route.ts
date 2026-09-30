@@ -31,7 +31,6 @@ if (!process.env.STRIPE_SECRET_KEY) {
 
 interface LessonBooking {
   id: string;
-  daily_room_url: string | null;
 }
 
 interface PrivateLessonDetails {
@@ -254,11 +253,6 @@ export async function POST(request: Request) {
                 availability_slot_id,
                 student_message,
                 contact_info,
-                daily_room_name,
-                daily_room_url,
-                daily_room_expires_at,
-                teacher_daily_token,
-                student_daily_token,
                 video_call_started_at,
                 video_call_ended_at
               ) VALUES (
@@ -276,11 +270,6 @@ export async function POST(request: Request) {
                 ${metadata.availability_slot_id || null},
                 ${metadata.student_message || ''},
                 ${sql.json(contactInfo)},
-                NULL,
-                NULL,
-                NULL,
-                NULL,
-                NULL,
                 NULL,
                 NULL
               )

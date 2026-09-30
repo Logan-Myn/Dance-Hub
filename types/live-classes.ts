@@ -8,10 +8,6 @@ export interface LiveClass {
   description?: string;
   scheduled_start_time: string;
   duration_minutes: number;
-  daily_room_name?: string;
-  daily_room_url?: string;
-  daily_room_token_teacher?: string;
-  daily_room_expires_at?: string;
   status: 'scheduled' | 'live' | 'ended' | 'cancelled';
   created_at: string;
   updated_at: string;

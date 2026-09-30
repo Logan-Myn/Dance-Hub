@@ -15,7 +15,6 @@ interface LiveClass {
   description?: string;
   scheduled_start_time: string;
   duration_minutes: number;
-  daily_room_name?: string;
   status: 'scheduled' | 'live' | 'ended' | 'cancelled';
   community_slug: string;
   community_name: string;
@@ -34,7 +33,7 @@ export default async function LiveClassPage(props: LiveClassPageProps) {
   // Fetch live class details from the view
   const liveClasses = await sql`
     SELECT id, title, description, scheduled_start_time, duration_minutes,
-           daily_room_name, status, community_slug, community_name,
+           status, community_slug, community_name,
            teacher_name, teacher_avatar_url, teacher_id, community_created_by,
            is_currently_active, is_starting_soon
     FROM live_classes_with_details

@@ -21,7 +21,6 @@ const mkBooking = (
     price_paid: '40',
     cancellation_cutoff_hours: 24,
     late_refund_policy: 'no_refund',
-    daily_room_name: null,
     ...over,
   } as unknown as LessonBookingWithDetails);
 
@@ -37,10 +36,12 @@ test('renders student name and lesson title', () => {
   expect(screen.getByText(/Maria · Beginner Bachata/)).toBeInTheDocument();
 });
 
-test('renders Join button when canJoinVideo is true', () => {
+// The LiveKit room is created lazily on first join, so a booking has no room
+// yet when the button needs to appear.
+test('renders Join button when canJoinVideo is true, before any room exists', () => {
   render(
     <BookingRow
-      booking={mkBooking({ daily_room_name: 'room-1' })}
+      booking={mkBooking()}
       canJoinVideo={true}
       onOpen={() => {}}
       onCancel={() => {}}

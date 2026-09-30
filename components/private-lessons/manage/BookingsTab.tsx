@@ -17,7 +17,6 @@ const GRACE_MS = 15 * 60_000;
 
 function canJoinVideoFor(booking: LessonBookingWithDetails): boolean {
   if (booking.payment_status !== 'succeeded') return false;
-  if (!booking.daily_room_name) return false;
   if (booking.lesson_status === 'canceled' || booking.lesson_status === 'completed')
     return false;
   if (!booking.scheduled_at) return true;

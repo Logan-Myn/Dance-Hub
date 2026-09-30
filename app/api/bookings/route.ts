@@ -16,9 +16,6 @@ interface BookingWithDetails {
   payment_intent_id: string | null;
   price_paid: number;
   is_community_member: boolean;
-  daily_room_name: string | null;
-  daily_room_url: string | null;
-  daily_room_expires_at: string | null;
   session_started_at: string | null;
   session_ended_at: string | null;
   teacher_notes: string | null;
@@ -66,9 +63,6 @@ export async function GET() {
         lb.stripe_payment_intent_id as payment_intent_id,
         lb.price_paid,
         lb.is_community_member,
-        lb.daily_room_name,
-        lb.daily_room_url,
-        lb.daily_room_expires_at,
         lb.session_started_at,
         lb.session_ended_at,
         lb.teacher_notes,

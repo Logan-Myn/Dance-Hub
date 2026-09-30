@@ -60,8 +60,6 @@ export interface LiveClassWithDetails {
   description: string | null;
   scheduled_start_time: string;
   duration_minutes: number;
-  daily_room_name: string | null;
-  daily_room_url: string | null;
   status: LiveClassStatus;
   created_at: string;
   updated_at: string;

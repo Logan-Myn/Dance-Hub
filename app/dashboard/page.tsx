@@ -205,7 +205,6 @@ export default function DashboardPage() {
 
   const canJoinVideo = (booking: LessonBookingWithDetails) => {
     if (booking.payment_status !== 'succeeded') return false;
-    if (!booking.daily_room_name) return false;
     if (isLessonOver(booking)) return false;
 
     const scheduledAt = booking.scheduled_at ? new Date(booking.scheduled_at) : null;
@@ -329,7 +328,7 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-                    {booking.daily_room_name && canJoinVideo(booking) ? (
+                    {canJoinVideo(booking) ? (
                       <Button size="sm" asChild className="rounded-xl">
                         <Link href={`/video-session/${booking.id}`}>
                           Join

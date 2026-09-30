@@ -18,8 +18,6 @@ interface PrivateLesson {
   regular_price: number;
   member_price: number | null;
   is_active: boolean;
-  daily_room_name: string | null;
-  daily_room_url: string | null;
   created_at: string;
   updated_at: string;
 }

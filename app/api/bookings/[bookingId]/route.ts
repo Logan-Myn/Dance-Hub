@@ -16,11 +16,6 @@ interface BookingWithDetails {
   payment_intent_id: string | null;
   price_paid: number;
   is_community_member: boolean;
-  daily_room_name: string | null;
-  daily_room_url: string | null;
-  daily_room_expires_at: string | null;
-  teacher_daily_token: string | null;
-  student_daily_token: string | null;
   session_started_at: string | null;
   session_ended_at: string | null;
   teacher_notes: string | null;
@@ -71,11 +66,6 @@ export async function GET(request: Request, props: { params: Promise<{ bookingId
         lb.price_paid,
         lb.is_community_member,
         lb.livekit_room_name,
-        lb.daily_room_name,
-        lb.daily_room_url,
-        lb.daily_room_expires_at,
-        lb.teacher_daily_token,
-        lb.student_daily_token,
         lb.session_started_at,
         lb.session_ended_at,
         lb.teacher_notes,

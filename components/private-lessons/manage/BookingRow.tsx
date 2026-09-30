@@ -58,7 +58,7 @@ export function BookingRow({
       </button>
 
       <div className="flex items-center gap-2 flex-shrink-0">
-        {canJoinVideo && booking.daily_room_name ? (
+        {canJoinVideo ? (
           <Button asChild size="sm" className="rounded-xl">
             <Link href={`/video-session/${booking.id}`}>Join</Link>
           </Button>
