@@ -424,6 +424,9 @@ export default function FeedClient({
 
       // Update local state
       if (data.gracePeriod && data.accessEndDate) {
+        // The sidebar shows the re-join button for a canceling membership
+        // with an end date, so set both or it only appears after a refresh.
+        setSubscriptionStatus("canceling");
         setAccessEndDate(data.accessEndDate);
         const endDate = new Date(data.accessEndDate).toLocaleDateString();
         toast.success(
