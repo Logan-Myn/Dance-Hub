@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { query, queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
+import { userCanManageCommunity } from "@/lib/community-auth";
 import { CreatePrivateLessonData } from "@/types/private-lessons";
 
 interface Community {
@@ -48,13 +49,27 @@ export async function GET(
       );
     }
 
+    // Inactive (hidden) lessons are only visible to the owner and platform
+    // admins; everyone else gets a 404, as if the lesson did not exist.
+    const session = await getSession();
+    const canManage =
+      !!session && (await userCanManageCommunity(session.user.id, community.id));
+
     // Get the specific private lesson
-    const lesson = await queryOne<PrivateLesson>`
-      SELECT *
-      FROM private_lessons
-      WHERE id = ${lessonId}
-        AND community_id = ${community.id}
-    `;
+    const lesson = canManage
+      ? await queryOne<PrivateLesson>`
+          SELECT *
+          FROM private_lessons
+          WHERE id = ${lessonId}
+            AND community_id = ${community.id}
+        `
+      : await queryOne<PrivateLesson>`
+          SELECT *
+          FROM private_lessons
+          WHERE id = ${lessonId}
+            AND community_id = ${community.id}
+            AND is_active = true
+        `;
 
     if (!lesson) {
       return NextResponse.json(

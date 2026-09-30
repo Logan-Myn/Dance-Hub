@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
-import { getSession } from "@/lib/auth-session";
-
-interface Community {
-  id: string;
-  created_by: string;
-}
+import { requireCommunityManager } from "@/lib/community-auth";
 
 interface Course {
   id: string;
@@ -19,29 +14,11 @@ export async function PUT(
 ) {
   const params = await props.params;
   try {
-    const session = await getSession();
+    const guard = await requireCommunityManager(params.communitySlug);
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
 
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    const user = session.user;
     const { title } = await request.json();
-
-    // Check if user is the community creator
-    const community = await queryOne<Community>`
-      SELECT id, created_by
-      FROM communities
-      WHERE slug = ${params.communitySlug}
-    `;
-
-    if (!community) {
-      return new NextResponse("Community not found", { status: 404 });
-    }
-
-    if (community.created_by !== user.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
 
     // Get course ID
     const course = await queryOne<Course>`
@@ -55,17 +32,23 @@ export async function PUT(
       return new NextResponse("Course not found", { status: 404 });
     }
 
-    // Update the chapter
+    // Update the chapter (scoped to this course)
+    let updated: { id: string }[];
     try {
-      await sql`
+      updated = await sql<{ id: string }[]>`
         UPDATE chapters
         SET title = ${title}, updated_at = NOW()
         WHERE id = ${params.chapterId}
           AND course_id = ${course.id}
+        RETURNING id
       `;
     } catch (updateError) {
       console.error("[CHAPTER_UPDATE]", updateError);
       return new NextResponse("Failed to update chapter", { status: 500 });
+    }
+
+    if (updated.length === 0) {
+      return new NextResponse("Chapter not found", { status: 404 });
     }
 
     return NextResponse.json({ message: "Chapter updated successfully" });
@@ -83,29 +66,9 @@ export async function DELETE(
 ) {
   const params = await props.params;
   try {
-    // Verify the session and get user
-    const session = await getSession();
-
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    const user = session.user;
-
-    // Check if user is the community creator
-    const community = await queryOne<Community>`
-      SELECT id, created_by
-      FROM communities
-      WHERE slug = ${params.communitySlug}
-    `;
-
-    if (!community) {
-      return new NextResponse("Community not found", { status: 404 });
-    }
-
-    if (community.created_by !== user.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
+    const guard = await requireCommunityManager(params.communitySlug);
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
 
     // Get course ID
     const course = await queryOne<Course>`
@@ -119,11 +82,23 @@ export async function DELETE(
       return new NextResponse("Course not found", { status: 404 });
     }
 
+    // The chapter must belong to this course before anything is deleted.
+    const chapter = await queryOne<{ id: string }>`
+      SELECT id
+      FROM chapters
+      WHERE id = ${params.chapterId}
+        AND course_id = ${course.id}
+    `;
+
+    if (!chapter) {
+      return new NextResponse("Chapter not found", { status: 404 });
+    }
+
     // Delete all lessons in the chapter first (foreign key constraint)
     try {
       await sql`
         DELETE FROM lessons
-        WHERE chapter_id = ${params.chapterId}
+        WHERE chapter_id = ${chapter.id}
       `;
     } catch (lessonsDeleteError) {
       console.error("[LESSONS_DELETE]", lessonsDeleteError);

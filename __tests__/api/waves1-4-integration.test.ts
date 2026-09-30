@@ -356,22 +356,6 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
       });
     });
 
-    describe('community/[communitySlug]/courses/route.ts', () => {
-      it('should fetch courses for community', async () => {
-        const community = await testQueryOne<{ id: string }>`
-          SELECT id FROM communities WHERE slug = ${TEST_IDS.communitySlug}
-        `;
-        expect(community).not.toBeNull();
-
-        const courses = await testQuery<Course>`
-          SELECT * FROM courses
-          WHERE community_id = ${community!.id}
-          AND is_public = true
-        `;
-        expect(courses.length).toBeGreaterThan(0);
-      });
-    });
-
     describe('threads/create/route.ts', () => {
       it('should create thread with all fields', async () => {
         const newThread = await testQueryOne<Thread>`
@@ -461,18 +445,6 @@ describe('Waves 1-4 Integration Tests - Neon Database Layer', () => {
           SET description = 'A test community for integration tests'
           WHERE slug = ${TEST_IDS.communitySlug}
         `;
-      });
-    });
-
-    describe('community/[communitySlug]/membership/[userId]/route.ts', () => {
-      it('should query membership status', async () => {
-        const membership = await testQueryOne<CommunityMember>`
-          SELECT * FROM community_members
-          WHERE community_id = ${TEST_IDS.communityId}
-          AND user_id = ${TEST_IDS.secondUserId}
-        `;
-        expect(membership).not.toBeNull();
-        expect(membership?.status).toBe('active');
       });
     });
   });

@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { queryOne } from "@/lib/db";
-
-interface Community {
-  id: string;
-}
+import { requireCommunityManager } from "@/lib/community-auth";
 
 interface Course {
   id: string;
@@ -29,23 +26,14 @@ export async function POST(
   const params = await props.params;
   try {
     const { communitySlug, courseSlug } = params;
+
+    const guard = await requireCommunityManager(communitySlug);
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
+
     const { title } = await request.json();
 
-    // Get community and verify it exists
-    const community = await queryOne<Community>`
-      SELECT id
-      FROM communities
-      WHERE slug = ${communitySlug}
-    `;
-
-    if (!community) {
-      return NextResponse.json(
-        { error: "Community not found" },
-        { status: 404 }
-      );
-    }
-
-    // Get course and verify it exists
+    // The course must belong to this community.
     const course = await queryOne<Course>`
       SELECT id
       FROM courses

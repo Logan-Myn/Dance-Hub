@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, sql } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
+import { requireCommunityManager } from '@/lib/community-auth';
 import { TeacherAvailabilitySlot } from '@/types/private-lessons';
 
 interface Community {
@@ -187,27 +188,12 @@ export async function POST(
 ) {
   const params = await props.params;
   try {
-    // Get the current user from Better Auth session
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      );
-    }
-
-    const user = session.user;
-
-    // Get community ID
-    const community = await queryOne<Community>`
-      SELECT id
-      FROM communities
-      WHERE slug = ${params.communitySlug}
-    `;
-
-    if (!community) {
-      return NextResponse.json({ error: 'Community not found' }, { status: 404 });
-    }
+    // The community owner is the teacher; only they (or a platform admin) can
+    // publish bookable slots here.
+    const guard = await requireCommunityManager(params.communitySlug);
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
+    const user = guard.session.user;
 
     const body = await request.json();
     const { date, start_time, end_time } = body;

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { query, queryOne, sql } from "@/lib/db";
-import { getSession } from "@/lib/auth-session";
 import { slugify } from "@/lib/utils";
+import {
+  requireCommunityManager,
+  requireCommunityViewer,
+  userCanManageCommunity,
+} from "@/lib/community-auth";
 import {
   uploadFile,
   generateFileKey,
@@ -9,12 +13,6 @@ import {
   extractKeyFromUrl,
 } from "@/lib/storage";
 import { deleteMuxAsset } from "@/lib/mux";
-
-interface Community {
-  id: string;
-  name: string;
-  created_by: string;
-}
 
 interface Course {
   id: string;
@@ -59,29 +57,12 @@ export async function GET(
 ) {
   const params = await props.params;
   try {
-    console.log("GET Course request params:", {
-      communitySlug: params.communitySlug,
-      courseSlug: params.courseSlug,
-      timestamp: new Date().toISOString(),
-    });
-
-    // Get community
-    const community = await queryOne<{ id: string }>`
-      SELECT id
-      FROM communities
-      WHERE slug = ${params.communitySlug}
-    `;
-
-    if (!community) {
-      console.error("Error fetching community:", {
-        slug: params.communitySlug,
-        timestamp: new Date().toISOString(),
-      });
-      return NextResponse.json(
-        { error: "Community not found" },
-        { status: 404 }
-      );
-    }
+    // Same rule as the classroom page: active (or grace-period) members, the
+    // owner and platform admins. Pre-registered users are not let in yet.
+    const guard = await requireCommunityViewer(params.communitySlug);
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
+    const userId = guard.session.user.id;
 
     const course = await queryOne<Course>`
       SELECT *
@@ -90,7 +71,12 @@ export async function GET(
         AND slug = ${params.courseSlug}
     `;
 
-    if (!course) {
+    // Unpublished courses are visible to the owner and admins only. Answer
+    // 404 rather than 403 so members cannot probe for draft slugs.
+    if (
+      !course ||
+      (!course.is_public && !(await userCanManageCommunity(userId, community.id)))
+    ) {
       return NextResponse.json({ error: "Course not found" }, { status: 404 });
     }
 
@@ -129,14 +115,11 @@ export async function GET(
       lessons: lessonsByChapter.get(chapter.id) || []
     }));
 
-    const session = await getSession();
-    const userId = session?.user?.id || null;
-
-    // If user is authenticated, fetch completion status — scoped to this
-    // course's lesson IDs so we don't ship every completion they've ever made.
+    // Fetch completion status, scoped to this course's lesson IDs so we don't
+    // ship every completion they've ever made.
     let completedLessonIds = new Set<string>();
     const allLessonIds = chaptersWithLessons.flatMap(c => c.lessons.map(l => l.id));
-    if (userId && allLessonIds.length > 0) {
+    if (allLessonIds.length > 0) {
       const completions = await query<LessonCompletion>`
         SELECT lesson_id
         FROM lesson_completions
@@ -163,12 +146,6 @@ export async function GET(
       }))
     };
 
-    // Log the final transformed data
-    console.log(
-      "Transformed course data:",
-      JSON.stringify(transformedCourse, null, 2)
-    );
-
     return NextResponse.json(transformedCourse, {
       headers: {
         "Cache-Control": "no-store, must-revalidate",
@@ -185,102 +162,6 @@ export async function GET(
   }
 }
 
-export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
-  const params = await props.params;
-  try {
-    const { communitySlug } = params;
-
-    // Get the community
-    const community = await queryOne<{ id: string }>`
-      SELECT id
-      FROM communities
-      WHERE slug = ${communitySlug}
-    `;
-
-    if (!community) {
-      return NextResponse.json(
-        { error: "Community not found" },
-        { status: 404 }
-      );
-    }
-
-    // Parse the form data
-    const formData = await request.formData();
-    const title = formData.get("title") as string;
-    const description = formData.get("description") as string;
-    const imageFile = formData.get("image") as File;
-
-    // Generate the slug from the title
-    const slug = slugify(title);
-
-    // Upload the image to B2 Storage
-    let imageUrl: string;
-    let fileKey: string;
-
-    try {
-      // Convert File to Buffer
-      const arrayBuffer = await imageFile.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      // Generate unique file key
-      fileKey = generateFileKey('course-images', imageFile.name);
-
-      // Upload to B2 Storage
-      imageUrl = await uploadFile(buffer, fileKey, imageFile.type);
-    } catch (uploadError) {
-      console.error("Error uploading image:", uploadError);
-      return NextResponse.json(
-        { error: "Failed to upload image" },
-        { status: 500 }
-      );
-    }
-
-    // Create a new course
-    const newCourse = await queryOne<Course>`
-      INSERT INTO courses (
-        title,
-        description,
-        image_url,
-        slug,
-        community_id,
-        created_at,
-        updated_at
-      ) VALUES (
-        ${title},
-        ${description},
-        ${imageUrl},
-        ${slug},
-        ${community.id},
-        NOW(),
-        NOW()
-      )
-      RETURNING *
-    `;
-
-    if (!newCourse) {
-      console.error("Error creating course: no row returned");
-      // Clean up the uploaded image if course creation fails
-      try {
-        await deleteFile(fileKey);
-      } catch (deleteError) {
-        console.error("Error cleaning up uploaded file:", deleteError);
-      }
-      return NextResponse.json(
-        { error: "Failed to create course" },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(newCourse);
-  } catch (error) {
-    console.error("Error creating course:", error);
-    return NextResponse.json(
-      { error: "Failed to create course" },
-      { status: 500 }
-    );
-  }
-}
-
 export const dynamic = "force-dynamic";
 
 export async function PUT(
@@ -289,30 +170,9 @@ export async function PUT(
 ) {
   const params = await props.params;
   try {
-    const session = await getSession();
-
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Get community
-    const community = await queryOne<Community>`
-      SELECT id, name, created_by
-      FROM communities
-      WHERE slug = ${params.communitySlug}
-    `;
-
-    if (!community) {
-      console.error("Error fetching community");
-      return NextResponse.json(
-        { error: "Community not found" },
-        { status: 404 }
-      );
-    }
-
-    if (community.created_by !== session.user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const guard = await requireCommunityManager(params.communitySlug);
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
 
     // Get current course
     const currentCourse = await queryOne<Course>`
@@ -434,15 +294,6 @@ export async function PUT(
       );
     }
 
-    // Log the response for debugging
-    console.log("PUT Course response:", {
-      id: updatedCourse.id,
-      title: updatedCourse.title,
-      is_public: updatedCourse.is_public,
-      updated_at: updatedCourse.updated_at,
-      fetch_time: new Date().toISOString(),
-    });
-
     return NextResponse.json(
       {
         course: updatedCourse,
@@ -471,28 +322,9 @@ export async function DELETE(
 ) {
   const params = await props.params;
   try {
-    const session = await getSession();
-
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const community = await queryOne<Community>`
-      SELECT id, name, created_by
-      FROM communities
-      WHERE slug = ${params.communitySlug}
-    `;
-
-    if (!community) {
-      return NextResponse.json(
-        { error: "Community not found" },
-        { status: 404 }
-      );
-    }
-
-    if (community.created_by !== session.user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const guard = await requireCommunityManager(params.communitySlug);
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
 
     const course = await queryOne<Course>`
       SELECT id, image_url

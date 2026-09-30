@@ -126,10 +126,19 @@ test.describe('Course settings: cover image and delete', () => {
     );
     expect([401, 403]).toContain(response.status());
 
+    // Course content is members-only, so an anonymous read is refused too.
+    const anonymousRead = await page.request.get(
+      `/api/community/${COMMUNITY_SLUG}/courses/${courseSlug}`
+    );
+    expect(anonymousRead.status()).toBe(401);
+
+    // The owner still sees the course under its original title.
+    await signInAsOwner(page);
     const stillNamed = await page.request.get(
       `/api/community/${COMMUNITY_SLUG}/courses/${courseSlug}`
     );
     expect(stillNamed.status()).toBe(200);
+    expect((await stillNamed.json()).title).not.toBe('Hijacked');
   });
 
   test('a non-owner cannot delete the course', async ({ page }) => {

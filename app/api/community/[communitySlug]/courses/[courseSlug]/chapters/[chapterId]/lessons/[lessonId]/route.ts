@@ -1,21 +1,8 @@
 import { NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
-import { getSession } from "@/lib/auth-session";
+import { requireCommunityManager } from "@/lib/community-auth";
 import { deleteMuxAsset } from "@/lib/mux";
 import { deleteFile } from "@/lib/storage";
-
-interface Community {
-  id: string;
-  created_by: string;
-}
-
-interface Course {
-  id: string;
-}
-
-interface Chapter {
-  id: string;
-}
 
 interface Lesson {
   id: string;
@@ -27,6 +14,62 @@ interface Lesson {
   lesson_position: number;
   created_at: string;
   updated_at: string;
+}
+
+type LessonParams = {
+  communitySlug: string;
+  courseSlug: string;
+  chapterId: string;
+  lessonId: string;
+};
+
+/**
+ * Loads the lesson only if the whole URL chain holds: lesson -> chapter ->
+ * course (by slug) -> community. Anything else is a 404.
+ */
+async function findScopedLesson(params: LessonParams, communityId: string) {
+  return queryOne<{ id: string; chapter_id: string; video_asset_id: string | null }>`
+    SELECT l.id, l.chapter_id, l.video_asset_id
+    FROM lessons l
+    JOIN chapters ch ON ch.id = l.chapter_id
+    JOIN courses co ON co.id = ch.course_id
+    WHERE l.id = ${params.lessonId}
+      AND ch.id = ${params.chapterId}
+      AND co.slug = ${params.courseSlug}
+      AND co.community_id = ${communityId}
+  `;
+}
+
+/**
+ * True if another community already uses this Mux asset (a lesson, a live-class
+ * recording or its About page). A freshly uploaded asset is not referenced
+ * anywhere yet, so this lets new uploads through while stopping an owner from
+ * pointing a lesson at someone else's video (and then deleting it with the
+ * lesson).
+ */
+async function assetUsedByOtherCommunity(assetId: string, communityId: string): Promise<boolean> {
+  const row = await queryOne<{ one: number }>`
+    SELECT 1 AS one
+    WHERE EXISTS (
+      SELECT 1
+      FROM lessons l
+      JOIN chapters ch ON ch.id = l.chapter_id
+      JOIN courses co ON co.id = ch.course_id
+      WHERE l.video_asset_id = ${assetId} AND co.community_id <> ${communityId}
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM live_class_recordings r
+      JOIN live_classes lc ON lc.id = r.live_class_id
+      WHERE r.mux_asset_id = ${assetId} AND lc.community_id <> ${communityId}
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM communities
+      WHERE id <> ${communityId} AND about_page::text LIKE ${`%${assetId}%`}
+    )
+  `;
+  return Boolean(row);
 }
 
 export async function PUT(
@@ -42,45 +85,30 @@ export async function PUT(
 ) {
   const params = await props.params;
   try {
+    const guard = await requireCommunityManager(params.communitySlug);
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
+
     const body = await request.json();
     const { title, content, videoAssetId, playbackId } = body;
 
-    // First, verify the community exists and get its ID
-    const community = await queryOne<{ id: string }>`
-      SELECT id
-      FROM communities
-      WHERE slug = ${params.communitySlug}
-    `;
-
-    if (!community) {
-      return NextResponse.json(
-        { error: "Community not found" },
-        { status: 404 }
-      );
+    const currentLesson = await findScopedLesson(params, community.id);
+    if (!currentLesson) {
+      return NextResponse.json({ error: "Lesson not found" }, { status: 404 });
     }
 
-    // Get the course ID
-    const course = await queryOne<Course>`
-      SELECT id
-      FROM courses
-      WHERE community_id = ${community.id}
-        AND slug = ${params.courseSlug}
-    `;
-
-    if (!course) {
-      return NextResponse.json({ error: "Course not found" }, { status: 404 });
-    }
-
-    // Verify the chapter exists
-    const chapter = await queryOne<Chapter>`
-      SELECT id
-      FROM chapters
-      WHERE course_id = ${course.id}
-        AND id = ${params.chapterId}
-    `;
-
-    if (!chapter) {
-      return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
+    // A changed video must not be another community's asset. Re-saving the
+    // lesson's current video (every text save sends it back) is always fine.
+    if (videoAssetId != null && videoAssetId !== currentLesson.video_asset_id) {
+      if (
+        typeof videoAssetId !== "string" ||
+        (await assetUsedByOtherCommunity(videoAssetId, community.id))
+      ) {
+        return NextResponse.json(
+          { error: "This video cannot be used for this lesson" },
+          { status: 403 }
+        );
+      }
     }
 
     // Update the lesson using COALESCE for partial updates
@@ -92,8 +120,8 @@ export async function PUT(
         video_asset_id = COALESCE(${videoAssetId ?? null}, video_asset_id),
         playback_id = COALESCE(${playbackId ?? null}, playback_id),
         updated_at = NOW()
-      WHERE id = ${params.lessonId}
-        AND chapter_id = ${params.chapterId}
+      WHERE id = ${currentLesson.id}
+        AND chapter_id = ${currentLesson.chapter_id}
       RETURNING *
     `;
 
@@ -132,67 +160,35 @@ export async function DELETE(
 ) {
   const params = await props.params;
   try {
-    // Verify auth session
-    const session = await getSession();
+    const guard = await requireCommunityManager(params.communitySlug);
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
 
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Resolve the lesson through this community before touching anything.
+    const lesson = await findScopedLesson(params, community.id);
+    if (!lesson) {
+      return NextResponse.json({ error: "Lesson not found" }, { status: 404 });
     }
 
-    const user = session.user;
+    // Keep the Mux asset if something else still plays it (another lesson or
+    // an About page); deleting it would break that video too.
+    const assetStillInUse = lesson.video_asset_id
+      ? Boolean(
+          await queryOne<{ one: number }>`
+            SELECT 1 AS one
+            WHERE EXISTS (
+              SELECT 1 FROM lessons
+              WHERE video_asset_id = ${lesson.video_asset_id} AND id <> ${lesson.id}
+            )
+            OR EXISTS (
+              SELECT 1 FROM communities
+              WHERE about_page::text LIKE ${`%${lesson.video_asset_id}%`}
+            )
+          `
+        )
+      : false;
 
-    // Get community and verify it exists
-    const community = await queryOne<Community>`
-      SELECT id, created_by
-      FROM communities
-      WHERE slug = ${params.communitySlug}
-    `;
-
-    if (!community) {
-      return NextResponse.json(
-        { error: "Community not found" },
-        { status: 404 }
-      );
-    }
-
-    // Verify user is community creator
-    if (community.created_by !== user.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Get course and verify it exists
-    const course = await queryOne<Course>`
-      SELECT id
-      FROM courses
-      WHERE community_id = ${community.id}
-        AND slug = ${params.courseSlug}
-    `;
-
-    if (!course) {
-      return NextResponse.json({ error: "Course not found" }, { status: 404 });
-    }
-
-    // Verify chapter exists
-    const chapter = await queryOne<Chapter>`
-      SELECT id
-      FROM chapters
-      WHERE course_id = ${course.id}
-        AND id = ${params.chapterId}
-    `;
-
-    if (!chapter) {
-      return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
-    }
-
-    // Get the lesson to check if it has a video before deleting
-    const lesson = await queryOne<{ video_asset_id: string | null }>`
-      SELECT video_asset_id
-      FROM lessons
-      WHERE id = ${params.lessonId}
-        AND chapter_id = ${params.chapterId}
-    `;
-
-    if (lesson?.video_asset_id) {
+    if (lesson.video_asset_id && !assetStillInUse) {
       // Delete the video from Mux (this also removes its alternate audio tracks on Mux).
       await deleteMuxAsset(lesson.video_asset_id);
 
@@ -215,7 +211,7 @@ export async function DELETE(
     // Clean up any linked live class recording
     try {
       await sql`
-        DELETE FROM live_class_recordings WHERE lesson_id = ${params.lessonId}
+        DELETE FROM live_class_recordings WHERE lesson_id = ${lesson.id}
       `;
     } catch (cleanupError) {
       console.error("Error cleaning up recording link:", cleanupError);
@@ -225,8 +221,8 @@ export async function DELETE(
     try {
       await sql`
         DELETE FROM lessons
-        WHERE id = ${params.lessonId}
-          AND chapter_id = ${params.chapterId}
+        WHERE id = ${lesson.id}
+          AND chapter_id = ${lesson.chapter_id}
       `;
     } catch (deleteError) {
       console.error("Error deleting lesson:", deleteError);

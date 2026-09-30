@@ -2,17 +2,25 @@ import { NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { getActiveRecipientsForCommunity } from '@/lib/broadcasts/recipients';
 import { runBroadcast } from '@/lib/broadcasts/sender';
+import { requireCommunityManager } from '@/lib/community-auth';
 
 export const dynamic = 'force-dynamic';
-
-interface Community {
-  id: string;
-  name: string;
-}
 
 interface Course {
   id: string;
   title: string;
+  slug: string;
+}
+
+// Course titles and community names are owner-supplied text; escape them before
+// they go into the email HTML.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 export async function POST(
@@ -21,15 +29,14 @@ export async function POST(
 ) {
   const params = await props.params;
   try {
-    const community = await queryOne<Community>`
-      SELECT id, name FROM communities WHERE slug = ${params.communitySlug}
-    `;
-    if (!community) {
-      return NextResponse.json({ error: 'Community not found' }, { status: 404 });
-    }
+    // Emails every active member, so only the owner (or a platform admin) may
+    // trigger it.
+    const guard = await requireCommunityManager(params.communitySlug);
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
 
     const course = await queryOne<Course>`
-      SELECT id, title FROM courses
+      SELECT id, title, slug FROM courses
       WHERE community_id = ${community.id} AND slug = ${params.courseSlug}
     `;
     if (!course) {
@@ -46,16 +53,16 @@ export async function POST(
       });
     }
 
-    const courseUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io'}/${params.communitySlug}/classroom/${params.courseSlug}`;
+    const courseUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io'}/${encodeURIComponent(community.slug)}/classroom/${encodeURIComponent(course.slug)}`;
 
     const htmlContent = `
       <h2 style="font-size:22px;margin:0 0 16px 0;color:#111827;">New course available</h2>
       <p style="margin:0 0 16px 0;line-height:1.6;color:#374151;">
-        A new course is now live in <strong>${community.name}</strong>:
+        A new course is now live in <strong>${escapeHtml(community.name)}</strong>:
       </p>
-      <p style="margin:0 0 24px 0;font-size:18px;color:#2563eb;">${course.title}</p>
+      <p style="margin:0 0 24px 0;font-size:18px;color:#2563eb;">${escapeHtml(course.title)}</p>
       <p style="margin:0 0 24px 0;">
-        <a href="${courseUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:500;">View course</a>
+        <a href="${escapeHtml(courseUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:500;">View course</a>
       </p>
     `.trim();
 
@@ -79,7 +86,7 @@ export async function POST(
   } catch (error) {
     console.error('Error in course notify route:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

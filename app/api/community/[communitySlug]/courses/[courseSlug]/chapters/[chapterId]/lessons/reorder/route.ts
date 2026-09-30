@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 import { query, queryOne, sql } from "@/lib/db";
-import { getSession } from "@/lib/auth-session";
-
-interface Community {
-  id: string;
-  created_by: string;
-}
+import { requireCommunityManager } from "@/lib/community-auth";
 
 interface Lesson {
   id: string;
@@ -28,25 +23,27 @@ export async function PUT(
 ) {
   const params = await props.params;
   try {
-    const { lessons } = await req.json();
+    const guard = await requireCommunityManager(params.communitySlug);
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
 
-    const session = await getSession();
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 });
+    const { lessons } = await req.json();
+    if (!Array.isArray(lessons)) {
+      return new NextResponse("lessons must be an array", { status: 400 });
     }
 
-    const community = await queryOne<Community>`
-      SELECT id, created_by
-      FROM communities
-      WHERE slug = ${params.communitySlug}
+    // The chapter must belong to a course in this community.
+    const chapter = await queryOne<{ id: string }>`
+      SELECT ch.id
+      FROM chapters ch
+      JOIN courses co ON co.id = ch.course_id
+      WHERE ch.id = ${params.chapterId}
+        AND co.slug = ${params.courseSlug}
+        AND co.community_id = ${community.id}
     `;
 
-    if (!community) {
-      return new NextResponse("Community not found", { status: 404 });
-    }
-
-    if (community.created_by !== session.user.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
+    if (!chapter) {
+      return new NextResponse("Chapter not found", { status: 404 });
     }
 
     if (lessons.length > 0) {
@@ -62,14 +59,14 @@ export async function PUT(
             unnest(${positions}::int[]) AS pos
         ) AS data
         WHERE lessons.id = data.id
-          AND lessons.chapter_id = ${params.chapterId}
+          AND lessons.chapter_id = ${chapter.id}
       `;
     }
 
     const updatedLessons = await query<Lesson>`
       SELECT *
       FROM lessons
-      WHERE chapter_id = ${params.chapterId}
+      WHERE chapter_id = ${chapter.id}
       ORDER BY lesson_position ASC
     `;
 

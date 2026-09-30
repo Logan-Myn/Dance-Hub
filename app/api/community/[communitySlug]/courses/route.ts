@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { query, queryOne, sql } from "@/lib/db";
+import { queryOne } from "@/lib/db";
 import { slugify } from "@/lib/utils";
 import { uploadFile, generateFileKey, deleteFile } from "@/lib/storage";
+import { requireCommunityManager } from "@/lib/community-auth";
 
 interface Course {
   id: string;
@@ -15,65 +16,21 @@ interface Course {
   is_public: boolean;
 }
 
-interface CommunityId {
-  id: string;
-}
-
-export async function GET(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
-  const params = await props.params;
-  try {
-    const { communitySlug } = params;
-
-    // Get community ID first
-    const community = await queryOne<CommunityId>`
-      SELECT id FROM communities WHERE slug = ${communitySlug}
-    `;
-
-    if (!community) {
-      return NextResponse.json(
-        { error: "Community not found" },
-        { status: 404 }
-      );
-    }
-
-    // Get courses for this community
-    const courses = await query<Course>`
-      SELECT *
-      FROM courses
-      WHERE community_id = ${community.id}
-      ORDER BY created_at DESC
-    `;
-
-    return NextResponse.json(courses);
-  } catch (error) {
-    console.error("Error fetching courses:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch courses" },
-      { status: 500 }
-    );
-  }
-}
-
 export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
   try {
-    const { communitySlug } = params;
-
-    // Get the community
-    const community = await queryOne<CommunityId>`
-      SELECT id FROM communities WHERE slug = ${communitySlug}
-    `;
-
-    if (!community) {
-      return NextResponse.json(
-        { error: "Community not found" },
-        { status: 404 }
-      );
-    }
+    // Only the owner (or a platform admin) may create courses and upload
+    // their cover images.
+    const guard = await requireCommunityManager(params.communitySlug);
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
 
     // Parse the form data
     const formData = await request.formData();
     const title = formData.get("title") as string;
+    if (!title || !title.trim()) {
+      return NextResponse.json({ error: "Title is required" }, { status: 400 });
+    }
     const description = formData.get("description") as string;
     const imageFile = formData.get("image") as File | null;
     const isPublic = formData.get("is_public") === "true";

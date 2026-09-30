@@ -1,31 +1,20 @@
 import { NextResponse } from "next/server";
-import { queryOne } from "@/lib/db";
 import { getCommunityThreads } from "@/lib/community-data";
+import { requireCommunityViewer } from "@/lib/community-auth";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-interface CommunityId {
-  id: string;
-}
-
 export async function GET(_request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
   try {
-    const { communitySlug } = params;
-
-    const community = await queryOne<CommunityId>`
-      SELECT id
-      FROM communities
-      WHERE slug = ${communitySlug}
-    `;
-
-    if (!community) {
-      return NextResponse.json(
-        { error: "Community not found" },
-        { status: 404 }
-      );
-    }
+    // Posts are members-only. Same audience as the feed page, which also lets
+    // pre-registered users in.
+    const guard = await requireCommunityViewer(params.communitySlug, {
+      allowPreRegistered: true,
+    });
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
 
     const threads = await getCommunityThreads(community.id);
 

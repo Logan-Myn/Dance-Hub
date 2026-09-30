@@ -1,11 +1,20 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { requireCommunityManager } from '@/lib/community-auth';
 
 export async function PUT(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
   try {
+    const guard = await requireCommunityManager(params.communitySlug);
+    if (!guard.ok) return guard.response;
+
     const { categories } = await request.json();
-    const { communitySlug } = params;
+    if (!Array.isArray(categories)) {
+      return NextResponse.json(
+        { error: 'Categories must be a list' },
+        { status: 400 }
+      );
+    }
 
     // Update community categories
     const result = await sql`
@@ -13,7 +22,7 @@ export async function PUT(request: Request, props: { params: Promise<{ community
       SET
         thread_categories = ${sql.json(categories)},
         updated_at = NOW()
-      WHERE slug = ${communitySlug}
+      WHERE id = ${guard.community.id}
       RETURNING id
     `;
 

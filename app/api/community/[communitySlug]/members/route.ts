@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { sql, query, queryOne } from "@/lib/db";
-import { getSession } from "@/lib/auth-session";
-
-interface CommunityId {
-  id: string;
-}
+import { sql, query } from "@/lib/db";
+import {
+  requireCommunityManager,
+  requireCommunityViewer,
+  userCanManageCommunity,
+} from "@/lib/community-auth";
 
 interface MemberWithProfile {
   id: string;
@@ -22,19 +22,15 @@ interface MemberWithProfile {
 export async function GET(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
   try {
-    // Get community ID first
-    const community = await queryOne<CommunityId>`
-      SELECT id
-      FROM communities
-      WHERE slug = ${params.communitySlug}
-    `;
-
-    if (!community) {
-      return NextResponse.json(
-        { error: "Community not found" },
-        { status: 404 }
-      );
-    }
+    // The roster is for people inside the community (the feed also lets
+    // pre-registered users in).
+    const guard = await requireCommunityViewer(params.communitySlug, {
+      allowPreRegistered: true,
+    });
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
+    const viewerId = guard.session.user.id;
+    const canManage = await userCanManageCommunity(viewerId, community.id);
 
     // Get members with their profiles (only active members with successful payment).
     // Exclude the community creator/admin — they should not appear in the member roster
@@ -48,19 +44,28 @@ export async function GET(request: Request, props: { params: Promise<{ community
         AND (subscription_status = 'active' OR subscription_status IS NULL)
     `;
 
-    // Format the members data
-    const formattedMembers = membersData.map(member => ({
-      id: member.id,
-      displayName: member.full_name || 'Anonymous',
-      email: member.email || '',
-      imageUrl: member.avatar_url || '',
-      joinedAt: member.joined_at,
-      status: member.status || 'active',
-      subscription_status: member.subscription_status,
-      current_period_end: member.current_period_end,
-      lastActive: member.last_active,
-      user_id: member.user_id
-    }));
+    // Emails and billing state are private. The owner/admin sees them for
+    // everyone; a member sees their own billing state (the feed reads it)
+    // and nobody else's.
+    const formattedMembers = membersData.map(member => {
+      const isSelf = member.user_id === viewerId;
+      return {
+        id: member.id,
+        displayName: member.full_name || 'Anonymous',
+        ...(canManage ? { email: member.email || '' } : {}),
+        imageUrl: member.avatar_url || '',
+        joinedAt: member.joined_at,
+        status: member.status || 'active',
+        ...(canManage || isSelf
+          ? {
+              subscription_status: member.subscription_status,
+              current_period_end: member.current_period_end,
+            }
+          : {}),
+        lastActive: member.last_active,
+        user_id: member.user_id
+      };
+    });
 
     return NextResponse.json({ members: formattedMembers });
   } catch (error) {
@@ -76,13 +81,9 @@ export async function GET(request: Request, props: { params: Promise<{ community
 export async function DELETE(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      );
-    }
+    const guard = await requireCommunityManager(params.communitySlug);
+    if (!guard.ok) return guard.response;
+    const { community } = guard;
 
     const { memberId } = await request.json();
     if (!memberId) {
@@ -92,33 +93,20 @@ export async function DELETE(request: Request, props: { params: Promise<{ commun
       );
     }
 
-    // Get community and check if user is the creator
-    const community = await queryOne<{ id: string; created_by: string }>`
-      SELECT id, created_by
-      FROM communities
-      WHERE slug = ${params.communitySlug}
+    // Scoped to this community so a member row from elsewhere can't be removed.
+    const deleted = await sql<{ id: string }[]>`
+      DELETE FROM community_members
+      WHERE id = ${memberId}
+        AND community_id = ${community.id}
+      RETURNING id
     `;
 
-    if (!community) {
+    if (deleted.length === 0) {
       return NextResponse.json(
-        { error: "Community not found" },
+        { error: "Member not found" },
         { status: 404 }
       );
     }
-
-    // Only the community creator can remove members
-    if (community.created_by !== session.user.id) {
-      return NextResponse.json(
-        { error: "Only the community creator can remove members" },
-        { status: 403 }
-      );
-    }
-
-    // Delete the member
-    await sql`
-      DELETE FROM community_members
-      WHERE id = ${memberId}
-    `;
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -1,3 +1,4 @@
+import { NextResponse } from 'next/server';
 import { POST } from '@/app/api/community/[communitySlug]/update-price/route';
 
 const mockProductsCreate = jest.fn();
@@ -11,6 +12,10 @@ jest.mock('@/lib/stripe', () => ({
 const mockSql = jest.fn();
 const mockQueryOne = jest.fn();
 jest.mock('@/lib/db', () => ({ sql: (...a: unknown[]) => mockSql(...a), queryOne: (...a: unknown[]) => mockQueryOne(...a) }));
+const mockRequireCommunityManager = jest.fn();
+jest.mock('@/lib/community-auth', () => ({
+  requireCommunityManager: (...a: unknown[]) => mockRequireCommunityManager(...a),
+}));
 
 const params = Promise.resolve({ communitySlug: 'salsa' });
 const community = {
@@ -19,7 +24,12 @@ const community = {
 };
 
 beforeEach(() => {
-  [mockProductsCreate, mockPricesCreate, mockSql, mockQueryOne].forEach((m) => m.mockReset());
+  [mockProductsCreate, mockPricesCreate, mockSql, mockQueryOne, mockRequireCommunityManager].forEach((m) => m.mockReset());
+  mockRequireCommunityManager.mockResolvedValue({
+    ok: true,
+    session: { user: { id: 'owner1' } },
+    community: { id: 'c1', slug: 'salsa', name: 'Salsa', created_by: 'owner1', stripe_account_id: 'acct_1' },
+  });
 });
 
 function req(body: object) {
@@ -56,4 +66,19 @@ it('does not create a yearly price when yearlyEnabled is false', async () => {
 
   const intervals = mockPricesCreate.mock.calls.map((c) => (c[0] as any).recurring?.interval);
   expect(intervals).not.toContain('year');
+});
+
+it('rejects callers who do not manage the community before touching Stripe or the DB', async () => {
+  mockRequireCommunityManager.mockResolvedValueOnce({
+    ok: false,
+    response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }),
+  });
+
+  const res = await POST(req({ price: 1, enabled: true }), { params });
+
+  expect(res.status).toBe(403);
+  expect(mockRequireCommunityManager).toHaveBeenCalledWith('salsa');
+  expect(mockQueryOne).not.toHaveBeenCalled();
+  expect(mockPricesCreate).not.toHaveBeenCalled();
+  expect(mockSql).not.toHaveBeenCalled();
 });

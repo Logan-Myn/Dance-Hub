@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { queryOne } from "@/lib/db";
-import { getSession } from "@/lib/auth-session";
-
-interface Community {
-  id: string;
-}
+import { requireCommunityManager } from "@/lib/community-auth";
 
 interface Course {
   id: string;
@@ -37,28 +33,14 @@ export async function POST(
 ) {
   const params = await props.params;
   try {
-    // Verify auth using Better Auth session
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    const guard = await requireCommunityManager(params.communitySlug);
+    if (!guard.ok) return guard.response;
+    const { community, session } = guard;
     const user = session.user;
 
     const { title } = await req.json();
 
-    // Get community and verify it exists
-    const community = await queryOne<Community>`
-      SELECT id
-      FROM communities
-      WHERE slug = ${params.communitySlug}
-    `;
-
-    if (!community) {
-      return NextResponse.json({ error: "Community not found" }, { status: 404 });
-    }
-
-    // Get course and verify it exists
+    // Get course and verify it belongs to this community
     const course = await queryOne<Course>`
       SELECT id
       FROM courses
@@ -70,7 +52,7 @@ export async function POST(
       return NextResponse.json({ error: "Course not found" }, { status: 404 });
     }
 
-    // Verify chapter exists
+    // Verify the chapter belongs to this course
     const chapter = await queryOne<Chapter>`
       SELECT id
       FROM chapters
@@ -86,7 +68,7 @@ export async function POST(
     const highestPositionLesson = await queryOne<LessonPosition>`
       SELECT lesson_position
       FROM lessons
-      WHERE chapter_id = ${params.chapterId}
+      WHERE chapter_id = ${chapter.id}
       ORDER BY lesson_position DESC
       LIMIT 1
     `;
@@ -111,7 +93,7 @@ export async function POST(
         NULL,
         NULL,
         ${newPosition},
-        ${params.chapterId},
+        ${chapter.id},
         NOW(),
         NOW(),
         ${user.id}

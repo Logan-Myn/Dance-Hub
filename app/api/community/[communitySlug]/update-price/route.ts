@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
+import { requireCommunityManager } from "@/lib/community-auth";
 
 interface Community {
   id: string;
@@ -13,14 +14,16 @@ interface Community {
 export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
   try {
-    const { price, enabled, yearlyEnabled, yearlyPrice, yearlyBenefits } = await request.json();
-    const { communitySlug } = params;
+    const guard = await requireCommunityManager(params.communitySlug);
+    if (!guard.ok) return guard.response;
 
-    // Get community by slug with stripe details
+    const { price, enabled, yearlyEnabled, yearlyPrice, yearlyBenefits } = await request.json();
+
+    // Reload with the Stripe product id, which the guard does not carry.
     const community = await queryOne<Community>`
       SELECT id, name, created_by, stripe_product_id, stripe_account_id
       FROM communities
-      WHERE slug = ${communitySlug}
+      WHERE id = ${guard.community.id}
     `;
 
     if (!community) {
