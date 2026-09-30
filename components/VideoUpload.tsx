@@ -118,6 +118,9 @@ export default function VideoUpload({
 
           // 202 means the upload landed but the asset is not linked yet. That
           // is a normal wait, not a failure.
+          if (assetResponse.status === 422) {
+            throw new Error("This video could not be uploaded. Please try again.");
+          }
           if (assetResponse.status !== 202) {
             if (!assetResponse.ok) {
               throw new Error(

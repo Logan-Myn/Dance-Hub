@@ -40,7 +40,11 @@ export async function createMuxUploadUrl() {
 
 export type MuxAssetLookup =
   | { state: 'pending' }
+  | { state: 'failed'; reason: string }
   | { state: 'found'; id: string; playbackId: string; status: string };
+
+// Upload states from which no asset will ever be created.
+const FAILED_UPLOAD_STATUSES = new Set(['errored', 'cancelled', 'timed_out']);
 
 /**
  * Look up the asset behind a direct upload.
@@ -51,6 +55,9 @@ export type MuxAssetLookup =
  */
 export async function getMuxAsset(uploadId: string): Promise<MuxAssetLookup> {
   const upload = await Video.uploads.retrieve(uploadId);
+  if (FAILED_UPLOAD_STATUSES.has(upload.status)) {
+    return { state: 'failed', reason: upload.status };
+  }
   if (!upload.asset_id) {
     return { state: 'pending' };
   }
@@ -58,6 +65,9 @@ export async function getMuxAsset(uploadId: string): Promise<MuxAssetLookup> {
   const asset = await Video.assets.retrieve(upload.asset_id);
   const playbackId = asset.playback_ids?.[0]?.id;
   if (!playbackId) {
+    if (asset.status === 'errored') {
+      return { state: 'failed', reason: 'asset_errored' };
+    }
     return { state: 'pending' };
   }
 
@@ -70,7 +80,7 @@ export async function getMuxAsset(uploadId: string): Promise<MuxAssetLookup> {
 }
 
 /**
- * Create a Mux asset from a single URL (e.g., Daily.co recording download).
+ * Create a Mux asset from a single URL.
  */
 export async function createAssetFromUrl(url: string, passthrough?: string) {
   const tokenId = process.env.MUX_TOKEN_ID;

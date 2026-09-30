@@ -20,6 +20,12 @@ export async function GET(req: Request, props: { params: Promise<{ assetId: stri
       return NextResponse.json({ state: 'pending' }, { status: 202 });
     }
 
+    // 422: Mux gave up on this upload, so no asset will ever appear. Tells the
+    // uploader to stop waiting now rather than at its deadline.
+    if (asset.state === 'failed') {
+      return NextResponse.json({ state: 'failed', reason: asset.reason }, { status: 422 });
+    }
+
     return NextResponse.json({
       id: asset.id,
       playbackId: asset.playbackId,

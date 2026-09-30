@@ -141,6 +141,27 @@ test('does not attach an asset that Mux failed to encode', async () => {
   expect(onUploadComplete).not.toHaveBeenCalled();
 });
 
+test('stops waiting as soon as Mux reports the upload failed', async () => {
+  (global.fetch as jest.Mock)
+    .mockResolvedValueOnce(uploadUrlResponse)
+    .mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({ state: 'failed', reason: 'timed_out' }),
+    });
+
+  const { onUploadComplete, onUploadError, input, file } = renderUpload();
+  fireEvent.change(input, { target: { files: [file] } });
+
+  await waitFor(() => expect(onUploadError).toHaveBeenCalled());
+  expect(onUploadComplete).not.toHaveBeenCalled();
+  // One poll is enough: a failed upload is final, not something to retry.
+  const assetPolls = (global.fetch as jest.Mock).mock.calls.filter(([url]) =>
+    String(url).startsWith('/api/mux/assets/')
+  );
+  expect(assetPolls).toHaveLength(1);
+});
+
 test('surfaces a genuine failure through onUploadError', async () => {
   (global.fetch as jest.Mock)
     .mockResolvedValueOnce(uploadUrlResponse)
