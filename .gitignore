@@ -69,3 +69,9 @@ Sidebar_exemple.tsx
 homepage_design.tsx
 DanceHub.md
 .superpowers/
+
+# Local working files (not part of the app)
+.agents/
+design/
+graphify-out/
+.orca/
