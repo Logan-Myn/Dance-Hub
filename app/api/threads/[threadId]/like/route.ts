@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
+import { canViewCommunity } from '@/lib/community-auth';
 
 interface LikeResult {
   likes: string[];
@@ -17,6 +18,24 @@ export async function POST(_request: Request, props: { params: Promise<{ threadI
 
     const userId = session.user.id;
     const { threadId } = params;
+
+    const thread = await queryOne<{ community_id: string; community_created_by: string }>`
+      SELECT t.community_id, c.created_by AS community_created_by
+      FROM threads t
+      JOIN communities c ON c.id = t.community_id
+      WHERE t.id = ${threadId}
+    `;
+    if (!thread) {
+      return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
+    }
+    const allowed = await canViewCommunity(
+      userId,
+      { id: thread.community_id, created_by: thread.community_created_by },
+      { allowPreRegistered: true }
+    );
+    if (!allowed) {
+      return NextResponse.json({ error: 'Members only' }, { status: 403 });
+    }
 
     const result = await queryOne<LikeResult>`
       UPDATE threads

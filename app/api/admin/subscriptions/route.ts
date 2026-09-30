@@ -2,13 +2,16 @@ import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { query } from '@/lib/db';
 import { Stripe } from 'stripe';
+import { requirePlatformAdmin } from '@/lib/community-auth';
 
 interface CommunityStripeAccount {
   stripe_account_id: string | null;
 }
 
 export async function GET() {
-  // Add debug logging
+  const guard = await requirePlatformAdmin();
+  if (!guard.ok) return guard.response;
+
   if (!process.env.STRIPE_SECRET_KEY) {
     console.error('STRIPE_SECRET_KEY is not defined in environment');
     return NextResponse.json(

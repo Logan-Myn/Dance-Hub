@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { queryOne, sql } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
+import { canViewCommunity } from '@/lib/community-auth';
 
 interface Profile {
   id: string;
@@ -9,8 +10,10 @@ interface Profile {
   avatar_url: string | null;
 }
 
-interface Comment {
+interface ParentComment {
   id: string;
+  community_id: string;
+  community_created_by: string;
 }
 
 export async function POST(
@@ -32,14 +35,27 @@ export async function POST(
       return NextResponse.json({ error: 'Content is required' }, { status: 400 });
     }
 
-    const parentComment = await queryOne<Comment>`
-      SELECT id
-      FROM comments
-      WHERE id = ${commentId}
+    // The parent comment must belong to the thread in the URL, so a reply
+    // cannot be attached to another community's thread.
+    const parentComment = await queryOne<ParentComment>`
+      SELECT cm.id, t.community_id, c.created_by AS community_created_by
+      FROM comments cm
+      JOIN threads t ON t.id = cm.thread_id
+      JOIN communities c ON c.id = t.community_id
+      WHERE cm.id = ${commentId} AND cm.thread_id = ${threadId}
     `;
 
     if (!parentComment) {
       return NextResponse.json({ error: 'Parent comment not found' }, { status: 404 });
+    }
+
+    const allowed = await canViewCommunity(
+      userId,
+      { id: parentComment.community_id, created_by: parentComment.community_created_by },
+      { allowPreRegistered: true }
+    );
+    if (!allowed) {
+      return NextResponse.json({ error: 'Only community members can reply here' }, { status: 403 });
     }
 
     const userData = await queryOne<Profile>`

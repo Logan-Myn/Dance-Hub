@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
+import { canViewCommunity } from '@/lib/community-auth';
 
 interface Community {
   created_by: string;
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
     }
 
     const userId = session.user.id;
-    const { title, content, communityId, categoryId, categoryName, pinned } = await request.json();
+    const { title, content, communityId, categoryId, pinned } = await request.json();
 
     if (!title || !content || !communityId || !categoryId) {
       return NextResponse.json(
@@ -56,6 +57,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'Community not found' },
         { status: 404 }
+      );
+    }
+
+    if (!(await canViewCommunity(userId, { id: communityId, created_by: community.created_by }, { allowPreRegistered: true }))) {
+      return NextResponse.json(
+        { error: 'Only community members can post here' },
+        { status: 403 }
       );
     }
 
@@ -82,6 +90,8 @@ export async function POST(request: Request) {
 
     const authorName = profile?.display_name || profile?.full_name || 'Anonymous';
     const authorImage = profile?.avatar_url || null;
+    // Take the category name from the stored category, not the request body.
+    const categoryName: string | null = typeof category.name === 'string' ? category.name : null;
 
     const thread = await queryOne<Thread>`
       INSERT INTO threads (

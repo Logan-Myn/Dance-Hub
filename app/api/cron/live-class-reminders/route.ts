@@ -75,8 +75,14 @@ async function endStaleLiveClasses(): Promise<number> {
 }
 
 export async function GET(request: NextRequest) {
+  // Fail closed: without a configured secret, "Bearer undefined" would pass.
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    console.error('CRON_SECRET is not set; refusing to run cron job');
+    return new Response('Cron is not configured', { status: 500 });
+  }
   const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return new Response('Unauthorized', { status: 401 });
   }
 

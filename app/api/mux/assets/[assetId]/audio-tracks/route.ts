@@ -17,6 +17,17 @@ interface AudioTrackRow {
 
 const DOWNLOAD_URL_TTL_SECONDS = 60 * 60 * 24; // 24h: comfortably longer than Mux processing
 
+// Storage keys for audio tracks are minted by buildAudioTrackKey in lib/mux.ts as
+// `audio-tracks/<assetId>/<uuid>.<ext>`. Only keys of exactly that shape, under
+// this asset's prefix, may be signed or deleted, so a caller cannot point the
+// track at (or later delete) any other file in storage.
+function isAudioTrackKeyForAsset(key: string, assetId: string): boolean {
+  if (!/^[A-Za-z0-9]+$/.test(assetId)) return false;
+  const prefix = `audio-tracks/${assetId}/`;
+  if (!key.startsWith(prefix)) return false;
+  return /^[0-9a-f-]{36}\.[a-z0-9]+$/.test(key.slice(prefix.length));
+}
+
 export async function POST(request: Request, props: { params: Promise<{ assetId: string }> }) {
   const { assetId } = await props.params;
   try {
@@ -36,6 +47,10 @@ export async function POST(request: Request, props: { params: Promise<{ assetId:
         { error: 'communityId, languageCode, name and b2Key are required' },
         { status: 400 }
       );
+    }
+
+    if (typeof b2Key !== 'string' || !isAudioTrackKeyForAsset(b2Key, assetId)) {
+      return NextResponse.json({ error: 'Invalid audio file reference.' }, { status: 400 });
     }
 
     if (!(await userCanManageCommunity(session.user.id, communityId))) {

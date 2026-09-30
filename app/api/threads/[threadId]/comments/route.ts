@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne, sql } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
+import { canViewCommunity } from '@/lib/community-auth';
 
 interface Profile {
   id: string;
@@ -11,6 +12,25 @@ interface Profile {
 
 interface Thread {
   id: string;
+  community_id: string;
+  community_created_by: string;
+}
+
+function loadThread(threadId: string) {
+  return queryOne<Thread>`
+    SELECT t.id, t.community_id, c.created_by AS community_created_by
+    FROM threads t
+    JOIN communities c ON c.id = t.community_id
+    WHERE t.id = ${threadId}
+  `;
+}
+
+function canSeeThread(userId: string, thread: Thread) {
+  return canViewCommunity(
+    userId,
+    { id: thread.community_id, created_by: thread.community_created_by },
+    { allowPreRegistered: true }
+  );
 }
 
 interface CommentRow {
@@ -31,7 +51,20 @@ interface CommentRow {
 export async function GET(_request: Request, props: { params: Promise<{ threadId: string }> }) {
   const params = await props.params;
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { threadId } = params;
+
+    const thread = await loadThread(threadId);
+    if (!thread) {
+      return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
+    }
+    if (!(await canSeeThread(session.user.id, thread))) {
+      return NextResponse.json({ error: 'Members only' }, { status: 403 });
+    }
 
     const comments = await query<CommentRow>`
       SELECT
@@ -81,14 +114,13 @@ export async function POST(request: Request, props: { params: Promise<{ threadId
       return NextResponse.json({ error: 'Content is required' }, { status: 400 });
     }
 
-    const thread = await queryOne<Thread>`
-      SELECT id
-      FROM threads
-      WHERE id = ${threadId}
-    `;
+    const thread = await loadThread(threadId);
 
     if (!thread) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
+    }
+    if (!(await canSeeThread(userId, thread))) {
+      return NextResponse.json({ error: 'Only community members can comment here' }, { status: 403 });
     }
 
     const userData = await queryOne<Profile>`

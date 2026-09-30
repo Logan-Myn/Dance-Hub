@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { requireSession } from "@/lib/community-auth";
+import { getUserIsAdmin } from "@/lib/community-data";
 
 // Disable caching for this route
 export const dynamic = 'force-dynamic';
@@ -12,18 +14,12 @@ interface CommunityWithMemberCount {
   slug: string;
   description: string | null;
   image_url: string | null;
+  image_focal_x: number | null;
+  image_focal_y: number | null;
+  image_zoom: string | number | null;
   created_by: string;
-  price: number | null;
-  currency: string | null;
-  membership_enabled: boolean;
-  membership_price: number | null;
-  stripe_account_id: string | null;
-  stripe_price_id: string | null;
-  stripe_onboarding_type: string | null;
   status: string;
   opening_date: string | null;
-  thread_categories: unknown;
-  custom_links: unknown;
   members_count: number;
 }
 
@@ -31,8 +27,16 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
+  const guard = await requireSession();
+  if (!guard.ok) return guard.response;
+
   try {
     const { userId } = await params;
+
+    // Only the user themself (or a platform admin) may list their memberships.
+    if (userId !== guard.session.user.id && !(await getUserIsAdmin(guard.session.user.id))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     // Get community IDs the user is an active member of
     const memberRows = await sql`
@@ -47,7 +51,9 @@ export async function GET(
     if (communityIds.length > 0) {
       communities = await sql`
         SELECT
-          c.*,
+          c.id, c.created_at, c.name, c.slug, c.description, c.image_url,
+          c.image_focal_x, c.image_focal_y, c.image_zoom, c.created_by,
+          c.status, c.opening_date,
           COALESCE((SELECT COUNT(*) FROM community_members WHERE community_id = c.id AND role != 'admin'), 0)::int as members_count
         FROM communities c
         WHERE c.id = ANY(${communityIds})
@@ -55,12 +61,7 @@ export async function GET(
       ` as CommunityWithMemberCount[];
     }
 
-    const response = NextResponse.json(
-      communities.map((community) => ({
-        ...community,
-        members_count: community.members_count,
-      }))
-    );
+    const response = NextResponse.json(communities);
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     return response;
   } catch (error) {

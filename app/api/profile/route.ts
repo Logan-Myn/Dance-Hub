@@ -1,32 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-session';
 import { sql } from '@/lib/db';
+import { getUserIsAdmin } from '@/lib/community-data';
 
-// GET: Fetch profile (current user or by userId query param)
+// GET: Fetch profile (current user or by userId query param).
+// Signed-in users only. Another user's profile is reduced to public fields
+// unless the caller is a platform admin.
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const requestedUserId = searchParams.get('userId');
-
-    // If userId is provided, fetch that specific profile (userId is Better Auth user ID)
-    if (requestedUserId) {
-      const profiles = await sql`
-        SELECT id, full_name, display_name, avatar_url, email, is_admin, auth_user_id, timezone
-        FROM profiles
-        WHERE auth_user_id = ${requestedUserId}
-      `;
-
-      if (profiles.length === 0) {
-        return NextResponse.json(
-          { error: 'Profile not found' },
-          { status: 404 }
-        );
-      }
-
-      return NextResponse.json(profiles[0]);
-    }
-
-    // Otherwise, fetch current user's profile (requires auth)
     const session = await getSession();
     if (!session) {
       return NextResponse.json(
@@ -35,10 +16,13 @@ export async function GET(request: Request) {
       );
     }
 
+    const { searchParams } = new URL(request.url);
+    const targetUserId = searchParams.get('userId') || session.user.id;
+
     const profiles = await sql`
       SELECT id, full_name, display_name, avatar_url, email, is_admin, auth_user_id, timezone
       FROM profiles
-      WHERE auth_user_id = ${session.user.id}
+      WHERE auth_user_id = ${targetUserId}
     `;
 
     if (profiles.length === 0) {
@@ -48,7 +32,18 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json(profiles[0]);
+    const profile = profiles[0];
+    if (targetUserId !== session.user.id && !(await getUserIsAdmin(session.user.id))) {
+      return NextResponse.json({
+        id: profile.id,
+        full_name: profile.full_name,
+        display_name: profile.display_name,
+        avatar_url: profile.avatar_url,
+        auth_user_id: profile.auth_user_id,
+      });
+    }
+
+    return NextResponse.json(profile);
   } catch (error) {
     console.error('Error fetching profile:', error);
     return NextResponse.json(

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
+import { canViewCommunity } from '@/lib/community-auth';
 
 interface LikeResult {
   likes: string[];
@@ -21,6 +22,26 @@ export async function POST(
 
     const userId = session.user.id;
     const { commentId } = params;
+
+    // Resolve the community through the comment's own thread.
+    const owner = await queryOne<{ community_id: string; community_created_by: string }>`
+      SELECT t.community_id, c.created_by AS community_created_by
+      FROM comments cm
+      JOIN threads t ON t.id = cm.thread_id
+      JOIN communities c ON c.id = t.community_id
+      WHERE cm.id = ${commentId}
+    `;
+    if (!owner) {
+      return NextResponse.json({ error: 'Comment not found' }, { status: 404 });
+    }
+    const allowed = await canViewCommunity(
+      userId,
+      { id: owner.community_id, created_by: owner.community_created_by },
+      { allowPreRegistered: true }
+    );
+    if (!allowed) {
+      return NextResponse.json({ error: 'Members only' }, { status: 403 });
+    }
 
     const result = await queryOne<LikeResult>`
       UPDATE comments
