@@ -9,6 +9,29 @@ NGINX_CONF="/etc/nginx/sites-available/$DOMAIN"
 
 cd "$PROJECT_DIR"
 
+# Run the Next.js server directly under PM2. Starting it through `npm start`
+# or `npx next` left the real server orphaned when the wrapper exited: PM2
+# then crash-looped on EADDRINUSE while the orphan kept serving with a dead
+# stdout/stderr, and froze at 100% CPU on its first logged error.
+pm2_start_next() {
+  pm2 start "$1/node_modules/next/dist/bin/next" --name "$APP_NAME" --cwd "$1" \
+    --interpreter node -- start -p "$APP_PORT"
+}
+
+# Fail loudly if something other than PM2's own process holds the port.
+check_port_owner() {
+  sleep 5
+  local holder managed
+  holder=$(ss -ltnp 2>/dev/null | grep ":$APP_PORT " | grep -oE "pid=[0-9]+" | head -1 | cut -d= -f2 || true)
+  managed=$(pm2 pid "$APP_NAME" 2>/dev/null || true)
+  if [[ -z "$holder" || "$holder" != "$managed" ]]; then
+    echo "!! Port $APP_PORT is held by pid '${holder:-none}', PM2 runs '${managed:-none}'."
+    echo "!! An orphaned server may still be serving old code. Kill it, then rerun."
+    exit 1
+  fi
+  echo "==> Port $APP_PORT served by PM2 pid $managed."
+}
+
 cmd_full() {
   echo "==> Installing dependencies..."
   npm install
@@ -23,8 +46,9 @@ cmd_full() {
 
   echo "==> Starting app with PM2..."
   pm2 delete "$APP_NAME" 2>/dev/null || true
-  pm2 start npm --name "$APP_NAME" -- start -- -p $APP_PORT
+  pm2_start_next "$PROJECT_DIR"
   pm2 save
+  check_port_owner
 
   echo ""
   echo "Done! App running on port $APP_PORT behind Nginx."
@@ -49,8 +73,9 @@ cmd_code() {
   bun run build
 
   echo "==> Reloading app..."
-  pm2 restart "$APP_NAME" 2>/dev/null || pm2 start npm --name "$APP_NAME" -- start -- -p $APP_PORT
+  pm2 restart "$APP_NAME" 2>/dev/null || pm2_start_next "$PROJECT_DIR"
   pm2 save
+  check_port_owner
 
   echo ""
   echo "Done! Redeployed."
