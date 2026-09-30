@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { queryOne, sql } from '@/lib/db';
 import { stripe } from "@/lib/stripe";
+import { requireSession } from "@/lib/community-auth";
 
 interface Community {
   id: string;
@@ -14,10 +15,13 @@ interface Member {
   stripe_subscription_id: string | null;
 }
 
-export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+export async function POST(_request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
   try {
-    const { userId } = await request.json();
+    const guard = await requireSession();
+    if (!guard.ok) return guard.response;
+    // Only the signed-in user can reactivate their own membership.
+    const userId = guard.session.user.id;
 
     // Get community with stripe account id
     const community = await queryOne<Community>`
@@ -50,7 +54,7 @@ export async function POST(request: Request, props: { params: Promise<{ communit
 
     if (member.stripe_subscription_id && community.stripe_account_id) {
       // Reactivate Stripe subscription by removing the cancellation
-      await stripe.subscriptions.update(
+      const subscription = await stripe.subscriptions.update(
         member.stripe_subscription_id,
         {
           cancel_at_period_end: false,
@@ -59,6 +63,20 @@ export async function POST(request: Request, props: { params: Promise<{ communit
           stripeAccount: community.stripe_account_id,
         }
       );
+
+      // Only grant access back when the subscription is actually in good
+      // standing. A past_due / unpaid / incomplete subscription must not flip
+      // the member to active; the webhook keeps subscription_status in sync.
+      if (subscription.status !== 'active' && subscription.status !== 'trialing') {
+        console.warn('Reactivate refused, subscription not in good standing:', {
+          subscriptionId: member.stripe_subscription_id,
+          status: subscription.status,
+        });
+        return NextResponse.json(
+          { error: 'Your membership payment is not up to date. Please update your payment method and try again.' },
+          { status: 409 }
+        );
+      }
 
       // Update member status back to active
       await sql`

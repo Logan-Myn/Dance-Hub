@@ -1,5 +1,9 @@
 import { POST } from '@/app/api/community/[communitySlug]/join-paid/route';
 
+// Identity comes from the session; any userId/email in the body is ignored.
+const mockGetSession = jest.fn();
+jest.mock('@/lib/auth-session', () => ({ getSession: () => mockGetSession() }));
+
 const mockCustomersCreate = jest.fn();
 const mockSubscriptionsCreate = jest.fn();
 const mockSubscriptionsCancel = jest.fn();
@@ -24,6 +28,8 @@ const community = {
 beforeEach(() => {
   [mockCustomersCreate, mockSubscriptionsCreate, mockSubscriptionsCancel, mockSetupIntentsCreate, mockSql, mockQueryOne]
     .forEach((m) => m.mockReset());
+  mockGetSession.mockReset();
+  mockGetSession.mockResolvedValue({ user: { id: 'u1', email: 'u1@x.com' } });
 });
 
 function req(body: object) {

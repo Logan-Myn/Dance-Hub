@@ -99,7 +99,7 @@ export function useJoinCommunity(
       const response = await fetch(`/api/community/${community.slug}/join-paid`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, email: user.email, plan }),
+        body: JSON.stringify({ plan }),
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -138,7 +138,6 @@ export function useJoinCommunity(
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id, email: user.email }),
           },
         );
         if (!response.ok) {
@@ -180,7 +179,6 @@ export function useJoinCommunity(
       const response = await fetch(`/api/community/${community.slug}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));

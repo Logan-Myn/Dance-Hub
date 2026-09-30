@@ -40,7 +40,6 @@ function PaymentForm({ communitySlug, price, mode, plan, dueTodayCents, onSucces
           const response = await fetch(`/api/community/${communitySlug}/check-subscription`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: user.id }),
           });
           const data = await response.json();
 
@@ -278,7 +277,7 @@ export function PaymentModalBody({
       const jRes = await fetch(`/api/community/${communitySlug}/join-paid`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, email: user.email, promotionCodeId: v.promotionCodeId, plan }),
+        body: JSON.stringify({ promotionCodeId: v.promotionCodeId, plan }),
       });
       if (!jRes.ok) {
         toast.error('Could not apply the code. Please try again.');

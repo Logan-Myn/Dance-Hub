@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
+import { requireSession } from "@/lib/community-auth";
 
 interface Community {
   id: string;
@@ -25,7 +26,13 @@ interface ExistingMember {
 export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
   try {
-    const { userId, email, promotionCodeId, plan } = await request.json();
+    const guard = await requireSession();
+    if (!guard.ok) return guard.response;
+    // The member and the Stripe customer email always come from the session,
+    // never from the request body.
+    const userId = guard.session.user.id;
+    const email = guard.session.user.email;
+    const { promotionCodeId, plan } = await request.json();
 
     // Get community with its membership price and stripe account
     const community = await queryOne<Community>`

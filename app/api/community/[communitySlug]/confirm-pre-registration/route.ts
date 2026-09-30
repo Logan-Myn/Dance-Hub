@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql, queryOne } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
+import { requireSession } from "@/lib/community-auth";
 import React from "react";
 import { getEmailService } from "@/lib/resend/email-service";
 import { PreRegistrationConfirmationEmail } from "@/lib/resend/templates/community/pre-registration-confirmation";
@@ -28,7 +29,11 @@ interface UserProfile {
 export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
   try {
-    const { userId, setupIntentId } = await request.json();
+    const guard = await requireSession();
+    if (!guard.ok) return guard.response;
+    // Identity comes from the session, never the request body.
+    const userId = guard.session.user.id;
+    const { setupIntentId } = await request.json();
 
     // Get community details
     const community = await queryOne<Community>`
@@ -51,6 +56,20 @@ export async function POST(request: Request, props: { params: Promise<{ communit
         stripeAccount: community.stripe_account_id!,
       }
     );
+
+    // The SetupIntent must be the one join-pre-registration created for this
+    // user and this community (it writes user_id and community_id into the
+    // metadata). Otherwise a caller could pass someone else's SetupIntent id
+    // and pre-register with their saved card.
+    if (
+      setupIntent.metadata?.user_id !== userId ||
+      setupIntent.metadata?.community_id !== community.id
+    ) {
+      return NextResponse.json(
+        { error: "This payment setup does not match your pre-registration" },
+        { status: 403 }
+      );
+    }
 
     if (setupIntent.status !== 'succeeded') {
       return NextResponse.json(

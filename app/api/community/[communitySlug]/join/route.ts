@@ -1,35 +1,57 @@
 import { NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
+import { requireSession } from "@/lib/community-auth";
 
 interface Community {
   id: string;
+  status: string | null;
+  membership_enabled: boolean | null;
+  membership_price: number | string | null;
 }
 
 interface Member {
   id: string;
 }
 
-export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+// Free join only. Paid communities go through join-paid (Stripe subscription)
+// and pre-registration communities through join-pre-registration, so this
+// route refuses both. The paid test mirrors the client (useJoinCommunity and
+// FeedClient): membership_enabled AND membership_price > 0.
+export async function POST(_request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
   try {
-    const body = await request.json();
-    console.log('Request body:', body);
-    const { userId } = body;
-    console.log('Extracted userId:', userId);
+    const guard = await requireSession();
+    if (!guard.ok) return guard.response;
+    // Never trust a userId from the request body.
+    const userId = guard.session.user.id;
 
     // Get community
     const community = await queryOne<Community>`
-      SELECT id
+      SELECT id, status, membership_enabled, membership_price
       FROM communities
       WHERE slug = ${params.communitySlug}
     `;
-
-    console.log('Community data:', community);
 
     if (!community) {
       return NextResponse.json(
         { error: "Community not found" },
         { status: 404 }
+      );
+    }
+
+    if (community.status === 'pre_registration') {
+      return NextResponse.json(
+        { error: "This community is open for pre-registration only" },
+        { status: 400 }
+      );
+    }
+
+    // numeric columns can arrive as strings ("20.00"), so coerce.
+    const price = Number(community.membership_price ?? 0);
+    if (community.membership_enabled && price > 0) {
+      return NextResponse.json(
+        { error: "This community requires a paid membership" },
+        { status: 403 }
       );
     }
 

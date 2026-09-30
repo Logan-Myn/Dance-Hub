@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { queryOne, sql } from '@/lib/db';
 import { stripe } from "@/lib/stripe";
+import { requireSession } from "@/lib/community-auth";
 
 interface Community {
   id: string;
@@ -56,10 +57,13 @@ async function reconcileIfTerminal(
   return true;
 }
 
-export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+export async function POST(_request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
   try {
-    const { userId } = await request.json();
+    const guard = await requireSession();
+    if (!guard.ok) return guard.response;
+    // Only the signed-in user can leave; never trust a userId from the body.
+    const userId = guard.session.user.id;
 
     // Get community with stripe account id
     const community = await queryOne<Community>`

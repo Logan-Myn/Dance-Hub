@@ -1,5 +1,9 @@
 import { POST } from '@/app/api/community/[communitySlug]/join-paid/route';
 
+// Identity comes from the session; any userId/email in the body is ignored.
+const mockGetSession = jest.fn();
+jest.mock('@/lib/auth-session', () => ({ getSession: () => mockGetSession() }));
+
 const mockCustomersCreate = jest.fn();
 const mockSubscriptionsCreate = jest.fn();
 const mockSubscriptionsCancel = jest.fn();
@@ -25,6 +29,8 @@ const community = {
 beforeEach(() => {
   [mockCustomersCreate, mockSubscriptionsCreate, mockSubscriptionsCancel, mockSetupIntentsCreate, mockSql, mockQueryOne]
     .forEach((m) => m.mockReset());
+  mockGetSession.mockReset();
+  mockGetSession.mockResolvedValue({ user: { id: 'u1', email: 'u1@x.com' } });
 });
 
 function req(body: object) {
@@ -71,4 +77,39 @@ it('rejects a yearly plan when the community has no yearly price configured', as
 
   expect(res.status).toBe(400);
   expect(mockSubscriptionsCreate).not.toHaveBeenCalled();
+});
+
+it('returns 401 and creates nothing when signed out', async () => {
+  mockGetSession.mockResolvedValueOnce(null);
+
+  const res = await POST(req({ userId: 'u1', email: 'u1@x.com' }), { params });
+
+  expect(res.status).toBe(401);
+  expect(mockQueryOne).not.toHaveBeenCalled();
+  expect(mockCustomersCreate).not.toHaveBeenCalled();
+  expect(mockSubscriptionsCreate).not.toHaveBeenCalled();
+});
+
+it('uses the session user and email, ignoring userId/email in the body', async () => {
+  mockQueryOne.mockResolvedValueOnce(community).mockResolvedValueOnce(null);
+  stubSubscriptionOk();
+
+  const res = await POST(req({ userId: 'victim', email: 'victim@x.com' }), { params });
+
+  expect(res.status).toBe(200);
+  expect(mockCustomersCreate).toHaveBeenCalledWith(
+    expect.objectContaining({ email: 'u1@x.com', metadata: expect.objectContaining({ user_id: 'u1' }) }),
+    { stripeAccount: 'acct_1' },
+  );
+  expect(mockSubscriptionsCreate).toHaveBeenCalledWith(
+    expect.objectContaining({ metadata: expect.objectContaining({ user_id: 'u1' }) }),
+    { stripeAccount: 'acct_1' },
+  );
+  // The existing-member lookup and the insert are keyed on the session user.
+  const memberLookupValues = mockQueryOne.mock.calls[1].slice(1);
+  expect(memberLookupValues).toContain('u1');
+  expect(memberLookupValues).not.toContain('victim');
+  const insertValues = mockSql.mock.calls.at(-1)!.slice(1);
+  expect(insertValues).toContain('u1');
+  expect(insertValues).not.toContain('victim');
 });

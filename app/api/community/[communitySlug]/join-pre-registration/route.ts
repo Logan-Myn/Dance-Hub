@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql, queryOne } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
+import { requireSession } from "@/lib/community-auth";
 
 interface CommunityDetails {
   id: string;
@@ -18,10 +19,16 @@ interface ExistingMember {
   id: string;
 }
 
-export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
+export async function POST(_request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
   try {
-    const { userId, email } = await request.json();
+    const guard = await requireSession();
+    if (!guard.ok) return guard.response;
+    // Identity comes from the session, never the request body. The user_id
+    // written to the SetupIntent metadata below is what
+    // confirm-pre-registration checks against the session.
+    const userId = guard.session.user.id;
+    const email = guard.session.user.email;
 
     // Get community details
     const community = await queryOne<CommunityDetails>`

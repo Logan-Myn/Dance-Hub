@@ -321,7 +321,7 @@ export default function FeedClient({
       const response = await fetch(`/api/community/${communitySlug}/join-paid`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: currentUser.id, email: currentUser.email, plan }),
+        body: JSON.stringify({ plan }),
       });
       if (!response.ok) throw new Error("Failed to create payment");
       const { clientSecret, requiresSetup, stripeAccountId } = await response.json();
@@ -353,10 +353,6 @@ export default function FeedClient({
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              userId: currentUser.id,
-              email: currentUser.email,
-            }),
           }
         );
 
@@ -388,7 +384,6 @@ export default function FeedClient({
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ userId: currentUser.id }),
         });
 
         if (!response.ok) {
@@ -419,7 +414,6 @@ export default function FeedClient({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ userId: currentUser.id }),
       });
 
       if (!response.ok) {
@@ -464,7 +458,6 @@ export default function FeedClient({
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ userId: currentUser.id }),
         }
       );
 
@@ -610,7 +603,6 @@ export default function FeedClient({
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ userId: currentUser.id }),
       });
 
       if (!response.ok) {

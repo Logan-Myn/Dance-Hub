@@ -279,8 +279,8 @@ test.describe('API Endpoint Tests', () => {
       },
     });
 
-    // Should return an error (community not found or auth required)
-    expect([400, 404, 500]).toContain(response.status());
+    // Should return an error (auth required; the body userId is ignored)
+    expect([400, 401, 404, 500]).toContain(response.status());
   });
 
   test('join-pre-registration endpoint exists', async ({ request }) => {
@@ -291,7 +291,7 @@ test.describe('API Endpoint Tests', () => {
       },
     });
 
-    // Should return an error but endpoint should exist
-    expect([400, 404, 500]).toContain(response.status());
+    // Should return an error (auth required) but endpoint should exist
+    expect([400, 401, 404, 500]).toContain(response.status());
   });
 });
