@@ -1,6 +1,7 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getCommunityBySlug, getThreadById } from '@/lib/community-data';
 import { getSession } from '@/lib/auth-session';
+import { canViewCommunity } from '@/lib/community-auth';
 import ThreadPageClient from './ThreadPageClient';
 
 export const dynamic = 'force-dynamic';
@@ -15,11 +16,17 @@ export default async function ThreadRoutePage(
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) notFound();
 
+  // Members-only, same gate as the feed page: everyone else goes to /about.
+  const session = await getSession();
+  if (!session) redirect(`/${params.communitySlug}/about`);
+  if (!(await canViewCommunity(session.user.id, community, { allowPreRegistered: true }))) {
+    redirect(`/${params.communitySlug}/about`);
+  }
+
   const thread = await getThreadById(community.id, params.threadId);
   if (!thread) notFound();
 
-  const session = await getSession();
-  const isCreator = !!session && community.created_by === session.user.id;
+  const isCreator = community.created_by === session.user.id;
 
   return (
     <ThreadPageClient

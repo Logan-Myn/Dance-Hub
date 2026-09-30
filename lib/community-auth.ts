@@ -30,10 +30,20 @@ export async function assetBelongsToCommunity(assetId: string, communityId: stri
   `;
   if (lessonOwned) return true;
 
+  // Exact match on a saved video section. A substring match on the whole
+  // about_page text let any text containing the id pass (and % / _ in the
+  // id acted as wildcards).
   const aboutOwned = await queryOne<{ one: number }>`
     SELECT 1 AS one
-    FROM communities
-    WHERE id = ${communityId} AND about_page::text LIKE ${`%${assetId}%`}
+    FROM communities c,
+      jsonb_array_elements(
+        CASE WHEN jsonb_typeof(c.about_page -> 'sections') = 'array'
+          THEN c.about_page -> 'sections'
+          ELSE '[]'::jsonb
+        END
+      ) AS s
+    WHERE c.id = ${communityId}
+      AND s -> 'content' ->> 'videoAssetId' = ${assetId}
     LIMIT 1
   `;
   return Boolean(aboutOwned);
