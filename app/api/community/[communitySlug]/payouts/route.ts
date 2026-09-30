@@ -1,30 +1,18 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import { queryOne } from "@/lib/db";
-
-interface CommunityStripeAccount {
-  stripe_account_id: string | null;
-}
+import { requireCommunityManager } from "@/lib/community-auth";
 
 export async function GET(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
-  const params = await props.params;
+  const { communitySlug } = await props.params;
+  const guard = await requireCommunityManager(communitySlug);
+  if (!guard.ok) return guard.response;
+
+  const stripeAccountId = guard.community.stripe_account_id;
+
   try {
-    const { communitySlug } = params;
-
-    // Get community data to fetch stripe_account_id
-    const community = await queryOne<CommunityStripeAccount>`
-      SELECT stripe_account_id
-      FROM communities
-      WHERE slug = ${communitySlug}
-    `;
-
-    if (!community) {
-      return NextResponse.json({ error: "Community not found" }, { status: 404 });
-    }
-
-    if (!community.stripe_account_id) {
+    if (!stripeAccountId) {
       return NextResponse.json({
-        error: "Stripe account not connected",
+        error: "Payout account not connected",
         payouts: [],
         balance: null,
       }, { status: 400 });
@@ -32,7 +20,7 @@ export async function GET(request: Request, props: { params: Promise<{ community
 
     // Fetch upcoming payout (balance)
     const balance = await stripe.balance.retrieve({
-      stripeAccount: community.stripe_account_id,
+      stripeAccount: stripeAccountId,
     });
 
     // Fetch recent payouts
@@ -42,7 +30,7 @@ export async function GET(request: Request, props: { params: Promise<{ community
         expand: ['data.destination'],
       },
       {
-        stripeAccount: community.stripe_account_id,
+        stripeAccount: stripeAccountId,
       }
     );
 

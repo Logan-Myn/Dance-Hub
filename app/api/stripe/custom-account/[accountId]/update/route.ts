@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { sql } from '@/lib/db';
+import { requireStripeAccountManager } from '@/lib/community-auth';
 
 interface BusinessInfo {
   type: 'individual' | 'company';
@@ -52,9 +53,11 @@ interface BankAccountInfo {
 }
 
 export async function PUT(request: Request, props: { params: Promise<{ accountId: string }> }) {
-  const params = await props.params;
+  const { accountId } = await props.params;
+  const guard = await requireStripeAccountManager(accountId);
+  if (!guard.ok) return guard.response;
+
   try {
-    const { accountId } = params;
     const {
       step,
       businessInfo,
@@ -70,8 +73,6 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
       tosAcceptance?: { accepted: boolean; date: string; userAgent: string };
       currentStep?: number;
     };
-
-    console.log('Update endpoint received:', { step, businessInfo, personalInfo, bankAccount, tosAcceptance, currentStep });
 
     // Verify the account exists and belongs to a community
     const account = await stripe.accounts.retrieve(accountId);

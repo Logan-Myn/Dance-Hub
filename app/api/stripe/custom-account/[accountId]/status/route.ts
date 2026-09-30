@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { stripe, mapStripeRequirement, isStripeAccountFullyVerified } from '@/lib/stripe';
 import { queryOne } from '@/lib/db';
+import { requireStripeAccountManager } from '@/lib/community-auth';
 
 interface OnboardingProgress {
   current_step: number;
@@ -13,10 +14,11 @@ interface OnboardingProgress {
 }
 
 export async function GET(request: Request, props: { params: Promise<{ accountId: string }> }) {
-  const params = await props.params;
-  try {
-    const { accountId } = params;
+  const { accountId } = await props.params;
+  const guard = await requireStripeAccountManager(accountId);
+  if (!guard.ok) return guard.response;
 
+  try {
     // Get Stripe account information
     const account = await stripe.accounts.retrieve(accountId);
 

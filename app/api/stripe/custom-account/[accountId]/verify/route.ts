@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { stripe, STRIPE_REQUIREMENT_MESSAGES, isStripeAccountFullyVerified } from '@/lib/stripe';
 import { sql } from '@/lib/db';
+import { requireStripeAccountManager } from '@/lib/community-auth';
 
 export async function POST(request: Request, props: { params: Promise<{ accountId: string }> }) {
-  const params = await props.params;
-  try {
-    const { accountId } = params;
+  const { accountId } = await props.params;
+  const guard = await requireStripeAccountManager(accountId);
+  if (!guard.ok) return guard.response;
 
+  try {
     // Get current account status
     const account = await stripe.accounts.retrieve(accountId);
 

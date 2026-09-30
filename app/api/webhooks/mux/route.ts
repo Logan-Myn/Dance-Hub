@@ -2,19 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
 import crypto from "crypto";
 
-const MUX_WEBHOOK_SECRET = process.env.MUX_WEBHOOK_SECRET;
+// Reject signatures older (or further in the future) than this, so a captured
+// request cannot be replayed later. Matches the Mux SDK default tolerance.
+const SIGNATURE_TOLERANCE_SECONDS = 5 * 60;
 
-function verifySignature(payload: string, signature: string | null): boolean {
-  if (!MUX_WEBHOOK_SECRET || !signature) return false;
+function verifySignature(payload: string, signature: string | null, secret: string): boolean {
+  if (!signature) return false;
   // Mux signature format: "t=<timestamp>,v1=<hex>"
   const parts = signature.split(",");
   const timestamp = parts.find((p) => p.startsWith("t="))?.replace("t=", "");
   const v1Sig = parts.find((p) => p.startsWith("v1="))?.replace("v1=", "");
   if (!timestamp || !v1Sig) return false;
 
+  const timestampSeconds = Number(timestamp);
+  if (!Number.isFinite(timestampSeconds)) return false;
+  const ageSeconds = Math.abs(Date.now() / 1000 - timestampSeconds);
+  if (ageSeconds > SIGNATURE_TOLERANCE_SECONDS) return false;
+
   // Mux signs: "{timestamp}.{body}"
   const signedPayload = `${timestamp}.${payload}`;
-  const hmac = crypto.createHmac("sha256", MUX_WEBHOOK_SECRET);
+  const hmac = crypto.createHmac("sha256", secret);
   hmac.update(signedPayload);
   const expected = hmac.digest("hex");
   try {
@@ -43,11 +50,18 @@ interface Chapter {
 }
 
 export async function POST(request: NextRequest) {
+  // Fail closed: without a secret we cannot tell Mux apart from anyone else.
+  const secret = process.env.MUX_WEBHOOK_SECRET;
+  if (!secret) {
+    console.error("MUX_WEBHOOK_SECRET is not set; rejecting Mux webhook");
+    return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
+  }
+
   try {
     const rawBody = await request.text();
     const signature = request.headers.get("mux-signature");
 
-    if (MUX_WEBHOOK_SECRET && !verifySignature(rawBody, signature)) {
+    if (!verifySignature(rawBody, signature, secret)) {
       console.error("Mux webhook signature verification failed");
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }

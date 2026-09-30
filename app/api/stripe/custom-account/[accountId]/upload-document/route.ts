@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { queryOne, sql } from '@/lib/db';
+import { requireStripeAccountManager } from '@/lib/community-auth';
+
+// Only verification uploads belong on this route; other file purposes
+// (disputes, branding, etc.) must not be reachable from here.
+const ALLOWED_PURPOSES = ['identity_document', 'additional_verification'] as const;
+type AllowedPurpose = (typeof ALLOWED_PURPOSES)[number];
+
+function isAllowedPurpose(value: string): value is AllowedPurpose {
+  return (ALLOWED_PURPOSES as readonly string[]).includes(value);
+}
 
 const ALLOWED_FILE_TYPES = [
   'image/jpeg',
@@ -17,14 +27,23 @@ interface OnboardingProgress {
 }
 
 export async function POST(request: Request, props: { params: Promise<{ accountId: string }> }) {
-  const params = await props.params;
+  const { accountId } = await props.params;
+  const guard = await requireStripeAccountManager(accountId);
+  if (!guard.ok) return guard.response;
+
   try {
-    const { accountId } = params;
     const formData = await request.formData();
 
     const file = formData.get('file') as File;
     const documentType = formData.get('documentType') as string;
-    const purpose = formData.get('purpose') as string || 'identity_document';
+    const purpose = (formData.get('purpose') as string | null) || 'identity_document';
+
+    if (!isAllowedPurpose(purpose)) {
+      return NextResponse.json(
+        { error: 'Invalid document purpose' },
+        { status: 400 }
+      );
+    }
 
     if (!file) {
       return NextResponse.json(
@@ -85,7 +104,7 @@ export async function POST(request: Request, props: { params: Promise<{ accountI
         name: file.name,
         type: file.type,
       },
-      purpose: purpose as any, // Stripe file upload purpose
+      purpose,
     });
 
     // Map document types to Stripe account update parameters

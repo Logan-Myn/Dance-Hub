@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import Stripe from 'stripe';
+import { requireStripeAccountManager } from '@/lib/community-auth';
 
 // GET endpoint to fetch bank account details
 export async function GET(request: Request, props: { params: Promise<{ accountId: string }> }) {
-  const params = await props.params;
+  const { accountId } = await props.params;
+  const guard = await requireStripeAccountManager(accountId);
+  if (!guard.ok) return guard.response;
+
   try {
-    const { accountId } = params;
-    
     // Retrieve the external account (bank account) information
-    const account = await stripe.accounts.retrieve(accountId);
     const bankAccounts = await stripe.accounts.listExternalAccounts(
       accountId,
       { object: 'bank_account', limit: 1 }
@@ -39,6 +40,9 @@ export async function GET(request: Request, props: { params: Promise<{ accountId
 // PUT endpoint to create a login link for bank account management
 export async function PUT(request: Request, props: { params: Promise<{ accountId: string }> }) {
   const { accountId } = await props.params;
+  const guard = await requireStripeAccountManager(accountId);
+  if (!guard.ok) return guard.response;
+
   try {
     const account = await stripe.accounts.retrieve(accountId);
     
