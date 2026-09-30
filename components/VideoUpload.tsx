@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react";
 import { Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface VideoUploadProps {
@@ -146,7 +145,6 @@ export default function VideoUpload({
       onUploadComplete(asset.id, asset.playbackId);
       setIsUploading(false);
       setSelectedFile(null);
-      toast.success("Video uploaded. It may take a minute before it plays.");
     } catch (error) {
       console.error("Upload error:", error);
       setIsUploading(false);

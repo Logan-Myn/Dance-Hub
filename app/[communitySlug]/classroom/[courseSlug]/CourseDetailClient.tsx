@@ -153,7 +153,7 @@ function InlineLessonContent({
         playbackId: playbackId,
       });
       setIsChangingVideo(false);
-      toast.success("Video updated");
+      toast.success("Your video is processing. It will appear here when it's ready.");
     } catch (error) {
       toast.error("Failed to update video");
     }

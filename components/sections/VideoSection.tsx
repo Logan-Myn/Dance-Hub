@@ -198,7 +198,7 @@ export default function VideoSection({
         videoAssetId: asset.id,
       });
       setIsUploading(false);
-      toast.success('Video uploaded. It may take a minute before it plays.');
+      toast.success("Your video is processing. It will appear here when it's ready.");
     } catch (error) {
       console.error('Upload error:', error);
       setIsUploading(false);

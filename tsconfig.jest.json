@@ -4,7 +4,15 @@
     "jsx": "react-jsx",
     "module": "commonjs",
     "moduleResolution": "node",
-    "isolatedModules": false
+    "isolatedModules": false,
+    // "node" resolution can't follow mux-player-react's typesVersions "."
+    // mapping, so point at its types directly. Keep the base aliases, since
+    // "paths" here replaces the base config's.
+    "paths": {
+      "@/*": ["./*"],
+      "@/types/*": ["./types/*"],
+      "@mux/mux-player-react": ["./node_modules/@mux/mux-player-react/dist/types/index.d.ts"]
+    }
   },
   "include": ["__tests__/**/*", "**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "supabase/functions", ".next"]
