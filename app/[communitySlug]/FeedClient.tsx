@@ -41,6 +41,7 @@ import { useIsMobile } from "@/hooks/use-is-mobile";
 import { LocalDate } from "@/components/ui/local-date";
 import { formatDate } from "@/lib/format-date";
 import type { MembershipStatus } from "@/lib/community-data";
+import { communityPath } from "@/lib/safe-redirect";
 
 // Membership routes answer failures with { error } (a reason the member can
 // act on) and, when the failure changed the membership, the new membership.
@@ -212,7 +213,7 @@ export default function FeedClient({
     const thread = threads.find((t) => t.id === threadId);
     if (!thread) return;
     if (isMobile) {
-      router.replace(`/${communitySlug}/threads/${thread.id}`);
+      router.replace(communityPath(communitySlug, `/threads/${thread.id}`));
     } else {
       setSelectedThread(thread);
     }
@@ -449,7 +450,7 @@ export default function FeedClient({
         );
         toast.success("Successfully left the community");
         setShowLeaveDialog(false);
-        router.push(`/${communitySlug}/about`);
+        router.push(communityPath(communitySlug, '/about'));
         return;
       }
 
@@ -480,7 +481,7 @@ export default function FeedClient({
         if (body?.membership && !body.membership.isMember) {
           // It already ended, so there is nothing to rejoin: join from scratch.
           setIsMember(false);
-          router.push(`/${communitySlug}/about`);
+          router.push(communityPath(communitySlug, '/about'));
         }
         return;
       }
@@ -626,7 +627,7 @@ export default function FeedClient({
       }
 
       toast.success('Pre-registration cancelled successfully');
-      router.push(`/${communitySlug}/about`);
+      router.push(communityPath(communitySlug, '/about'));
     } catch (error) {
       console.error('Error cancelling pre-registration:', error);
       toast.error('Failed to cancel pre-registration');
@@ -672,7 +673,7 @@ export default function FeedClient({
 
   const handleThreadClick = (thread: Thread) => {
     if (isMobile) {
-      router.push(`/${communitySlug}/threads/${thread.id}`);
+      router.push(communityPath(communitySlug, `/threads/${thread.id}`));
     } else {
       setSelectedThread(thread);
     }
@@ -692,7 +693,7 @@ export default function FeedClient({
             membersCount={totalMembers}
             members={members}
             isCreator={isCreator}
-            onManageClick={() => router.push(`/${communitySlug}/admin`)}
+            onManageClick={() => router.push(communityPath(communitySlug, '/admin'))}
           />
 
           <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">

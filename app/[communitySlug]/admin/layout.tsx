@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth-session';
-import { loginPath } from '@/lib/safe-redirect';
+import { communityPath, loginPath } from '@/lib/safe-redirect';
 import { getCommunityBySlug, getUserIsAdmin } from '@/lib/community-data';
 
 export default async function AdminLayout(
@@ -13,16 +13,16 @@ export default async function AdminLayout(
   const { children } = props;
 
   const session = await getSession();
-  if (!session) redirect(loginPath(`/${params.communitySlug}/admin`));
+  if (!session) redirect(loginPath(communityPath(params.communitySlug, '/admin')));
 
   const community = await getCommunityBySlug(params.communitySlug);
-  if (!community) redirect(`/${params.communitySlug}`);
+  if (!community) redirect(communityPath(params.communitySlug));
 
   // The community owner OR a site-wide admin (profiles.is_admin) can manage.
   // Anything else bounces to the community feed.
   const isOwner = community.created_by === session.user.id;
   const canManage = isOwner || (await getUserIsAdmin(session.user.id));
-  if (!canManage) redirect(`/${params.communitySlug}`);
+  if (!canManage) redirect(communityPath(params.communitySlug));
 
   // Chrome around the admin pages is set by the child route groups
   // (with-nav) and (focused) — this layout only enforces access.

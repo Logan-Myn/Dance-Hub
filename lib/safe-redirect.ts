@@ -19,6 +19,18 @@ export function safeRedirectPath(value: unknown): string | null {
   return value;
 }
 
+/**
+ * Path inside a community: "/<slug><rest>", with the slug encoded as a single
+ * path segment. Next decodes route params, so a request for
+ * /%2F%2Fevil.com/admin hands code the slug "//evil.com"; interpolated raw it
+ * would give "///evil.com", which browsers follow to evil.com. Encoded, it
+ * stays a path on our own origin. Normal slugs ([a-z0-9-]) are unchanged.
+ * `rest` is a literal suffix such as "/about" or "/admin/emails/<id>".
+ */
+export function communityPath(slug: string, rest = ''): string {
+  return `/${encodeURIComponent(slug)}${rest}`;
+}
+
 /** Home page with the login modal open, returning to returnTo afterwards. */
 export function loginPath(returnTo?: string): string {
   const safe = safeRedirectPath(returnTo);

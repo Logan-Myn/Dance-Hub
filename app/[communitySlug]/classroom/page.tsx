@@ -7,6 +7,7 @@ import {
   getCoursesForCommunity,
 } from '@/lib/community-data';
 import ClassroomPageClient from './ClassroomPageClient';
+import { communityPath } from '@/lib/safe-redirect';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -21,7 +22,7 @@ export default async function ClassroomPage(
   if (!community) notFound();
 
   const session = await getSession();
-  if (!session) redirect(`/${params.communitySlug}/about`);
+  if (!session) redirect(communityPath(params.communitySlug, '/about'));
 
   const [isMember, isAdmin] = await Promise.all([
     getCommunityMembership(community.id, session.user.id),
@@ -32,7 +33,7 @@ export default async function ClassroomPage(
   // Same gating as the original client-side flow: anyone who's not a member,
   // creator, or site admin gets bounced to /about.
   if (!isMember && !isCreator && !isAdmin) {
-    redirect(`/${params.communitySlug}/about`);
+    redirect(communityPath(params.communitySlug, '/about'));
   }
 
   const initialCourses = await getCoursesForCommunity(community.id, isCreator || isAdmin);

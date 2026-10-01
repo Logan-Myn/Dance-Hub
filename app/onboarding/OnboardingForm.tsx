@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { UploadCloud, X } from 'lucide-react';
 import { uploadFileToStorage, STORAGE_FOLDERS } from '@/lib/storage-client';
 import { BannerCropper, type BannerCropValue } from '@/components/admin/BannerCropper';
+import { communityPath } from '@/lib/safe-redirect';
 
 export default function OnboardingForm() {
   const [communityName, setCommunityName] = useState('');
@@ -141,7 +142,7 @@ export default function OnboardingForm() {
       }
 
       // Redirect to the newly created community page
-      router.push(`/${data.slug}`);
+      router.push(communityPath(data.slug));
     } catch (error) {
       console.error('Error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to create community');

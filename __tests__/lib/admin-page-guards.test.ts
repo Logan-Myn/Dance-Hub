@@ -81,6 +81,15 @@ describe('requireCommunityManagerPage', () => {
     await expect(requireCommunityManagerPage('nope')).rejects.toThrow('REDIRECT /nope');
   });
 
+  it('keeps a crafted slug on our own origin (no open redirect)', async () => {
+    // /%2F%2Fevil.example/admin reaches the guard as the slug "//evil.example".
+    mockSession.mockResolvedValue({ user: { id: 'u1' } });
+    mockQueryOne.mockResolvedValueOnce(undefined);
+    await expect(requireCommunityManagerPage('//evil.example')).rejects.toThrow(
+      /^REDIRECT \/%2F%2Fevil\.example$/
+    );
+  });
+
   it('lets the owner through with the community', async () => {
     const session = { user: { id: 'owner' } };
     mockSession.mockResolvedValue(session);

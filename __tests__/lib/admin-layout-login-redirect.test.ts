@@ -19,6 +19,7 @@ jest.mock('next/navigation', () => ({
 import PlatformAdminLayout from '@/app/admin/layout';
 import CommunityAdminLayout from '@/app/[communitySlug]/admin/layout';
 import { getCommunityBySlug } from '@/lib/community-data';
+import { getSession } from '@/lib/auth-session';
 
 it('platform admin layout sends a signed-out visitor to log in, then back to /admin', async () => {
   await expect(PlatformAdminLayout({ children: null })).rejects.toThrow(
@@ -31,4 +32,13 @@ it('community admin layout sends a signed-out visitor to log in, then back to th
     CommunityAdminLayout({ children: null, params: Promise.resolve({ communitySlug: 'salsa' }) })
   ).rejects.toThrow('REDIRECT /?auth=login&redirect=%2Fsalsa%2Fadmin');
   expect(getCommunityBySlug).not.toHaveBeenCalled();
+});
+
+it('community admin layout keeps a crafted slug on our own origin', async () => {
+  // Next decodes params, so /%2F%2Fevil.example/admin arrives as "//evil.example".
+  (getSession as jest.Mock).mockResolvedValueOnce({ user: { id: 'u1' } });
+  (getCommunityBySlug as jest.Mock).mockResolvedValueOnce(null);
+  await expect(
+    CommunityAdminLayout({ children: null, params: Promise.resolve({ communitySlug: '//evil.example' }) })
+  ).rejects.toThrow(/^REDIRECT \/%2F%2Fevil\.example$/);
 });

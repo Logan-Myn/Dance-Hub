@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast';
 import { EmailEditor } from './EmailEditor';
 import { QuotaBadge } from './QuotaBadge';
 import { UpgradeDialog } from './UpgradeDialog';
+import { communityPath } from '@/lib/safe-redirect';
 
 interface Props {
   communityId: string;
@@ -74,7 +75,7 @@ export function EmailComposer(props: Props) {
       } else {
         toast.success(`Published to ${data.recipientCount} readers.`);
       }
-      router.push(`/${props.communitySlug}/admin/emails/${data.broadcastId}`);
+      router.push(communityPath(props.communitySlug, `/admin/emails/${data.broadcastId}`));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Send failed');
     } finally {

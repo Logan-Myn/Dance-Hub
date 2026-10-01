@@ -7,6 +7,7 @@ import {
   getCourseWithChapters,
 } from '@/lib/community-data';
 import CourseDetailClient from './CourseDetailClient';
+import { communityPath } from '@/lib/safe-redirect';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -21,7 +22,7 @@ export default async function CourseDetailPage(
   if (!community) notFound();
 
   const session = await getSession();
-  if (!session) redirect(`/${params.communitySlug}/about`);
+  if (!session) redirect(communityPath(params.communitySlug, '/about'));
 
   const [isMember, isAdmin] = await Promise.all([
     getCommunityMembership(community.id, session.user.id),
@@ -30,7 +31,7 @@ export default async function CourseDetailPage(
   const isCreator = community.created_by === session.user.id;
 
   if (!isMember && !isCreator && !isAdmin) {
-    redirect(`/${params.communitySlug}/about`);
+    redirect(communityPath(params.communitySlug, '/about'));
   }
 
   const initialCourse = await getCourseWithChapters(

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/AuthContext";
 import { PayoutScheduleForm } from "@/components/admin/PayoutScheduleForm";
+import { communityPath } from "@/lib/safe-redirect";
 
 // Ported from CommunitySettingsModal.tsx lines 92-120.
 interface StripeRequirement {
@@ -423,7 +424,7 @@ export function SubscriptionsEditor({
   // (a dedicated page in the (focused) route group). Triggers in this editor
   // navigate there via Link instead of mounting the wizard modal here.
   const handleStartCustomOnboarding = useCallback(() => {
-    router.push(`/${communitySlug}/admin/stripe-onboarding`);
+    router.push(communityPath(communitySlug, '/admin/stripe-onboarding'));
   }, [router, communitySlug]);
 
   // Creates / updates the Stripe Price + toggles membership on/off

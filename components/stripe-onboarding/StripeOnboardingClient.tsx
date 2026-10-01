@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { OnboardingWizard } from "./OnboardingWizard";
+import { communityPath } from "@/lib/safe-redirect";
 
 interface Props {
   communityId: string;
@@ -16,7 +17,7 @@ export function StripeOnboardingClient({ communityId, communitySlug }: Props) {
       communityId={communityId}
       communitySlug={communitySlug}
       onComplete={() => {
-        router.push(`/${communitySlug}/admin/subscriptions`);
+        router.push(communityPath(communitySlug, '/admin/subscriptions'));
         router.refresh();
       }}
     />

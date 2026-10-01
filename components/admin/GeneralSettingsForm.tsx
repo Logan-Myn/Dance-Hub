@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { uploadFileToStorage, STORAGE_FOLDERS } from "@/lib/storage-client";
 import { BannerRepositionModal } from "@/components/admin/BannerRepositionModal";
+import { communityPath } from "@/lib/safe-redirect";
 
 interface CustomLink {
   title: string;
@@ -204,7 +205,7 @@ export function GeneralSettingsForm({
       // If the slug has changed, navigate to the new URL — the admin route
       // is nested under /[communitySlug], so we must redirect.
       if (newSlug !== currentSlug) {
-        window.location.href = `/${newSlug}/admin/general`;
+        window.location.href = communityPath(newSlug, '/admin/general');
         return;
       }
 

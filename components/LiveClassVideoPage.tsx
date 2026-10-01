@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "react-hot-toast";
 import dynamic from "next/dynamic";
+import { communityPath } from "@/lib/safe-redirect";
 const LiveKitClassRoom = dynamic(() => import("./LiveKitClassRoom"), { ssr: false });
 
 interface LiveClass {
@@ -88,7 +89,7 @@ export default function LiveClassVideoPage({ classId, liveClass, canManage = fal
 
   const handleLeave = () => {
     // Redirect to community page when user leaves the call
-    router.push(`/${liveClass.community_slug}`);
+    router.push(communityPath(liveClass.community_slug));
   };
 
   const handleEndClass = async () => {
@@ -104,7 +105,7 @@ export default function LiveClassVideoPage({ classId, liveClass, canManage = fal
       }
       toast.success("Class ended successfully");
       new BroadcastChannel("live-class-updates").postMessage({ type: "class-ended", classId });
-      router.push(`/${liveClass.community_slug}`);
+      router.push(communityPath(liveClass.community_slug));
     } catch (err) {
       toast.error("Failed to end class");
       console.error("Error ending class:", err);

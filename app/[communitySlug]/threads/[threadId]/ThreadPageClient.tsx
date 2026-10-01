@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import ThreadView, { type ThreadViewProps } from '@/components/ThreadView';
+import { communityPath } from '@/lib/safe-redirect';
 
 // Shape matches the ThreadView prop (feed/thread model used by ThreadModal).
 // getThreadById returns a CommunityThread; we adapt field names below.
@@ -84,7 +85,7 @@ export default function ThreadPageClient({
   };
 
   const handleClose = () => {
-    router.push(`/${communitySlug}`);
+    router.push(communityPath(communitySlug));
   };
 
   // The "like" / "comment" / "edit" mutations in ThreadView call these back.
@@ -93,7 +94,7 @@ export default function ThreadPageClient({
   const noopLikeUpdate = () => router.refresh();
   const noopCommentUpdate = () => router.refresh();
   const noopThreadUpdate = () => router.refresh();
-  const handleDelete = () => router.push(`/${communitySlug}`);
+  const handleDelete = () => router.push(communityPath(communitySlug));
 
   const backHeader = (
     <div className="flex items-center gap-2 px-4 py-3">

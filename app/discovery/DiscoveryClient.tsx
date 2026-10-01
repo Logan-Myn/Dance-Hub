@@ -10,6 +10,7 @@ import { useAuthModal } from "@/contexts/AuthModalContext";
 import useSWR from 'swr';
 import { fetcher, type Community } from '@/lib/fetcher';
 import { useState, useMemo } from 'react';
+import { communityPath } from '@/lib/safe-redirect';
 
 export default function DiscoveryClient() {
   const { user: currentUser } = useAuth();
@@ -53,7 +54,7 @@ export default function DiscoveryClient() {
       return;
     }
 
-    window.location.href = `/${community.slug}`;
+    window.location.href = communityPath(community.slug);
   };
 
   return (

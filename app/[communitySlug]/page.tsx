@@ -7,6 +7,7 @@ import {
   getUserIsAdmin,
 } from '@/lib/community-data';
 import FeedClient from './FeedClient';
+import { communityPath } from '@/lib/safe-redirect';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -43,7 +44,7 @@ export default async function CommunityFeedPage(
   if (!community) notFound();
 
   const session = await getSession();
-  if (!session) redirect(`/${params.communitySlug}/about`);
+  if (!session) redirect(communityPath(params.communitySlug, '/about'));
 
   const [membership, isAdmin] = await Promise.all([
     getMembershipStatus(community.id, session.user.id),
@@ -54,7 +55,7 @@ export default async function CommunityFeedPage(
   // Same gating as the original client-side flow: anyone who isn't a member,
   // pre-registered, creator, or site admin gets bounced to /about.
   if (!membership.isMember && !membership.isPreRegistered && !isCreator && !isAdmin) {
-    redirect(`/${params.communitySlug}/about`);
+    redirect(communityPath(params.communitySlug, '/about'));
   }
 
   // Transform DB row to the front-end shape FeedClient already expects

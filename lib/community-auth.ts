@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { queryOne } from '@/lib/db';
 import { getSession, type Session } from '@/lib/auth-session';
 import { getMembershipStatus, getUserIsAdmin } from '@/lib/community-data';
-import { loginPath } from '@/lib/safe-redirect';
+import { communityPath, loginPath } from '@/lib/safe-redirect';
 
 /** True if the user created the community or is a platform admin. */
 export async function userCanManageCommunity(userId: string, communityId: string): Promise<boolean> {
@@ -169,10 +169,10 @@ export async function requireCommunityManagerPage(
   slug: string
 ): Promise<{ session: Session; community: GuardedCommunity }> {
   const session = await getSession();
-  if (!session) redirect(loginPath(`/${slug}/admin`));
+  if (!session) redirect(loginPath(communityPath(slug, '/admin')));
   const community = await loadCommunityBySlug(slug);
   if (!community || !(await userCanManageCommunity(session.user.id, community.id))) {
-    redirect(`/${slug}`);
+    redirect(communityPath(slug));
   }
   return { session, community };
 }

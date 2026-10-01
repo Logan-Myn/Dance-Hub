@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAuthModal } from '@/contexts/AuthModalContext';
+import { communityPath } from '@/lib/safe-redirect';
 
 export interface JoinCommunityData {
   id: string;
@@ -74,7 +75,7 @@ export function useJoinCommunity(
   const onJoinSuccess = () => {
     closePayment();
     toast.success('Successfully joined the community!');
-    if (community) router.push(`/${community.slug}`);
+    if (community) router.push(communityPath(community.slug));
     router.refresh();
   };
 

@@ -3,7 +3,7 @@
  * they only accept same-origin relative paths. Anything else would let a
  * crafted link send someone to another site right after a real sign-in.
  */
-import { authModalRequestFromSearch, loginPath, safeRedirectPath } from '@/lib/safe-redirect';
+import { authModalRequestFromSearch, communityPath, loginPath, safeRedirectPath } from '@/lib/safe-redirect';
 
 describe('safeRedirectPath', () => {
   it.each(['/dashboard', '/salsa/admin?tab=members#top', '/', '/%2F%2Fevil.example'])(
@@ -73,5 +73,21 @@ describe('authModalRequestFromSearch', () => {
   it('does nothing without a known auth param', () => {
     expect(authModalRequestFromSearch('')).toBeNull();
     expect(authModalRequestFromSearch('?auth=admin')).toBeNull();
+  });
+});
+
+describe('communityPath', () => {
+  it('builds paths for normal slugs unchanged', () => {
+    expect(communityPath('salsa')).toBe('/salsa');
+    expect(communityPath('salsa-tallinn', '/admin/emails/b1')).toBe('/salsa-tallinn/admin/emails/b1');
+  });
+
+  it('keeps a decoded route param inside our origin', () => {
+    // Next decodes params, so /%2F%2Fevil.example/admin arrives as "//evil.example".
+    expect(communityPath('//evil.example')).toBe('/%2F%2Fevil.example');
+    expect(communityPath('\\evil.example', '/about')).toBe('/%5Cevil.example/about');
+    for (const slug of ['//evil.example', '/evil.example', '\\evil.example', 'a/../../evil']) {
+      expect(safeRedirectPath(communityPath(slug, '/about'))).not.toBeNull();
+    }
   });
 });

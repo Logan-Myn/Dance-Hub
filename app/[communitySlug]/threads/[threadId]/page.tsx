@@ -3,6 +3,7 @@ import { getCommunityBySlug, getThreadById } from '@/lib/community-data';
 import { getSession } from '@/lib/auth-session';
 import { canViewCommunity } from '@/lib/community-auth';
 import ThreadPageClient from './ThreadPageClient';
+import { communityPath } from '@/lib/safe-redirect';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -18,9 +19,9 @@ export default async function ThreadRoutePage(
 
   // Members-only, same gate as the feed page: everyone else goes to /about.
   const session = await getSession();
-  if (!session) redirect(`/${params.communitySlug}/about`);
+  if (!session) redirect(communityPath(params.communitySlug, '/about'));
   if (!(await canViewCommunity(session.user.id, community, { allowPreRegistered: true }))) {
-    redirect(`/${params.communitySlug}/about`);
+    redirect(communityPath(params.communitySlug, '/about'));
   }
 
   const thread = await getThreadById(community.id, params.threadId);

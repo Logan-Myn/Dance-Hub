@@ -62,6 +62,7 @@ import NotifyMembersModal from "@/components/NotifyMembersModal";
 import DeleteLessonModal from "@/components/DeleteLessonModal";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
+import { communityPath } from "@/lib/safe-redirect";
 
 interface Chapter {
   id: string;
@@ -744,7 +745,7 @@ export default function CourseDetailClient({
       // stale — replace it. router.refresh() also re-renders the parent RSC
       // tree (classroom listing) so the renamed title shows up there too.
       if (course.slug && course.slug !== courseSlug) {
-        router.replace(`/${communitySlug}/classroom/${course.slug}`);
+        router.replace(communityPath(communitySlug, `/classroom/${course.slug}`));
       } else {
         mutateCourse();
         router.refresh();
@@ -771,7 +772,7 @@ export default function CourseDetailClient({
 
     // The course no longer exists, so this page cannot re-render — send the
     // owner back to the classroom listing and refresh it.
-    router.replace(`/${communitySlug}/classroom`);
+    router.replace(communityPath(communitySlug, '/classroom'));
     router.refresh();
   };
 
