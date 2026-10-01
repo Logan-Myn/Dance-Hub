@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { query, queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { createRoom } from "@/lib/stream-hub";
+import { parseRangeParams } from "@/lib/calendar-week";
 
 interface Community {
   id: string;
@@ -62,12 +63,18 @@ export async function GET(
     let liveClasses: LiveClassWithDetails[];
 
     if (start && end) {
+      // The calendar sends its week as UTC instants (start inclusive, end
+      // exclusive), worked out in the viewer's timezone.
+      const range = parseRangeParams(start, end);
+      if (!range) {
+        return NextResponse.json({ error: "Invalid date range" }, { status: 400 });
+      }
       liveClasses = await query<LiveClassWithDetails>`
         SELECT *
         FROM live_classes_with_details
         WHERE community_id = ${community.id}
-          AND scheduled_start_time >= ${`${start}T00:00:00`}
-          AND scheduled_start_time <= ${`${end}T23:59:59`}
+          AND scheduled_start_time >= ${range.start.toISOString()}
+          AND scheduled_start_time < ${range.end.toISOString()}
         ORDER BY scheduled_start_time ASC
       `;
     } else {
