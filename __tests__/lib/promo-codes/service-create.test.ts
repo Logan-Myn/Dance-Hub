@@ -1,12 +1,17 @@
 import { createPromoCode } from '@/lib/promo-codes/service';
 
 const mockCouponsCreate = jest.fn();
+const mockCouponsDel = jest.fn();
 const mockPromoCreate = jest.fn();
+const mockPromoUpdate = jest.fn();
 const mockPricesRetrieve = jest.fn();
 jest.mock('@/lib/stripe', () => ({
   stripe: {
-    coupons: { create: (...a: unknown[]) => mockCouponsCreate(...a) },
-    promotionCodes: { create: (...a: unknown[]) => mockPromoCreate(...a) },
+    coupons: { create: (...a: unknown[]) => mockCouponsCreate(...a), del: (...a: unknown[]) => mockCouponsDel(...a) },
+    promotionCodes: {
+      create: (...a: unknown[]) => mockPromoCreate(...a),
+      update: (...a: unknown[]) => mockPromoUpdate(...a),
+    },
     prices: { retrieve: (...a: unknown[]) => mockPricesRetrieve(...a) },
   },
 }));
@@ -19,8 +24,14 @@ jest.mock('@/lib/db', () => ({
 }));
 
 beforeEach(() => {
-  [mockCouponsCreate, mockPromoCreate, mockPricesRetrieve, mockSql, mockQueryOne].forEach((m) => m.mockReset());
+  [mockCouponsCreate, mockCouponsDel, mockPromoCreate, mockPromoUpdate, mockPricesRetrieve, mockSql, mockQueryOne]
+    .forEach((m) => m.mockReset());
 });
+
+/** No existing code with that name, then the INSERT returns `row`. */
+function stubInsert(row: unknown) {
+  mockQueryOne.mockResolvedValueOnce(null).mockResolvedValueOnce(row);
+}
 
 const args = {
   communityId: 'c1',
@@ -36,7 +47,7 @@ const args = {
 it('creates coupon + promotion code on the connected account and inserts a row', async () => {
   mockCouponsCreate.mockResolvedValueOnce({ id: 'coupon_1' });
   mockPromoCreate.mockResolvedValueOnce({ id: 'promo_1' });
-  mockQueryOne.mockResolvedValueOnce({
+  stubInsert({
     id: 'row_1', community_id: 'c1', code: 'MARCELA20',
     stripe_coupon_id: 'coupon_1', stripe_promotion_code_id: 'promo_1',
     discount_type: 'percent', discount_value: 20, duration: 'repeating',
@@ -63,7 +74,7 @@ it('resolves currency from the membership price for amount codes', async () => {
   mockPricesRetrieve.mockResolvedValueOnce({ currency: 'eur' });
   mockCouponsCreate.mockResolvedValueOnce({ id: 'coupon_2' });
   mockPromoCreate.mockResolvedValueOnce({ id: 'promo_2' });
-  mockQueryOne.mockResolvedValueOnce({
+  stubInsert({
     id: 'row_2', community_id: 'c1', code: 'TEN', stripe_coupon_id: 'coupon_2',
     stripe_promotion_code_id: 'promo_2', discount_type: 'amount', discount_value: 10,
     duration: 'once', duration_in_months: null, max_redemptions: null, expires_at: null,
@@ -91,7 +102,7 @@ it('rejects invalid input before calling Stripe', async () => {
 it('persists the plan scope and reflects it on the record', async () => {
   mockCouponsCreate.mockResolvedValueOnce({ id: 'coupon_3' });
   mockPromoCreate.mockResolvedValueOnce({ id: 'promo_3' });
-  mockQueryOne.mockResolvedValueOnce({
+  stubInsert({
     id: 'row_3', community_id: 'c1', code: 'YEARONLY',
     stripe_coupon_id: 'coupon_3', stripe_promotion_code_id: 'promo_3',
     discount_type: 'percent', discount_value: 20, duration: 'once',
@@ -107,13 +118,13 @@ it('persists the plan scope and reflects it on the record', async () => {
 
   expect(rec.appliesToPlan).toBe('yearly');
   // the scope value is passed into the INSERT tagged-template call
-  expect(mockQueryOne.mock.calls[0]).toContain('yearly');
+  expect(mockQueryOne.mock.calls[1]).toContain('yearly');
 });
 
 it('defaults appliesToPlan to both when the row has none', async () => {
   mockCouponsCreate.mockResolvedValueOnce({ id: 'coupon_4' });
   mockPromoCreate.mockResolvedValueOnce({ id: 'promo_4' });
-  mockQueryOne.mockResolvedValueOnce({
+  stubInsert({
     id: 'row_4', community_id: 'c1', code: 'PLAIN',
     stripe_coupon_id: 'coupon_4', stripe_promotion_code_id: 'promo_4',
     discount_type: 'percent', discount_value: 20, duration: 'once',
@@ -127,4 +138,40 @@ it('defaults appliesToPlan to both when the row has none', async () => {
   });
 
   expect(rec.appliesToPlan).toBe('both');
+});
+
+it('refuses a name already used in the community, in any case, before calling Stripe', async () => {
+  mockQueryOne.mockResolvedValueOnce({ id: 'row_old', active: false });
+
+  await expect(createPromoCode({ ...args, input: { ...args.input, code: 'marcela20' } }))
+    .rejects.toThrow(/already have a code called marcela20/i);
+
+  const [strings, ...values] = mockQueryOne.mock.calls[0];
+  expect((strings as string[]).join('?')).toMatch(/lower\(code\) = lower\(\?\)/);
+  expect(values).toEqual(expect.arrayContaining(['c1', 'marcela20']));
+  expect(mockCouponsCreate).not.toHaveBeenCalled();
+  expect(mockPromoCreate).not.toHaveBeenCalled();
+});
+
+it('switches off the promotion code and deletes the coupon when the row cannot be saved', async () => {
+  mockCouponsCreate.mockResolvedValueOnce({ id: 'coupon_9' });
+  mockPromoCreate.mockResolvedValueOnce({ id: 'promo_9' });
+  mockQueryOne.mockResolvedValueOnce(null).mockRejectedValueOnce(Object.assign(new Error('duplicate key'), { code: '23505' }));
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+
+  await expect(createPromoCode(args)).rejects.toThrow(/already have a code called MARCELA20/);
+
+  expect(mockPromoUpdate).toHaveBeenCalledWith('promo_9', { active: false }, { stripeAccount: 'acct_1' });
+  expect(mockCouponsDel).toHaveBeenCalledWith('coupon_9', { stripeAccount: 'acct_1' });
+});
+
+it('deletes the coupon when the promotion code cannot be created', async () => {
+  mockQueryOne.mockResolvedValueOnce(null);
+  mockCouponsCreate.mockResolvedValueOnce({ id: 'coupon_8' });
+  mockPromoCreate.mockRejectedValueOnce(new Error('stripe says no'));
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+
+  await expect(createPromoCode(args)).rejects.toThrow('stripe says no');
+
+  expect(mockCouponsDel).toHaveBeenCalledWith('coupon_8', { stripeAccount: 'acct_1' });
 });

@@ -57,39 +57,84 @@ export async function createPromoCode(args: {
 }): Promise<PromoCodeRecord> {
   const problem = validateCreateInput(args.input);
   if (problem) throw new Error(problem);
+  const code = args.input.code.trim();
+  const stripeAccount = { stripeAccount: args.stripeAccountId };
+  const duplicateName = () => new Error(`You already have a code called ${code}. Delete it to reuse the name.`);
+
+  // Codes are matched regardless of case (Stripe does the same), and our
+  // UNIQUE (community_id, code) also counts switched-off codes. Check before
+  // creating anything on Stripe, so we never make a live code we can't store.
+  const existing = await queryOne<{ id: string }>`
+    SELECT id FROM community_promo_codes
+    WHERE community_id = ${args.communityId}
+      AND lower(code) = lower(${code})
+    LIMIT 1
+  `;
+  if (existing) throw duplicateName();
 
   let currency: string | null = null;
   if (args.input.discountType === 'amount') {
-    const price = await stripe.prices.retrieve(args.stripePriceId, {
-      stripeAccount: args.stripeAccountId,
-    });
+    const price = await stripe.prices.retrieve(args.stripePriceId, stripeAccount);
     currency = price.currency;
   }
 
   const coupon = await stripe.coupons.create(
     buildCouponParams(args.input, currency),
-    { stripeAccount: args.stripeAccountId },
+    stripeAccount,
   );
 
-  const promo = await stripe.promotionCodes.create(
-    buildPromotionCodeParams(args.input, coupon.id),
-    { stripeAccount: args.stripeAccountId },
-  );
+  // From here on, undo what Stripe has if a later step fails, so no code is
+  // left redeemable without a row the owner can see and switch off.
+  const deleteCoupon = async () => {
+    try {
+      await stripe.coupons.del(coupon.id, stripeAccount);
+    } catch (err) {
+      console.error('[promo-codes] failed to delete coupon after a failed create', coupon.id, err);
+    }
+  };
 
-  const row = await queryOne<PromoCodeRow>`
-    INSERT INTO community_promo_codes (
-      community_id, code, stripe_coupon_id, stripe_promotion_code_id,
-      discount_type, discount_value, duration, duration_in_months,
-      max_redemptions, expires_at, active, created_by, applies_to_plan
-    ) VALUES (
-      ${args.communityId}, ${args.input.code.trim()}, ${coupon.id}, ${promo.id},
-      ${args.input.discountType}, ${args.input.discountValue}, ${args.input.duration},
-      ${args.input.durationInMonths}, ${args.input.maxRedemptions},
-      ${args.input.expiresAt}, true, ${args.createdBy}, ${args.input.appliesToPlan ?? 'both'}
-    )
-    RETURNING *
-  `;
-  if (!row) throw new Error('Failed to persist promo code');
+  let promo: Awaited<ReturnType<typeof stripe.promotionCodes.create>>;
+  try {
+    promo = await stripe.promotionCodes.create(
+      buildPromotionCodeParams(args.input, coupon.id),
+      stripeAccount,
+    );
+  } catch (err) {
+    await deleteCoupon();
+    throw err;
+  }
+
+  let row: PromoCodeRow | null = null;
+  let insertError: unknown = null;
+  try {
+    row = await queryOne<PromoCodeRow>`
+      INSERT INTO community_promo_codes (
+        community_id, code, stripe_coupon_id, stripe_promotion_code_id,
+        discount_type, discount_value, duration, duration_in_months,
+        max_redemptions, expires_at, active, created_by, applies_to_plan
+      ) VALUES (
+        ${args.communityId}, ${code}, ${coupon.id}, ${promo.id},
+        ${args.input.discountType}, ${args.input.discountValue}, ${args.input.duration},
+        ${args.input.durationInMonths}, ${args.input.maxRedemptions},
+        ${args.input.expiresAt}, true, ${args.createdBy}, ${args.input.appliesToPlan ?? 'both'}
+      )
+      RETURNING *
+    `;
+  } catch (err) {
+    insertError = err;
+  }
+
+  if (!row) {
+    try {
+      await stripe.promotionCodes.update(promo.id, { active: false }, stripeAccount);
+    } catch (err) {
+      console.error('[promo-codes] failed to switch off promotion code after a failed create', promo.id, err);
+    }
+    await deleteCoupon();
+    // A unique violation means the same name was created at the same moment.
+    if ((insertError as { code?: string } | null)?.code === '23505') throw duplicateName();
+    throw insertError ?? new Error('Failed to persist promo code');
+  }
   return rowToRecord(row);
 }
 
