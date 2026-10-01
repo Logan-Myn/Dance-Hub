@@ -1,5 +1,6 @@
 import { cache } from 'react';
 import { query, queryOne } from './db';
+import { sanitizeRichText } from './sanitize-html';
 import type { PrivateLesson } from '@/types/private-lessons';
 
 export interface CommunityRow {
@@ -257,11 +258,12 @@ export const getCommunityThreads = cache(async (communityId: string): Promise<Co
     v instanceof Date ? v.toISOString() : v;
 
   // Comment bodies are loaded on demand by ThreadView when a thread opens —
-  // the feed only needs `commentsCount`.
+  // the feed only needs `commentsCount`. Bodies are sanitized on the way out
+  // as well as on write, for rows stored before write-time sanitizing.
   return threads.map((t) => ({
     id: t.id,
     title: t.title,
-    content: t.content,
+    content: sanitizeRichText(t.content),
     createdAt: toIso(t.created_at),
     userId: t.user_id,
     author: {
@@ -322,7 +324,7 @@ export const getThreadById = cache(
     return {
       id: row.id,
       title: row.title,
-      content: row.content,
+      content: sanitizeRichText(row.content),
       createdAt: toIso(row.created_at),
       userId: row.user_id,
       author: {

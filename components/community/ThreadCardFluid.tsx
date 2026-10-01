@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Heart, MessageSquare, Pin } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CATEGORY_ICONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { htmlToPlainText } from "@/lib/html-to-text";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "react-hot-toast";
 
@@ -61,6 +62,8 @@ export default function ThreadCardFluid({
     setLocalLikes(likes ?? []);
     setLocalLikesCount(likes_count || 0);
   }, [likes, likes_count]);
+
+  const preview = useMemo(() => htmlToPlainText(content), [content]);
 
   const iconConfig = CATEGORY_ICONS.find((i) => i.label === category_type);
   const IconComponent = iconConfig?.icon || null;
@@ -192,11 +195,13 @@ export default function ThreadCardFluid({
         {title}
       </h2>
 
-      {/* Content preview */}
-      <div
-        className="prose prose-sm max-w-none text-muted-foreground line-clamp-3 mb-4"
-        dangerouslySetInnerHTML={{ __html: content }}
-      />
+      {/* Content preview: plain text, never the stored HTML */}
+      <p
+        data-testid="thread-preview"
+        className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line break-words line-clamp-3 mb-4"
+      >
+        {preview}
+      </p>
 
       {/* Interaction buttons */}
       <div className="flex items-center gap-4">

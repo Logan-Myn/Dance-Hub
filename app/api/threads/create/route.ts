@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
 import { canViewCommunity } from '@/lib/community-auth';
+import { sanitizeRichText } from '@/lib/sanitize-html';
 
 interface Community {
   created_by: string;
@@ -38,7 +39,10 @@ export async function POST(request: Request) {
     }
 
     const userId = session.user.id;
-    const { title, content, communityId, categoryId, pinned } = await request.json();
+    const { title, content: rawContent, communityId, categoryId, pinned } = await request.json();
+    // The body is editor HTML, but the API takes any string: store only the
+    // allowlisted markup. Non-strings and markup-only payloads end up empty.
+    const content = sanitizeRichText(rawContent);
 
     if (!title || !content || !communityId || !categoryId) {
       return NextResponse.json(

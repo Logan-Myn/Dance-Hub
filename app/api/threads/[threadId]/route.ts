@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql, queryOne } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
+import { sanitizeRichText } from "@/lib/sanitize-html";
 
 interface ThreadOwnership {
   user_id: string;
@@ -30,8 +31,14 @@ export async function PATCH(request: Request, props: { params: Promise<{ threadI
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { title, content } = await request.json();
+    const { title, content: rawContent } = await request.json();
     const { threadId } = params;
+
+    // Same rule as thread create: store only the allowlisted editor markup.
+    const content = sanitizeRichText(rawContent);
+    if (!content) {
+      return NextResponse.json({ error: "Content is required" }, { status: 400 });
+    }
 
     const auth = await authorizeThreadMutation(threadId, session.user.id);
     if (!auth.ok) {
