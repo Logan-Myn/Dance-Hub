@@ -99,9 +99,11 @@ describe('sanitizeEmailHtml (broadcasts)', () => {
     expect(sanitizeEmailHtml(html)).toBe(normalizeStyles(html));
   });
 
-  it('removes images that are not https, and onerror handlers', () => {
-    expect(sanitizeEmailHtml('<img src="http://x.example/a.png" />')).toBe('<img />');
-    expect(sanitizeEmailHtml('<img src="data:image/png;base64,AAAA" />')).toBe('<img />');
+  it('removes images that are not absolute https URLs, and onerror handlers', () => {
+    expect(sanitizeEmailHtml('<p>a</p><img src="http://x.example/a.png" />')).toBe('<p>a</p>');
+    expect(sanitizeEmailHtml('<img src="data:image/png;base64,AAAA" />')).toBe('');
+    expect(sanitizeEmailHtml('<img src="/api/some/route" />')).toBe('');
+    expect(sanitizeEmailHtml('<img src="//x.example/a.png" />')).toBe('');
     expect(sanitizeEmailHtml('<img src="https://x.example/a.png" onerror="alert(1)" />')).toBe(
       '<img src="https://x.example/a.png" />'
     );

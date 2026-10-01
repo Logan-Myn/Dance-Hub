@@ -69,8 +69,19 @@ const emailOptions: sanitizeHtml.IOptions = {
     ...baseOptions.allowedClasses,
     img: ['max-w-full', 'rounded'],
   },
-  // Uploaded broadcast images are served over https; nothing else is needed.
+  // Uploaded broadcast images are absolute https URLs; nothing else is needed.
+  // Relative and protocol-relative sources are dropped too, and so is any
+  // image left without a source.
   allowedSchemesByTag: { img: ['https'] },
+  transformTags: {
+    ...baseOptions.transformTags,
+    img: (tagName, attribs) => {
+      const out: sanitizeHtml.Attributes = { ...attribs };
+      if (!/^https:\/\//i.test(out.src ?? '')) delete out.src;
+      return { tagName, attribs: out };
+    },
+  },
+  exclusiveFilter: (frame) => frame.tag === 'img' && !frame.attribs.src,
 };
 
 /** Thread bodies (components/Editor.tsx). Non-strings become ''. */

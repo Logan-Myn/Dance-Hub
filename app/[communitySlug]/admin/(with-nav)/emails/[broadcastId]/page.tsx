@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { queryOne } from '@/lib/db';
 import { getCommunityBySlug } from '@/lib/community-data';
 import { format } from 'date-fns';
+import { buildBroadcastPreviewDocument } from '@/lib/broadcasts/preview-document';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,13 +125,15 @@ export default async function BroadcastDetailPage(
 
       {/* The issue itself — framed like a published page */}
       <div className="mx-auto max-w-2xl">
-        <div className="relative bg-white border border-border/60 shadow-[0_2px_24px_-8px_rgba(80,40,120,0.15)] rounded-sm">
-          <div
-            className="prose prose-sm sm:prose-base max-w-none p-8 sm:p-12
-              prose-headings:font-display prose-headings:text-foreground
-              prose-p:text-foreground/90 prose-a:text-primary
-              prose-strong:text-foreground prose-img:rounded"
-            dangerouslySetInnerHTML={{ __html: broadcast.html_content }}
+        <div className="relative bg-white border border-border/60 shadow-[0_2px_24px_-8px_rgba(80,40,120,0.15)] rounded-sm overflow-hidden">
+          {/* Owner-written HTML: sanitized, and framed with no scripts and an
+              opaque origin, so it cannot act in the viewer's session. */}
+          <iframe
+            title={broadcast.subject || 'Broadcast'}
+            srcDoc={buildBroadcastPreviewDocument(broadcast.html_content)}
+            sandbox="allow-popups allow-popups-to-escape-sandbox"
+            referrerPolicy="no-referrer"
+            className="block w-full h-[70vh] min-h-[480px] border-0 bg-white"
           />
         </div>
         <p className="text-center text-[10px] uppercase tracking-[0.18em] text-muted-foreground mt-6">

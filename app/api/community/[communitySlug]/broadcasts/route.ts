@@ -4,6 +4,7 @@ import { authorizeBroadcastAccess } from '@/lib/broadcasts/auth';
 import { checkCanSend } from '@/lib/broadcasts/quota';
 import { getActiveRecipientsForCommunity } from '@/lib/broadcasts/recipients';
 import { runBroadcast } from '@/lib/broadcasts/sender';
+import { sanitizeEmailHtml } from '@/lib/sanitize-html';
 
 interface BroadcastListRow {
   id: string;
@@ -23,12 +24,14 @@ export async function POST(req: Request, props: { params: Promise<{ communitySlu
   let broadcastId: string | null = null;
 
   try {
-    const { subject, htmlContent, editorJson, previewText } = (await req.json()) as {
+    const { subject, htmlContent: rawHtml, editorJson, previewText } = (await req.json()) as {
       subject: string;
-      htmlContent: string;
+      htmlContent: unknown;
       editorJson: unknown;
       previewText?: string;
     };
+    // Stored, sent and shown on the archive page: keep only the editor's markup.
+    const htmlContent = sanitizeEmailHtml(rawHtml);
     if (!subject || !htmlContent || !editorJson) {
       return NextResponse.json(
         { error: 'Missing subject/htmlContent/editorJson' },

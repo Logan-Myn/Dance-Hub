@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { authorizeBroadcastAccess } from '@/lib/broadcasts/auth';
 import { runBroadcast } from '@/lib/broadcasts/sender';
 import { queryOne } from '@/lib/db';
+import { sanitizeEmailHtml } from '@/lib/sanitize-html';
 
 async function ensureUnsubscribeToken(email: string): Promise<string | null> {
   // The schema's DEFAULT generates a token on insert. ON CONFLICT preserves
@@ -27,11 +28,12 @@ export async function POST(req: Request, props: { params: Promise<{ communitySlu
   const { session, community } = authz;
 
   try {
-    const { subject, htmlContent, previewText } = (await req.json()) as {
+    const { subject, htmlContent: rawHtml, previewText } = (await req.json()) as {
       subject: string;
-      htmlContent: string;
+      htmlContent: unknown;
       previewText?: string;
     };
+    const htmlContent = sanitizeEmailHtml(rawHtml);
     if (!subject || !htmlContent) {
       return NextResponse.json({ error: 'Missing subject or htmlContent' }, { status: 400 });
     }
