@@ -2,6 +2,11 @@
  * custom-account/[accountId]/update
  * - bank_account: fields and currency come from the Stripe account's country,
  *   the new bank account becomes the default and replaces the old ones.
+ * - business_info: one merged object per entity (company name and address
+ *   both kept), business phone passed on, ToS date from the server clock and
+ *   user agent from the request header.
+ * - personal_info: company accounts get a representative person instead of
+ *   `individual` fields.
  */
 import { PUT } from '@/app/api/stripe/custom-account/[accountId]/update/route';
 
@@ -237,5 +242,161 @@ describe('bank_account', () => {
     const written = JSON.stringify(progressJsonWrites());
     expect(written).toContain('0003');
     expect(written).not.toContain('SE3550000000054910000003');
+  });
+});
+
+describe('business_info', () => {
+  const address = {
+    line1: 'Narva mnt 5',
+    city: 'Tallinn',
+    state: 'Harjumaa',
+    postal_code: '10117',
+    country: 'EE',
+  };
+
+  it('keeps the company name, address and phone together', async () => {
+    mockRetrieve.mockResolvedValue(account({ country: 'EE', business_type: 'company' }));
+
+    const res = await PUT(
+      put({
+        step: 'business_info',
+        businessInfo: {
+          type: 'company',
+          name: 'Salsa OÜ',
+          address,
+          phone: '+3725551234',
+          url: 'https://dance-hub.io/salsa',
+          mcc: '8299',
+        },
+      }),
+      params
+    );
+
+    expect(res.status).toBe(200);
+    const updateArg = mockUpdate.mock.calls[0][1];
+    expect(updateArg.business_type).toBe('company');
+    expect(updateArg.company).toEqual({ name: 'Salsa OÜ', address, phone: '+3725551234' });
+    expect(updateArg.individual).toBeUndefined();
+    expect(updateArg.business_profile).toEqual({ url: 'https://dance-hub.io/salsa', mcc: '8299' });
+  });
+
+  it('keeps an individual name, address and phone together', async () => {
+    mockRetrieve.mockResolvedValue(account({ country: 'EE' }));
+
+    await PUT(
+      put({
+        step: 'business_info',
+        businessInfo: { type: 'individual', name: 'Ana Maria Lopez', address, phone: '+3725551234' },
+      }),
+      params
+    );
+
+    expect(mockUpdate.mock.calls[0][1].individual).toEqual({
+      first_name: 'Ana',
+      last_name: 'Maria Lopez',
+      address,
+      phone: '+3725551234',
+    });
+  });
+
+  it('records ToS acceptance with the server time and the request user agent', async () => {
+    const now = new Date('2026-10-01T12:00:00Z').getTime();
+    const spy = jest.spyOn(Date, 'now').mockReturnValue(now);
+    try {
+      await PUT(
+        put(
+          {
+            step: 'business_info',
+            businessInfo: { type: 'individual', name: 'Ana Lopez' },
+            tosAcceptance: { accepted: true, date: '2001-01-01T00:00:00Z', userAgent: 'forged agent' },
+          },
+          { 'user-agent': 'Mozilla/5.0 (real browser)', 'x-real-ip': '203.0.113.9' }
+        ),
+        params
+      );
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(mockUpdate.mock.calls[0][1].tos_acceptance).toEqual({
+      date: Math.floor(now / 1000),
+      ip: '203.0.113.9',
+      user_agent: 'Mozilla/5.0 (real browser)',
+    });
+  });
+
+  it('does not record ToS acceptance unless it was accepted', async () => {
+    await PUT(
+      put({
+        step: 'business_info',
+        businessInfo: { type: 'individual', name: 'Ana Lopez' },
+        tosAcceptance: { accepted: false },
+      }),
+      params
+    );
+
+    expect(mockUpdate.mock.calls[0][1].tos_acceptance).toBeUndefined();
+  });
+});
+
+describe('personal_info', () => {
+  const personalInfo = {
+    first_name: 'Ana',
+    last_name: 'Lopez',
+    email: 'ana@example.com',
+    phone: '+3725551234',
+    dob: { day: 1, month: 2, year: 1990 },
+    address: { line1: 'Narva mnt 5', city: 'Tallinn', state: 'Harju', postal_code: '10117', country: 'EE' },
+  };
+
+  it('sets individual fields on an individual account', async () => {
+    await PUT(put({ step: 'personal_info', personalInfo }), params);
+
+    expect(mockUpdate).toHaveBeenCalledWith('acct_1', { individual: personalInfo });
+    expect(mockCreatePerson).not.toHaveBeenCalled();
+  });
+
+  it('creates the representative for a company account', async () => {
+    mockRetrieve.mockResolvedValue(account({ business_type: 'company' }));
+    mockListPersons.mockResolvedValue({ data: [] });
+    mockCreatePerson.mockResolvedValue({ id: 'person_1' });
+
+    const res = await PUT(put({ step: 'personal_info', personalInfo }), params);
+
+    expect(res.status).toBe(200);
+    expect(mockListPersons).toHaveBeenCalledWith('acct_1', {
+      relationship: { representative: true },
+      limit: 1,
+    });
+    expect(mockCreatePerson).toHaveBeenCalledWith('acct_1', {
+      ...personalInfo,
+      relationship: { representative: true },
+    });
+    // `individual` is not valid on a company account.
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('updates the existing representative instead of adding another', async () => {
+    mockRetrieve.mockResolvedValue(account({ business_type: 'company' }));
+    mockListPersons.mockResolvedValue({ data: [{ id: 'person_1' }] });
+
+    await PUT(put({ step: 'personal_info', personalInfo }), params);
+
+    expect(mockUpdatePerson).toHaveBeenCalledWith('acct_1', 'person_1', {
+      ...personalInfo,
+      relationship: { representative: true },
+    });
+    expect(mockCreatePerson).not.toHaveBeenCalled();
+  });
+
+  it('returns the error when Stripe rejects the representative', async () => {
+    mockRetrieve.mockResolvedValue(account({ business_type: 'company' }));
+    mockListPersons.mockResolvedValue({ data: [] });
+    mockCreatePerson.mockRejectedValue(new Error('Invalid date of birth'));
+
+    const res = await PUT(put({ step: 'personal_info', personalInfo }), params);
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain('Invalid date of birth');
   });
 });

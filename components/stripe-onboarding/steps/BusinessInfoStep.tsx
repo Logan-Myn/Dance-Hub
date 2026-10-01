@@ -183,11 +183,9 @@ export function BusinessInfoStep({
             phone: businessInfo.businessPhone,
             mcc: businessInfo.mccCode,
           },
+          // The server records the acceptance time, IP and user agent itself.
           tosAcceptance: {
             accepted: tosAccepted,
-            date: new Date().toISOString(),
-            ip: null, // Will be filled by server from request headers
-            userAgent: navigator.userAgent,
           },
         }),
       });
