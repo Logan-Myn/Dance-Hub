@@ -361,20 +361,28 @@ export interface MembershipStatus {
   currentPeriodEnd: string | null;
 }
 
+export interface MembershipRow {
+  status: string;
+  subscription_status: string | null;
+  current_period_end: Date | string | null;
+}
+
 export const getMembershipStatus = cache(async (
   communityId: string,
   userId: string,
 ): Promise<MembershipStatus> => {
-  const member = await queryOne<{
-    status: string;
-    subscription_status: string | null;
-    current_period_end: Date | string | null;
-  }>`
+  const member = await queryOne<MembershipRow>`
     SELECT status, subscription_status, current_period_end
     FROM community_members
     WHERE community_id = ${communityId}
       AND user_id = ${userId}
   `;
+  return toMembershipStatus(member);
+});
+
+// Also used by the leave / reactivate routes, so the feed can take its
+// membership state from their responses instead of guessing it.
+export function toMembershipStatus(member: MembershipRow | null | undefined): MembershipStatus {
   if (!member) {
     return { isMember: false, isPreRegistered: false, status: null, subscriptionStatus: null, currentPeriodEnd: null };
   }
@@ -395,7 +403,7 @@ export const getMembershipStatus = cache(async (
     subscriptionStatus: member.subscription_status,
     currentPeriodEnd: periodEnd ? periodEnd.toISOString() : null,
   };
-});
+}
 
 // Site-wide admin flag from profiles.is_admin (mapped from better-auth user
 // id via auth_user_id). Used by classroom to give admins blanket access.

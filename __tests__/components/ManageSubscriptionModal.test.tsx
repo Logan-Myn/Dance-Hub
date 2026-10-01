@@ -122,6 +122,38 @@ describe("ManageSubscriptionModal", () => {
     expect(screen.getByText(/2 months free\./)).toBeInTheDocument();
   });
 
+  it("shows when a membership that is set to end ends, not a next charge", async () => {
+    mockFetch({
+      "/subscription": { ...summaryFixture, cancelAtPeriodEnd: true },
+      "/subscription/payments": { invoices: [] },
+    });
+
+    render(
+      <ManageSubscriptionModal isOpen={true} onClose={() => {}} communitySlug="test" stripeAccountId="acct_test" />
+    );
+
+    await waitFor(() => expect(screen.getByText(/Ends on:/)).toBeInTheDocument());
+    expect(screen.queryByText(/Next charge/)).not.toBeInTheDocument();
+  });
+
+  it("does not offer the yearly switch for a membership that is set to end", async () => {
+    mockFetch({
+      "/subscription": {
+        ...summaryFixture,
+        cancelAtPeriodEnd: true,
+        upgrade: { available: true, yearlyAmount: 20000, yearlyBenefits: null },
+      },
+      "/subscription/payments": { invoices: [] },
+    });
+
+    render(
+      <ManageSubscriptionModal isOpen={true} onClose={() => {}} communitySlug="test" stripeAccountId="acct_test" />
+    );
+
+    await waitFor(() => expect(screen.getByText(/Ends on:/)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /Switch to yearly/ })).not.toBeInTheDocument();
+  });
+
   it("shows error when summary fetch fails", async () => {
     global.fetch = jest.fn(() =>
       Promise.resolve({ ok: false, json: () => Promise.resolve({}) })

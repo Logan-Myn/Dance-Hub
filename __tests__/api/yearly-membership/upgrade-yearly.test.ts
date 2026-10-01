@@ -111,3 +111,17 @@ it('POST returns 400 when the community does not have yearly enabled', async () 
   expect(res.status).toBe(400);
   expect(mockSubUpdate).not.toHaveBeenCalled();
 });
+
+it.each([
+  ['GET', () => GET(new Request('http://x'), { params })],
+  ['POST', () => POST(new Request('http://x', { method: 'POST' }), { params })],
+])('%s refuses a subscription that is set to end', async (_method, call) => {
+  mockGetSession.mockResolvedValueOnce({ user: { id: 'u1' } });
+  mockQueryOne.mockResolvedValueOnce(community).mockResolvedValueOnce(member);
+  mockSubRetrieve.mockResolvedValueOnce({ ...subWithMonthlyItem, cancel_at_period_end: true });
+
+  const res = await call();
+  expect(res.status).toBe(400);
+  expect(mockInvoicePreview).not.toHaveBeenCalled();
+  expect(mockSubUpdate).not.toHaveBeenCalled();
+});

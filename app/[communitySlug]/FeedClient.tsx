@@ -38,6 +38,17 @@ import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { useNextStep } from "nextstepjs";
 import { useIsMobile } from "@/hooks/use-is-mobile";
+import { LocalDate } from "@/components/ui/local-date";
+import { formatDate } from "@/lib/format-date";
+import type { MembershipStatus } from "@/lib/community-data";
+
+// Membership routes answer failures with { error } (a reason the member can
+// act on) and, when the failure changed the membership, the new membership.
+async function failureBody(
+  response: Response
+): Promise<{ error?: string; membership?: MembershipStatus } | null> {
+  return response.json().catch(() => null);
+}
 
 interface CustomLink {
   title: string;
@@ -302,18 +313,19 @@ export default function FeedClient({
   // page.tsx and arrive as initial props. SWR refreshes community / members /
   // threads above; the manual mirror useEffects sync those caches into local
   // state so existing code keeps working.
-
-  // Mirror SWR membersData into the current user's membership status.
-  useEffect(() => {
-    if (!membersData || !currentUser) return;
-    const currentMember = membersData.find((m) => m.user_id === currentUser.id);
-    if (!currentMember) return;
-    setMemberStatus(currentMember.status ?? null);
-    setSubscriptionStatus(currentMember.subscription_status ?? null);
-    if (currentMember.current_period_end) {
-      setAccessEndDate(currentMember.current_period_end);
-    }
-  }, [membersData, currentUser]);
+  //
+  // The viewer's own membership is NOT read from the members list: that list
+  // leaves out canceling members and its cache can predate a leave. It comes
+  // from the props and then from the leave / reactivate responses.
+  const applyMembership = (membership: MembershipStatus) => {
+    setIsMember(membership.isMember);
+    setMemberStatus(membership.status);
+    setSubscriptionStatus(membership.subscriptionStatus);
+    setAccessEndDate(membership.currentPeriodEnd);
+    // Drop the cached copy of this page so going back to it doesn't show the
+    // old membership.
+    router.refresh();
+  };
 
   const startPaidJoin = async (plan: 'monthly' | 'yearly' = 'monthly') => {
     if (!currentUser) return;
@@ -417,20 +429,18 @@ export default function FeedClient({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to leave community");
+        const body = await failureBody(response);
+        toast.error(body?.error || "Failed to leave community");
+        return;
       }
 
       const data = await response.json();
 
       // Update local state
-      if (data.gracePeriod && data.accessEndDate) {
-        // The sidebar shows the re-join button for a canceling membership
-        // with an end date, so set both or it only appears after a refresh.
-        setSubscriptionStatus("canceling");
-        setAccessEndDate(data.accessEndDate);
-        const endDate = new Date(data.accessEndDate).toLocaleDateString();
+      if (data.gracePeriod && data.membership?.currentPeriodEnd) {
+        applyMembership(data.membership);
         toast.success(
-          `Your membership will end on ${endDate}. You'll maintain access until then.`
+          `Your membership will end on ${formatDate(data.membership.currentPeriodEnd)}. You'll maintain access until then.`
         );
       } else {
         setIsMember(false);
@@ -465,15 +475,18 @@ export default function FeedClient({
       );
 
       if (!response.ok) {
-        throw new Error("Failed to reactivate membership");
+        const body = await failureBody(response);
+        toast.error(body?.error || "Failed to reactivate membership");
+        if (body?.membership && !body.membership.isMember) {
+          // It already ended, so there is nothing to rejoin: join from scratch.
+          setIsMember(false);
+          router.push(`/${communitySlug}/about`);
+        }
+        return;
       }
 
       const data = await response.json();
-
-      // Update local state
-      setMemberStatus("active");
-      setSubscriptionStatus("active");
-      setAccessEndDate(null);
+      applyMembership(data.membership);
       toast.success("Your membership has been reactivated!");
     } catch (error) {
       console.error("Error reactivating membership:", error);
@@ -914,10 +927,9 @@ export default function FeedClient({
                   Your subscription will be canceled, but you'll maintain access
                   until the end of your current billing period.
                   {accessEndDate && (
-                    <p className="mt-2 text-sm font-medium text-yellow-600">
-                      You will have access until{" "}
-                      {new Date(accessEndDate).toLocaleDateString()}
-                    </p>
+                    <span className="mt-2 block text-sm font-medium text-yellow-600">
+                      You will have access until <LocalDate value={accessEndDate} />
+                    </span>
                   )}
                 </>
               ) : (

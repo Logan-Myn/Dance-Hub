@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { LocalDate } from "@/components/ui/local-date";
 import {
   ExternalLink,
   ChevronDown,
@@ -275,7 +276,7 @@ export default function CommunitySidebar({
                 <p className="text-xs text-center text-muted-foreground mb-2">
                   Your membership ends on{" "}
                   <span className="font-medium text-amber-600">
-                    {new Date(accessEndDate).toLocaleDateString()}
+                    <LocalDate value={accessEndDate} />
                   </span>
                 </p>
                 <Button
@@ -284,6 +285,17 @@ export default function CommunitySidebar({
                 >
                   Rejoin Community
                 </Button>
+                {/* Rejoining is refused while a payment is overdue, so the
+                    card must stay reachable here. */}
+                {stripeAccountId && (
+                  <Button
+                    onClick={onManageClick}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    Manage
+                  </Button>
+                )}
               </>
             ) : memberStatus === "inactive" ? (
               <>
@@ -295,8 +307,7 @@ export default function CommunitySidebar({
                 </Button>
                 {accessEndDate && (
                   <p className="text-xs text-center text-amber-600">
-                    Access until{" "}
-                    {new Date(accessEndDate).toLocaleDateString()}
+                    Access until <LocalDate value={accessEndDate} />
                   </p>
                 )}
               </>

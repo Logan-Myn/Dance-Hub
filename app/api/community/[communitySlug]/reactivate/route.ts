@@ -2,13 +2,15 @@ import { NextResponse } from 'next/server';
 import { queryOne, sql } from '@/lib/db';
 import { stripe } from "@/lib/stripe";
 import { requireSession } from "@/lib/community-auth";
+import { toMembershipStatus, type MembershipRow } from "@/lib/community-data";
+import { ENDED_SUBSCRIPTION_STATUSES, markMembershipEnded } from "@/lib/membership-ended";
 
 interface Community {
   id: string;
   stripe_account_id: string | null;
 }
 
-interface Member {
+interface Member extends MembershipRow {
   id: string;
   user_id: string;
   community_id: string;
@@ -62,6 +64,19 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
         { stripeAccount: community.stripe_account_id }
       );
 
+      // Stripe already ended it (the webhook that should have told us never
+      // arrived). Nothing to un-cancel; the member has to join again.
+      if (ENDED_SUBSCRIPTION_STATUSES.includes(subscription.status)) {
+        const ended = await markMembershipEnded(community.id, userId, subscription.status);
+        return NextResponse.json(
+          {
+            error: 'Your membership has ended. Join again to continue.',
+            membership: toMembershipStatus(ended ?? member),
+          },
+          { status: 409 }
+        );
+      }
+
       if (subscription.status !== 'active' && subscription.status !== 'trialing') {
         console.warn('Reactivate refused, subscription not in good standing:', {
           subscriptionId: member.stripe_subscription_id,
@@ -81,16 +96,20 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
       );
 
       // Update member status back to active
-      await sql`
+      const [updated] = await sql<MembershipRow[]>`
         UPDATE community_members
         SET
           status = 'active',
           subscription_status = 'active'
         WHERE community_id = ${community.id}
           AND user_id = ${userId}
+        RETURNING status, subscription_status, current_period_end
       `;
 
-      return NextResponse.json({ success: true });
+      return NextResponse.json({
+        success: true,
+        membership: toMembershipStatus(updated),
+      });
     }
 
     return NextResponse.json(

@@ -79,6 +79,7 @@ export async function GET(
       amount: price?.unit_amount ?? 0,
       interval,
       currentPeriodEnd,
+      cancelAtPeriodEnd: sub.cancel_at_period_end,
       defaultPaymentMethod: card
         ? { brand: card.brand, last4: card.last4 }
         : null,

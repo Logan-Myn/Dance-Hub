@@ -55,6 +55,9 @@ async function resolve(communitySlug: string): Promise<ResolveResult> {
     { expand: ["items.data.price"] },
     { stripeAccount: community.stripe_account_id },
   );
+  if (sub.cancel_at_period_end) {
+    return { error: NextResponse.json({ error: "Your membership is set to end. Rejoin before switching to yearly." }, { status: 400 }) };
+  }
   const item = sub.items.data[0];
   if (!item) return { error: NextResponse.json({ error: "Subscription has no items" }, { status: 400 }) };
   if (item.price?.recurring?.interval === "year") {

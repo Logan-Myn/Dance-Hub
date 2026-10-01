@@ -66,6 +66,8 @@ function req(body: object) {
 /** Interpolated values of every sql`...` / queryOne`...` call (strings dropped). */
 const sqlValues = () => mockSql.mock.calls.flatMap((c) => c.slice(1));
 const queryValues = () => mockQueryOne.mock.calls.flatMap((c) => c.slice(1));
+/** SQL text of the nth sql`...` call. */
+const sqlText = (n: number) => (mockSql.mock.calls[n][0] as string[]).join('?');
 
 beforeEach(() => {
   [
@@ -234,6 +236,59 @@ describe('leave', () => {
     expect(queryValues()).toContain('u1');
     expect([...sqlValues(), ...queryValues()]).not.toContain('victim');
   });
+
+  it('returns the stored membership when cancelling at period end', async () => {
+    const periodEnd = new Date(Date.now() + 30 * 86400_000);
+    mockQueryOne
+      .mockResolvedValueOnce({ id: 'c1', stripe_account_id: 'acct_1' })
+      .mockResolvedValueOnce({ user_id: 'u1', community_id: 'c1', role: 'member', status: 'active', stripe_subscription_id: 'sub_1' });
+    mockSubscriptionsUpdate.mockResolvedValueOnce({
+      id: 'sub_1',
+      items: { data: [{ current_period_end: Math.floor(periodEnd.getTime() / 1000) }] },
+    });
+    mockSql.mockResolvedValueOnce([
+      { status: 'active', subscription_status: 'canceling', current_period_end: periodEnd },
+    ]);
+    const res = await leavePOST(req({}), { params });
+    expect(res.status).toBe(200);
+    expect(sqlText(0)).toMatch(/RETURNING/);
+    expect(await res.json()).toMatchObject({
+      gracePeriod: true,
+      membership: {
+        isMember: true,
+        status: 'active',
+        subscriptionStatus: 'canceling',
+        currentPeriodEnd: periodEnd.toISOString(),
+      },
+    });
+  });
+
+  describe('when Stripe already ended the subscription', () => {
+    const setup = () => {
+      mockQueryOne
+        .mockResolvedValueOnce({ id: 'c1', stripe_account_id: 'acct_1' })
+        .mockResolvedValueOnce({ user_id: 'u1', community_id: 'c1', role: 'member', status: 'active', stripe_subscription_id: 'sub_1' });
+      mockSubscriptionsUpdate.mockRejectedValueOnce(new Error('subscription is canceled'));
+      mockSubscriptionsRetrieve.mockResolvedValueOnce({ id: 'sub_1', status: 'canceled' });
+    };
+
+    it('marks the member inactive and counts them out', async () => {
+      setup();
+      mockSql.mockResolvedValueOnce([{ status: 'inactive', subscription_status: 'canceled', current_period_end: null }]);
+      const res = await leavePOST(req({}), { params });
+      expect(await res.json()).toMatchObject({ success: true, reconciled: true });
+      expect(sqlText(0)).toMatch(/status = 'inactive'/);
+      expect(sqlText(1)).toMatch(/decrement_members_count/);
+    });
+
+    it('does not count the member out twice', async () => {
+      setup();
+      mockSql.mockResolvedValueOnce([]); // row was already inactive
+      const res = await leavePOST(req({}), { params });
+      expect(await res.json()).toMatchObject({ success: true, reconciled: true });
+      expect(mockSql).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 describe('reactivate', () => {
@@ -252,6 +307,39 @@ describe('reactivate', () => {
     expect(mockSql).toHaveBeenCalledTimes(1);
     expect(sqlValues()).toContain('u1');
     expect([...sqlValues(), ...queryValues()]).not.toContain('victim');
+  });
+
+  it('returns the stored membership, keeping the period end', async () => {
+    const periodEnd = new Date(Date.now() + 30 * 86400_000);
+    setup();
+    mockSubscriptionsRetrieve.mockResolvedValueOnce({ id: 'sub_1', status: 'active' });
+    mockSubscriptionsUpdate.mockResolvedValueOnce({ id: 'sub_1', status: 'active' });
+    mockSql.mockResolvedValueOnce([
+      { status: 'active', subscription_status: 'active', current_period_end: periodEnd },
+    ]);
+    const res = await reactivatePOST(req({}), { params });
+    expect(res.status).toBe(200);
+    expect(sqlText(0)).toMatch(/RETURNING/);
+    expect((await res.json()).membership).toMatchObject({
+      isMember: true,
+      status: 'active',
+      subscriptionStatus: 'active',
+      currentPeriodEnd: periodEnd.toISOString(),
+    });
+  });
+
+  it.each(['canceled', 'incomplete_expired'])('ends the membership and says so when the subscription is %s', async (status) => {
+    setup();
+    mockSubscriptionsRetrieve.mockResolvedValueOnce({ id: 'sub_1', status });
+    mockSql.mockResolvedValueOnce([{ status: 'inactive', subscription_status: status, current_period_end: null }]);
+    const res = await reactivatePOST(req({}), { params });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: 'Your membership has ended. Join again to continue.',
+      membership: { isMember: false, status: 'inactive' },
+    });
+    expect(sqlText(0)).toMatch(/status = 'inactive'/);
+    expect(mockSubscriptionsUpdate).not.toHaveBeenCalled();
   });
 
   it.each(['past_due', 'unpaid', 'incomplete'])('does not mark the member active when the subscription is %s', async (status) => {

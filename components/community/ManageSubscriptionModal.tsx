@@ -18,6 +18,7 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { toast } from "react-hot-toast";
+import { formatDate } from "@/lib/format-date";
 
 type Status = "active" | "past_due" | "canceled" | "incomplete" | string;
 
@@ -27,6 +28,7 @@ interface SubscriptionSummary {
   amount: number;
   interval: string;
   currentPeriodEnd: number;
+  cancelAtPeriodEnd?: boolean;
   defaultPaymentMethod: { brand: string; last4: string } | null;
   upgrade: { available: boolean; yearlyAmount: number; yearlyBenefits: string | null } | null;
 }
@@ -52,12 +54,7 @@ const formatMoney = (minor: number, currency: string) =>
     currency: currency.toUpperCase(),
   }).format(minor / 100);
 
-const formatDate = (unixSec: number) =>
-  new Date(unixSec * 1000).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+const formatUnixDate = (unixSec: number) => formatDate(unixSec * 1000);
 
 const intervalLabel = (interval: string) =>
   interval === "month" ? "Monthly" : interval === "year" ? "Yearly" : interval;
@@ -370,7 +367,8 @@ export function ManageSubscriptionModal({
                 {formatMoney(summary.amount, summary.currency)}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
-                Next charge: {formatDate(summary.currentPeriodEnd)}
+                {summary.cancelAtPeriodEnd ? "Ends on" : "Next charge"}:{" "}
+                {formatUnixDate(summary.currentPeriodEnd)}
               </p>
 
               {summary.status === "past_due" && (
@@ -390,7 +388,8 @@ export function ManageSubscriptionModal({
               )}
             </section>
 
-            {summary.interval === "month" && summary.upgrade?.available && (
+            {/* Upgrading would charge for a plan that is about to end. */}
+            {summary.interval === "month" && summary.upgrade?.available && !summary.cancelAtPeriodEnd && (
               <section>
                 <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-2">
                   Switch to yearly
@@ -456,7 +455,7 @@ export function ManageSubscriptionModal({
                       className="flex items-center justify-between text-sm"
                     >
                       <span>
-                        {formatDate(p.paidAt)} ·{" "}
+                        {formatUnixDate(p.paidAt)} ·{" "}
                         {formatMoney(p.amount, p.currency)}
                       </span>
                       {p.hostedInvoiceUrl && (

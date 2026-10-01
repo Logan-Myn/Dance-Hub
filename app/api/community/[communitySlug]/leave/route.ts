@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { queryOne, sql } from '@/lib/db';
 import { stripe } from "@/lib/stripe";
 import { requireSession } from "@/lib/community-auth";
+import { toMembershipStatus, type MembershipRow } from "@/lib/community-data";
+import { ENDED_SUBSCRIPTION_STATUSES, markMembershipEnded } from "@/lib/membership-ended";
 
 interface Community {
   id: string;
@@ -26,7 +28,7 @@ async function reconcileIfTerminal(
   communityId: string,
   userId: string,
 ): Promise<boolean> {
-  let stripeStatus: string | null = null;
+  let stripeStatus: string;
   try {
     const sub = await stripe.subscriptions.retrieve(
       stripeSubscriptionId,
@@ -37,23 +39,11 @@ async function reconcileIfTerminal(
     return false;
   }
 
-  if (stripeStatus !== 'canceled' && stripeStatus !== 'incomplete_expired') {
+  if (!ENDED_SUBSCRIPTION_STATUSES.includes(stripeStatus)) {
     return false;
   }
 
-  await sql`
-    UPDATE community_members
-    SET status = 'inactive',
-        subscription_status = ${stripeStatus},
-        cancelled_at = NOW()
-    WHERE community_id = ${communityId}
-      AND user_id = ${userId}
-  `;
-  try {
-    await sql`SELECT decrement_members_count(${communityId})`;
-  } catch (countError) {
-    console.error('Error updating members count on reconcile:', countError);
-  }
+  await markMembershipEnded(communityId, userId, stripeStatus);
   return true;
 }
 
@@ -113,17 +103,19 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
         const currentPeriodEnd = subscriptionItem?.current_period_end;
         accessEndDate = currentPeriodEnd ? new Date(currentPeriodEnd * 1000) : new Date();
 
-        await sql`
+        const [updated] = await sql<MembershipRow[]>`
           UPDATE community_members
           SET subscription_status = 'canceling', current_period_end = ${accessEndDate.toISOString()}
           WHERE community_id = ${community.id}
             AND user_id = ${userId}
+          RETURNING status, subscription_status, current_period_end
         `;
 
         return NextResponse.json({
           success: true,
           accessEndDate: accessEndDate.toISOString(),
-          gracePeriod: true
+          gracePeriod: true,
+          membership: toMembershipStatus(updated),
         });
       } catch (error) {
         // If Stripe rejects the update because the subscription is already in a
