@@ -188,8 +188,12 @@ export const auth = betterAuth({
     account: {
       create: {
         // Linking Google to a user whose email was never verified removes
-        // that user's password and sessions (account pre-hijack guard).
-        after: async (account, ctx) => {
+        // that user's password and sessions (account pre-hijack guard). It
+        // runs before the insert: linkAccount is not in a transaction, so if
+        // the guard fails the link must not happen at all (a throw here makes
+        // better-auth answer "unable to link account"). Never return false,
+        // which would skip the insert but still sign the user in.
+        before: async (account, ctx) => {
           await revokeUnverifiedPassword(
             account,
             ctx?.context.internalAdapter ?? sqlAccountStore

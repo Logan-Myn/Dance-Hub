@@ -12,7 +12,7 @@ export interface AuthAccountStore {
 }
 
 /**
- * Account pre-hijack guard, run after an account row is created.
+ * Account pre-hijack guard, run before an account row is created.
  *
  * Email sign-up creates the user and its password ("credential") account
  * before the email is verified. If someone else registered that email, the
@@ -22,8 +22,9 @@ export interface AuthAccountStore {
  * password is removed and every session of that user ends. The owner can set a
  * password again with "forgot password", which recreates the account.
  *
- * Runs before better-auth marks the email verified and before it creates the
- * new session, so the Google sign-in itself is unaffected.
+ * Runs before the Google account is inserted, before better-auth marks the
+ * email verified and before it creates the new session, so the Google
+ * sign-in itself is unaffected. If this throws, the link is not made.
  */
 export async function revokeUnverifiedPassword(
   account: { userId: string; providerId: string },
