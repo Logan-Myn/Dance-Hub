@@ -295,7 +295,12 @@ describe('reactivate', () => {
   const setup = () =>
     mockQueryOne
       .mockResolvedValueOnce({ id: 'c1', stripe_account_id: 'acct_1' })
-      .mockResolvedValueOnce({ id: 'm1', user_id: 'u1', community_id: 'c1', stripe_subscription_id: 'sub_1' });
+      // An active member who cancelled and is still in the paid period.
+      .mockResolvedValueOnce({
+        id: 'm1', user_id: 'u1', community_id: 'c1', stripe_subscription_id: 'sub_1',
+        status: 'active', subscription_status: 'canceling',
+        current_period_end: new Date(Date.now() + 30 * 86400_000),
+      });
 
   it.each(['active', 'trialing'])('restores access when the subscription is %s', async (status) => {
     setup();

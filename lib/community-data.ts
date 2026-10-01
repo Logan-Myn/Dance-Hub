@@ -393,11 +393,14 @@ export function toMembershipStatus(member: MembershipRow | null | undefined): Me
         ? member.current_period_end
         : new Date(member.current_period_end))
     : null;
-  const inGrace =
-    member.subscription_status === 'canceling' && periodEnd && periodEnd > new Date();
   const isPreRegistered =
     member.status === 'pre_registered' || member.status === 'pending_pre_registration';
-  const isMember = member.status === 'active' || !!inGrace;
+  // Only an active membership counts. A member who cancels keeps status
+  // 'active' (subscription_status 'canceling') until the paid period ends and
+  // the subscription.deleted webhook marks them inactive, so the grace period
+  // is covered. subscription_status alone never grants access: a
+  // pre-registered or pending row marked 'canceling' never paid for a period.
+  const isMember = member.status === 'active';
   return {
     isMember,
     isPreRegistered,
