@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { query, queryOne, sql } from "@/lib/db";
 import { requireCommunityManager } from "@/lib/community-auth";
+import { sanitizeRichTextOrNull } from "@/lib/sanitize-html";
 
 interface Lesson {
   id: string;
@@ -73,7 +74,7 @@ export async function PUT(
     const transformedLessons = updatedLessons.map(lesson => ({
       id: lesson.id,
       title: lesson.title,
-      content: lesson.content,
+      content: sanitizeRichTextOrNull(lesson.content),
       lesson_position: lesson.lesson_position,
       chapter_id: lesson.chapter_id,
       created_at: lesson.created_at,

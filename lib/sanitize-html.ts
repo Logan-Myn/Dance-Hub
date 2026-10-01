@@ -4,8 +4,8 @@ import sanitizeHtml from 'sanitize-html';
 // its own editor produces; the API accepts any string, so everything that
 // stores or returns thread or broadcast HTML runs it through one of these.
 //
-// The lists follow the editor schemas: components/Editor.tsx (threads: Tiptap
-// StarterKit, TextAlign, a font-size TextStyle) and
+// The lists follow the editor schemas: components/Editor.tsx (threads and
+// lesson text: Tiptap StarterKit, TextAlign, a font-size TextStyle) and
 // components/emails/EmailEditor.tsx (broadcasts: StarterKit, TextAlign, Link,
 // Image). Keep them in sync when an editor gains an extension.
 
@@ -84,10 +84,15 @@ const emailOptions: sanitizeHtml.IOptions = {
   exclusiveFilter: (frame) => frame.tag === 'img' && !frame.attribs.src,
 };
 
-/** Thread bodies (components/Editor.tsx). Non-strings become ''. */
+/** Thread bodies and lesson text (components/Editor.tsx). Non-strings become ''. */
 export function sanitizeRichText(html: unknown): string {
   if (typeof html !== 'string') return '';
   return sanitizeHtml(html, baseOptions);
+}
+
+/** sanitizeRichText for nullable columns (lessons.content): null stays null. */
+export function sanitizeRichTextOrNull(html: string | null | undefined): string | null {
+  return html == null ? null : sanitizeRichText(html);
 }
 
 /** Broadcast emails (components/emails/EmailEditor.tsx). Non-strings become ''. */

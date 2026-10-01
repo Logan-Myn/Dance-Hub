@@ -4,6 +4,7 @@ import { requireCommunityManager } from "@/lib/community-auth";
 import { deleteMuxAsset, Video } from "@/lib/mux";
 import { isMuxAssetUsedElsewhere } from "@/lib/mux-asset-usage";
 import { deleteFile } from "@/lib/storage";
+import { sanitizeRichText, sanitizeRichTextOrNull } from "@/lib/sanitize-html";
 
 interface Lesson {
   id: string;
@@ -96,7 +97,14 @@ export async function PUT(
     const { community } = guard;
 
     const body = await request.json();
-    const { title, content, videoAssetId, playbackId } = body;
+    const { title, content: rawContent, videoAssetId, playbackId } = body;
+
+    // Lesson text is rendered as HTML on the classroom page: store only the
+    // editor's allowlisted markup. Leaving it out keeps the current text.
+    if (rawContent != null && typeof rawContent !== "string") {
+      return NextResponse.json({ error: "Invalid content" }, { status: 400 });
+    }
+    const content = rawContent == null ? null : sanitizeRichText(rawContent);
 
     const currentLesson = await findScopedLesson(params, community.id);
     if (!currentLesson) {
@@ -152,6 +160,7 @@ export async function PUT(
     // Transform the response for frontend compatibility
     const transformedLesson = {
       ...updatedLesson,
+      content: sanitizeRichTextOrNull(updatedLesson.content),
       order: updatedLesson.lesson_position,
       videoAssetId: updatedLesson.video_asset_id,
       playbackId: updatedLesson.playback_id,

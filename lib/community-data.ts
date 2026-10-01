@@ -1,6 +1,6 @@
 import { cache } from 'react';
 import { query, queryOne } from './db';
-import { sanitizeRichText } from './sanitize-html';
+import { sanitizeRichText, sanitizeRichTextOrNull } from './sanitize-html';
 import type { PrivateLesson } from '@/types/private-lessons';
 
 export interface CommunityRow {
@@ -574,6 +574,8 @@ export const getCourseWithChapters = cache(async (
     const arr = lessonsByChapter.get(l.chapter_id) ?? [];
     arr.push({
       ...l,
+      // Rendered as HTML on the classroom page; older rows predate sanitizing.
+      content: sanitizeRichTextOrNull(l.content),
       videoAssetId: l.video_asset_id,
       playbackId: l.playback_id,
       completed: completedLessonIds.has(l.id),

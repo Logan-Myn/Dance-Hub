@@ -1,9 +1,10 @@
 /**
  * One-off: re-sanitize rich-text HTML stored before write-time sanitizing.
  *
- * Thread bodies (threads.content) and broadcast emails
- * (email_broadcasts.html_content) are now sanitized when they are written and
- * again when they are read, so old rows are already harmless in the app. This
+ * Thread bodies (threads.content), lesson text (lessons.content) and broadcast
+ * emails (email_broadcasts.html_content) are now sanitized when they are
+ * written and again when they are read, so old rows are already harmless in
+ * the app. This
  * cleans the stored copies too, so nothing else that reads the table later
  * (exports, new features) picks up unsafe markup.
  *
@@ -15,7 +16,9 @@
  *   DATABASE_URL=... bun run scripts/resanitize-rich-text.ts           # dry run
  *   DATABASE_URL=... bun run scripts/resanitize-rich-text.ts --apply   # write
  *
- * Take a backup (pg_dump of both tables) before running with --apply.
+ * Take a backup (pg_dump of the three tables) before running with --apply.
+ * The dry run also shows whether any lesson held markup the current editor
+ * cannot produce (e.g. images from an older editor), which would be dropped.
  */
 
 import postgres from 'postgres';
@@ -56,6 +59,13 @@ async function main() {
   `;
   await resanitize('thread', threads, sanitizeRichText, (id, html) =>
     sql`UPDATE threads SET content = ${html} WHERE id = ${id}`
+  );
+
+  const lessons = await sql<{ id: string; html: string | null }[]>`
+    SELECT id, content AS html FROM lessons
+  `;
+  await resanitize('lesson', lessons, sanitizeRichText, (id, html) =>
+    sql`UPDATE lessons SET content = ${html} WHERE id = ${id}`
   );
 
   const broadcasts = await sql<{ id: string; html: string | null }[]>`

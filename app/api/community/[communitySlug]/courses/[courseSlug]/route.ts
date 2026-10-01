@@ -14,6 +14,7 @@ import {
 } from "@/lib/storage";
 import { deleteMuxAsset } from "@/lib/mux";
 import { isMuxAssetUsedElsewhere } from "@/lib/mux-asset-usage";
+import { sanitizeRichTextOrNull } from "@/lib/sanitize-html";
 
 interface Course {
   id: string;
@@ -140,6 +141,7 @@ export async function GET(
         ...chapter,
         lessons: chapter.lessons.map((lesson) => ({
           ...lesson,
+          content: sanitizeRichTextOrNull(lesson.content),
           videoAssetId: lesson.video_asset_id,
           playbackId: lesson.playback_id,
           completed: completedLessonIds.has(lesson.id)
