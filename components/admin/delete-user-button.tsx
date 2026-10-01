@@ -43,7 +43,8 @@ export default function DeleteUserButton({ userId }: DeleteUserButtonProps) {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete user');
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to delete user. Please try again.');
       }
 
       toast.success("User has been successfully deleted");
@@ -52,7 +53,7 @@ export default function DeleteUserButton({ userId }: DeleteUserButtonProps) {
       window.location.reload();
     } catch (error) {
       console.error('Error deleting user:', error);
-      toast.error("Failed to delete user. Please try again.");
+      toast.error(error instanceof Error ? error.message : "Failed to delete user. Please try again.");
     }
   };
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { queryOne, sql } from "@/lib/db";
+import { query, queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
+import { cancelMemberSubscriptions, type MemberSubscriptionRef } from "@/lib/subscription-cancel";
 
 interface Profile {
   id: string;
@@ -27,6 +28,26 @@ export async function DELETE(request: Request, props: { params: Promise<{ userId
 
     if (!requesterProfile?.is_admin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Cancel the user's membership subscriptions, each on its community's
+    // connected account, before their member rows go: afterwards nothing in
+    // the app can cancel them, and they would keep being charged.
+    const memberships = await query<MemberSubscriptionRef>`
+      SELECT cm.stripe_subscription_id, cm.subscription_status, c.stripe_account_id
+      FROM community_members cm
+      JOIN communities c ON c.id = cm.community_id
+      WHERE cm.user_id = ${userId}
+        AND cm.stripe_subscription_id IS NOT NULL
+    `;
+    const notCancelled = await cancelMemberSubscriptions(memberships);
+    if (notCancelled.length > 0) {
+      return NextResponse.json(
+        {
+          error: `We couldn't cancel ${notCancelled.length} of this user's ${notCancelled.length === 1 ? "subscription" : "subscriptions"}, so the user was not deleted. Please try again.`,
+        },
+        { status: 502 }
+      );
     }
 
     // Delete user's profile first (this will cascade delete community_members)

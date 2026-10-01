@@ -39,3 +39,38 @@ export async function cancelSubscriptionNow(
     throw err;
   }
 }
+
+export interface MemberSubscriptionRef {
+  stripe_subscription_id: string | null;
+  subscription_status: string | null;
+  /** The community's connected account, where membership subscriptions live. */
+  stripe_account_id: string | null;
+}
+
+/**
+ * Cancels the membership subscriptions of rows that are about to be deleted
+ * (a removed member, a deleted community or user). Free members and
+ * subscriptions that already ended are skipped. Returns the ids that could
+ * not be cancelled; the caller must not delete anything if there are any.
+ */
+export async function cancelMemberSubscriptions(rows: MemberSubscriptionRef[]): Promise<string[]> {
+  const failed: string[] = [];
+  for (const row of rows) {
+    const subscriptionId = row.stripe_subscription_id;
+    if (!subscriptionId) continue;
+    if (row.subscription_status && ENDED_SUBSCRIPTION_STATUSES.includes(row.subscription_status)) continue;
+    if (!row.stripe_account_id) {
+      // The subscription lives on a connected account we no longer know.
+      console.error('[subscriptions] no connected account to cancel on:', subscriptionId);
+      failed.push(subscriptionId);
+      continue;
+    }
+    try {
+      await cancelSubscriptionNow(subscriptionId, row.stripe_account_id);
+    } catch (err) {
+      console.error('[subscriptions] failed to cancel:', subscriptionId, err);
+      failed.push(subscriptionId);
+    }
+  }
+  return failed;
+}

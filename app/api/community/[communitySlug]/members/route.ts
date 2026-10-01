@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { sql, query } from "@/lib/db";
+import { sql, query, queryOne } from "@/lib/db";
 import {
   requireCommunityManager,
   requireCommunityViewer,
   userCanManageCommunity,
 } from "@/lib/community-auth";
+import { cancelMemberSubscriptions } from "@/lib/subscription-cancel";
 
 interface MemberWithProfile {
   id: string;
@@ -94,6 +95,40 @@ export async function DELETE(request: Request, props: { params: Promise<{ commun
     }
 
     // Scoped to this community so a member row from elsewhere can't be removed.
+    const member = await queryOne<{
+      id: string;
+      stripe_subscription_id: string | null;
+      subscription_status: string | null;
+    }>`
+      SELECT id, stripe_subscription_id, subscription_status
+      FROM community_members
+      WHERE id = ${memberId}
+        AND community_id = ${community.id}
+    `;
+
+    if (!member) {
+      return NextResponse.json(
+        { error: "Member not found" },
+        { status: 404 }
+      );
+    }
+
+    // Cancel their subscription first: once the row is gone nothing in the
+    // app can, and they would keep being charged with no access.
+    const notCancelled = await cancelMemberSubscriptions([
+      {
+        stripe_subscription_id: member.stripe_subscription_id,
+        subscription_status: member.subscription_status,
+        stripe_account_id: community.stripe_account_id,
+      },
+    ]);
+    if (notCancelled.length > 0) {
+      return NextResponse.json(
+        { error: "We couldn't cancel this member's subscription, so they were not removed. Please try again." },
+        { status: 502 }
+      );
+    }
+
     const deleted = await sql<{ id: string }[]>`
       DELETE FROM community_members
       WHERE id = ${memberId}

@@ -5,7 +5,7 @@
  *
  * @jest-environment node
  */
-import { cancelSubscriptionNow, isMissingStripeResource } from '@/lib/subscription-cancel';
+import { cancelMemberSubscriptions, cancelSubscriptionNow, isMissingStripeResource } from '@/lib/subscription-cancel';
 
 const mockCancel = jest.fn();
 const mockRetrieve = jest.fn();
@@ -68,4 +68,58 @@ it('recognises missing-object errors', () => {
   expect(isMissingStripeResource(missing)).toBe(true);
   expect(isMissingStripeResource(new Error('boom'))).toBe(false);
   expect(isMissingStripeResource(null)).toBe(false);
+});
+
+describe('cancelMemberSubscriptions', () => {
+  it('cancels each live membership subscription on its community account', async () => {
+    mockCancel.mockResolvedValue({ status: 'canceled' });
+
+    const failed = await cancelMemberSubscriptions([
+      { stripe_subscription_id: 'sub_a', subscription_status: 'active', stripe_account_id: 'acct_1' },
+      { stripe_subscription_id: 'sub_b', subscription_status: 'canceling', stripe_account_id: 'acct_2' },
+      { stripe_subscription_id: 'sub_c', subscription_status: null, stripe_account_id: 'acct_1' },
+    ]);
+
+    expect(failed).toEqual([]);
+    expect(mockCancel).toHaveBeenCalledWith('sub_a', { stripeAccount: 'acct_1' });
+    expect(mockCancel).toHaveBeenCalledWith('sub_b', { stripeAccount: 'acct_2' });
+    expect(mockCancel).toHaveBeenCalledWith('sub_c', { stripeAccount: 'acct_1' });
+  });
+
+  it('skips free members and subscriptions that already ended', async () => {
+    const failed = await cancelMemberSubscriptions([
+      { stripe_subscription_id: null, subscription_status: null, stripe_account_id: 'acct_1' },
+      { stripe_subscription_id: 'sub_x', subscription_status: 'canceled', stripe_account_id: 'acct_1' },
+      { stripe_subscription_id: 'sub_y', subscription_status: 'incomplete_expired', stripe_account_id: 'acct_1' },
+    ]);
+
+    expect(failed).toEqual([]);
+    expect(mockCancel).not.toHaveBeenCalled();
+  });
+
+  it('reports the ones it could not cancel, and keeps going', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockCancel
+      .mockRejectedValueOnce(Object.assign(new Error('rate limited'), { statusCode: 429 }))
+      .mockResolvedValueOnce({ status: 'canceled' });
+    mockRetrieve.mockResolvedValueOnce({ status: 'active' });
+
+    const failed = await cancelMemberSubscriptions([
+      { stripe_subscription_id: 'sub_a', subscription_status: 'active', stripe_account_id: 'acct_1' },
+      { stripe_subscription_id: 'sub_b', subscription_status: 'active', stripe_account_id: 'acct_1' },
+    ]);
+
+    expect(failed).toEqual(['sub_a']);
+    expect(mockCancel).toHaveBeenCalledTimes(2);
+  });
+
+  it('counts a subscription with no connected account to cancel it on as a failure', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    const failed = await cancelMemberSubscriptions([
+      { stripe_subscription_id: 'sub_a', subscription_status: 'active', stripe_account_id: null },
+    ]);
+
+    expect(failed).toEqual(['sub_a']);
+    expect(mockCancel).not.toHaveBeenCalled();
+  });
 });
