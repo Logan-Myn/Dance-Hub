@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { queryOne, sql } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
+import { isConnectedAccountGone } from '@/lib/stripe-connect-errors';
+
+// The wizard reacts to `code` and loads the linked account instead.
+const ACCOUNT_EXISTS = {
+  error: 'This community already has a payout account',
+  code: 'account_exists',
+};
 
 interface Community {
   id: string;
@@ -46,23 +53,28 @@ export async function POST(request: Request) {
 
     // If community has a stripe_account_id, verify it's still valid
     if (community.stripe_account_id) {
-      console.log('Checking if existing Stripe account is valid:', community.stripe_account_id);
       try {
         await stripe.accounts.retrieve(community.stripe_account_id);
-        console.log('Existing Stripe account is valid');
-        return NextResponse.json(
-          { error: 'Community already has a Stripe account' },
-          { status: 400 }
-        );
+        return NextResponse.json(ACCOUNT_EXISTS, { status: 400 });
       } catch (stripeError: any) {
-        console.log('Existing Stripe account is invalid:', stripeError.message);
-        // Account doesn't exist or is invalid, clear it from database and continue
+        if (!isConnectedAccountGone(stripeError)) {
+          // A network error, rate limit or outage says nothing about the
+          // account. Keep the link; unlinking would re-point a live community
+          // at an empty account.
+          console.error('Could not check the existing Stripe account:', stripeError);
+          return NextResponse.json(
+            { error: 'We could not reach the payment provider. Please try again in a moment.' },
+            { status: 502 }
+          );
+        }
+        console.log('Existing Stripe account is gone:', stripeError.message);
+        // Only clear the id we checked, never one another request just saved.
         await sql`
           UPDATE communities
           SET stripe_account_id = NULL
           WHERE id = ${communityId}
+            AND stripe_account_id = ${community.stripe_account_id}
         `;
-        console.log('Cleared invalid stripe_account_id from database');
       }
     }
 
@@ -83,17 +95,31 @@ export async function POST(request: Request) {
       },
     });
 
-    // Update the community with the Stripe account ID
+    // Link the new account only if the community still has none, so two
+    // concurrent requests can't overwrite each other's account.
+    let saved: { id: string } | null;
     try {
-      await sql`
+      saved = await queryOne<{ id: string }>`
         UPDATE communities
         SET stripe_account_id = ${account.id}, stripe_onboarding_type = 'custom'
         WHERE id = ${communityId}
+          AND stripe_account_id IS NULL
+        RETURNING id
       `;
     } catch (updateError) {
       // If database update fails, we should delete the Stripe account
       await stripe.accounts.del(account.id);
       throw updateError;
+    }
+
+    if (!saved) {
+      // Another request linked an account first. Keep theirs, drop ours.
+      try {
+        await stripe.accounts.del(account.id);
+      } catch (delError) {
+        console.error('Could not delete the unused Stripe account:', account.id, delError);
+      }
+      return NextResponse.json(ACCOUNT_EXISTS, { status: 400 });
     }
 
     // Initialize onboarding progress tracking

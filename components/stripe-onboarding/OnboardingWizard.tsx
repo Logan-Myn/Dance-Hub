@@ -253,7 +253,7 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
         console.log("Account creation failed:", errorData);
         
         // If account already exists, try to get the existing account ID
-        if (errorData.error === "Community already has a Stripe account") {
+        if (errorData.code === "account_exists") {
           console.log("Account already exists, fetching existing account...");
           try {
             const communityResponse = await fetch(`/api/community/${communitySlug}`);
