@@ -164,42 +164,46 @@ export async function deletePromoCode(args: {
 export async function validatePromoCode(args: {
   stripeAccountId: string;
   code: string;
-  communityId?: string;
+  communityId: string;
   plan?: 'monthly' | 'yearly';
 }): Promise<ValidateResult> {
   const invalid: ValidateResult = { valid: false, reason: 'That code is not valid.' };
   const trimmed = args.code.trim();
   if (!trimmed) return invalid;
 
-  const list = await stripe.promotionCodes.list(
-    { code: trimmed, active: true, limit: 1 },
-    { stripeAccount: args.stripeAccountId },
-  );
-  const promo = list.data[0];
+  // Look the code up in this community's mirror first, so unknown, switched
+  // off or deleted codes are refused without calling Stripe. Stripe matches
+  // codes regardless of case, so this does too.
+  const mirror = await queryOne<{ stripe_promotion_code_id: string; applies_to_plan: string }>`
+    SELECT stripe_promotion_code_id, applies_to_plan
+    FROM community_promo_codes
+    WHERE community_id = ${args.communityId}
+      AND lower(code) = lower(${trimmed})
+      AND active = true
+    LIMIT 1
+  `;
+  if (!mirror) return invalid;
+
+  // Per-plan scope (enforced in-app; monthly & yearly share one Stripe product).
+  const plan = args.plan ?? 'monthly';
+  const scope = mirror.applies_to_plan ?? 'both';
+  if (scope !== 'both' && scope !== plan) {
+    return {
+      valid: false,
+      reason: scope === 'yearly'
+        ? 'This code only applies to the yearly plan.'
+        : 'This code only applies to the monthly plan.',
+    };
+  }
+
+  // Stripe stays the source of truth for redemptions, expiry and limits.
+  const promo = await stripe.promotionCodes.retrieve(mirror.stripe_promotion_code_id, {
+    stripeAccount: args.stripeAccountId,
+  });
   if (!promo || !promo.active) return invalid;
 
   if (promo.expires_at && promo.expires_at * 1000 < Date.now()) return invalid;
   if (promo.max_redemptions != null && (promo.times_redeemed ?? 0) >= promo.max_redemptions) return invalid;
-
-  // Per-plan scope (enforced in-app; monthly & yearly share one Stripe product).
-  // A missing mirror row is treated as unrestricted ('both').
-  if (args.communityId) {
-    const plan = args.plan ?? 'monthly';
-    const mirror = await queryOne<{ applies_to_plan: string }>`
-      SELECT applies_to_plan FROM community_promo_codes
-      WHERE community_id = ${args.communityId} AND stripe_promotion_code_id = ${promo.id}
-      LIMIT 1
-    `;
-    const scope = mirror?.applies_to_plan ?? 'both';
-    if (scope !== 'both' && scope !== plan) {
-      return {
-        valid: false,
-        reason: scope === 'yearly'
-          ? 'This code only applies to the yearly plan.'
-          : 'This code only applies to the monthly plan.',
-      };
-    }
-  }
 
   // API 2025-12-15.clover no longer exposes an expanded `coupon` on the
   // promotion code; it carries the coupon id under `promotion.coupon`. Fetch
