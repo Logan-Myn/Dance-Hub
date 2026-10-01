@@ -1,5 +1,6 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { ManageSubscriptionModal } from "@/components/community/ManageSubscriptionModal";
 
 // Mock Stripe Elements — we only render the details view in these tests.
@@ -120,6 +121,26 @@ describe("ManageSubscriptionModal", () => {
 
     await waitFor(() => expect(screen.getByRole("button", { name: /Switch to yearly/ })).toBeInTheDocument());
     expect(screen.getByText(/2 months free\./)).toBeInTheDocument();
+  });
+
+  it("warns that a monthly-only discount won't carry over to the yearly plan", async () => {
+    mockFetch({
+      "/subscription": {
+        ...summaryFixture,
+        interval: "month",
+        upgrade: { available: true, yearlyAmount: 20000, yearlyBenefits: null },
+      },
+      "/subscription/payments": { invoices: [] },
+      "/subscription/upgrade-yearly": { prorationAmount: 18000, currency: "eur", yearlyAmount: 20000, discountRemoved: true },
+    });
+
+    render(
+      <ManageSubscriptionModal isOpen={true} onClose={() => {}} communitySlug="test" stripeAccountId="acct_test" />
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: /Switch to yearly/ }));
+
+    expect(await screen.findByText(/discount applies to the monthly plan only/)).toBeInTheDocument();
   });
 
   it("shows when a membership that is set to end ends, not a next charge", async () => {

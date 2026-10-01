@@ -225,7 +225,7 @@ export function ManageSubscriptionModal({
   const [stripePromise, setStripePromise] =
     useState<Promise<StripeClient | null> | null>(null);
   const [upgrading, setUpgrading] = useState(false);
-  const [upgradePreview, setUpgradePreview] = useState<{ prorationAmount: number; currency: string; yearlyAmount: number } | null>(null);
+  const [upgradePreview, setUpgradePreview] = useState<{ prorationAmount: number; currency: string; yearlyAmount: number; discountRemoved?: boolean } | null>(null);
   const [upgradeSecret, setUpgradeSecret] = useState<string | null>(null);
 
   const fetchAll = React.useCallback(async () => {
@@ -501,6 +501,11 @@ export function ManageSubscriptionModal({
               You'll pay {formatMoney(upgradePreview.prorationAmount, upgradePreview.currency)} now for the
               rest of this period, then {formatMoney(upgradePreview.yearlyAmount, upgradePreview.currency)}/year.
             </p>
+            {upgradePreview.discountRemoved && (
+              <p className="text-sm text-muted-foreground">
+                Your current discount applies to the monthly plan only, so it won&apos;t carry over to the yearly plan.
+              </p>
+            )}
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => { setView("details"); setUpgradePreview(null); }} disabled={upgrading}>
                 Cancel

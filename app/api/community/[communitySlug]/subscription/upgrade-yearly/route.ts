@@ -26,7 +26,44 @@ type ResolveResult =
       itemId: string;
       stripeAccount: string;
       yearlyPriceId: string;
+      // Set when a discount must be dropped for the yearly plan: the
+      // discounts to keep ('' clears them all), for the preview and update.
+      discounts?: Stripe.SubscriptionUpdateParams["discounts"];
     };
+
+// A promo code scoped to the monthly plan must not carry over to the yearly
+// price (monthly and yearly share one product, so Stripe can't scope it; see
+// join-paid). Returns the discounts to keep, or undefined to leave them as
+// they are. A discount with no mirror row is unrestricted, as in join-paid.
+async function discountsForYearly(
+  communityId: string,
+  discounts: Array<string | Stripe.Discount> | null | undefined,
+): Promise<Stripe.SubscriptionUpdateParams["discounts"] | undefined> {
+  if (!discounts?.length) return undefined;
+  const keep: string[] = [];
+  let dropped = false;
+  for (const discount of discounts) {
+    const id = typeof discount === "string" ? discount : discount.id;
+    const promo = typeof discount === "string" ? null : discount.promotion_code;
+    const promoId = typeof promo === "string" ? promo : promo?.id;
+    if (promoId) {
+      const mirror = await queryOne<{ applies_to_plan: string }>`
+        SELECT applies_to_plan FROM community_promo_codes
+        WHERE community_id = ${communityId}
+          AND stripe_promotion_code_id = ${promoId}
+        LIMIT 1
+      `;
+      if (mirror?.applies_to_plan === "monthly") {
+        dropped = true;
+        continue;
+      }
+    }
+    keep.push(id);
+  }
+  if (!dropped) return undefined;
+  // An empty string (not []) is what clears discounts on the Stripe API.
+  return keep.length ? keep.map((discount) => ({ discount })) : "";
+}
 
 // Resolve the caller's monthly subscription + the community's yearly target.
 // Returns a NextResponse on any failure, or the resolved context on success.
@@ -52,7 +89,7 @@ async function resolve(communitySlug: string): Promise<ResolveResult> {
 
   const sub = await stripe.subscriptions.retrieve(
     member.stripe_subscription_id,
-    { expand: ["items.data.price"] },
+    { expand: ["items.data.price", "discounts"] },
     { stripeAccount: community.stripe_account_id },
   );
   if (sub.cancel_at_period_end) {
@@ -70,6 +107,7 @@ async function resolve(communitySlug: string): Promise<ResolveResult> {
     itemId: item.id,
     stripeAccount: community.stripe_account_id,
     yearlyPriceId: community.stripe_yearly_price_id,
+    discounts: await discountsForYearly(community.id, sub.discounts as Array<string | Stripe.Discount>),
   };
 }
 
@@ -82,6 +120,9 @@ export async function GET(_req: Request, props: { params: Promise<{ communitySlu
     const preview = await stripe.invoices.createPreview(
       {
         subscription: ctx.subId,
+        ...(ctx.discounts !== undefined
+          ? { discounts: ctx.discounts as Stripe.InvoiceCreatePreviewParams["discounts"] }
+          : {}),
         subscription_details: {
           items: [{ id: ctx.itemId, price: ctx.yearlyPriceId }],
           // Reset the cycle to now so the preview reflects the real upgrade:
@@ -97,6 +138,7 @@ export async function GET(_req: Request, props: { params: Promise<{ communitySlu
       prorationAmount: preview.amount_due,
       currency: preview.currency,
       yearlyAmount: Math.round(Number(ctx.community.yearly_price) * 100),
+      discountRemoved: ctx.discounts !== undefined,
     });
   } catch (err) {
     console.error("Upgrade preview failed:", err);
@@ -122,6 +164,7 @@ export async function POST(_req: Request, props: { params: Promise<{ communitySl
         // prorated invoice is paid. If the payment needs action (e.g. 3DS) and
         // the member abandons it, the subscription stays on monthly (spec §4).
         payment_behavior: "pending_if_incomplete",
+        ...(ctx.discounts !== undefined ? { discounts: ctx.discounts } : {}),
         expand: ["latest_invoice.confirmation_secret"],
       },
       { stripeAccount: ctx.stripeAccount },
