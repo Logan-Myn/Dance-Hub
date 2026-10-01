@@ -5,6 +5,7 @@ import { getEmailService } from "@/lib/resend/email-service";
 import { SignupVerificationEmail } from "@/lib/resend/templates/auth/signup-verification";
 import { PasswordResetEmail } from "@/lib/resend/templates/auth/password-reset";
 import { EmailChangeVerification } from "@/lib/resend/templates/auth/email-change";
+import { revokeUnverifiedPassword, sqlAccountStore } from "@/lib/auth-hooks";
 
 // Better Auth signs verification tokens as JWTs and verifies them server-side
 // when the link is hit. We only inspect the payload to pick the right template.
@@ -168,7 +169,24 @@ export const auth = betterAuth({
   account: {
     accountLinking: {
       enabled: true,
-      trustedProviders: ["google", "email-password"],
+      // No trusted providers: Google is linked to an existing user only when
+      // Google says the email is verified. (The old "email-password" entry was
+      // not a provider id and did nothing.)
+    },
+  },
+
+  databaseHooks: {
+    account: {
+      create: {
+        // Linking Google to a user whose email was never verified removes
+        // that user's password and sessions (account pre-hijack guard).
+        after: async (account, ctx) => {
+          await revokeUnverifiedPassword(
+            account,
+            ctx?.context.internalAdapter ?? sqlAccountStore
+          );
+        },
+      },
     },
   },
 
