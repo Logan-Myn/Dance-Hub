@@ -42,7 +42,7 @@ function stubSubscriptionOk() {
   mockSubscriptionsCreate.mockResolvedValueOnce({
     id: 'sub_1', latest_invoice: { id: 'in_1', amount_due: 20000, confirmation_secret: { client_secret: 'pi_secret' } },
   });
-  mockSql.mockResolvedValue([]);
+  mockSql.mockResolvedValue([{ id: 'm1' }]); // the claimed membership row
 }
 
 it('subscribes on the yearly price when plan is yearly', async () => {
@@ -109,7 +109,8 @@ it('uses the session user and email, ignoring userId/email in the body', async (
   const memberLookupValues = mockQueryOne.mock.calls[1].slice(1);
   expect(memberLookupValues).toContain('u1');
   expect(memberLookupValues).not.toContain('victim');
-  const insertValues = mockSql.mock.calls.at(-1)!.slice(1);
+  const insertCall = mockSql.mock.calls.find((c) => (c[0] as string[]).join('?').includes('INSERT INTO community_members'));
+  const insertValues = insertCall!.slice(1);
   expect(insertValues).toContain('u1');
   expect(insertValues).not.toContain('victim');
 });

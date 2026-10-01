@@ -245,3 +245,27 @@ it("shows member controls after an admin with an ended membership joins again", 
 
   expect(await screen.findByRole("button", { name: "Leave Community" })).toBeInTheDocument();
 });
+
+it("disables Join while the join request is in flight, so a double click starts one checkout", async () => {
+  let release: (value: Response) => void = () => {};
+  mockFetch({ "/members": { body: { members: [] } } });
+  const baseFetch = global.fetch;
+  global.fetch = jest.fn((url: RequestInfo | URL) => {
+    if (String(url).endsWith("/join-paid")) {
+      return new Promise<Response>((resolve) => { release = resolve; });
+    }
+    return baseFetch(url);
+  }) as jest.Mock;
+  // Non-members only reach the feed's Join button as site admins (others get the About page).
+  renderFeed({ memberStatus: null, subscriptionStatus: null, accessEndDate: null, isMember: false, isAdmin: true });
+
+  const join = await screen.findByRole("button", { name: "Join for €25/month" });
+  await userEvent.dblClick(join);
+
+  await waitFor(() => expect(join).toBeDisabled());
+  const joinPaidCalls = (global.fetch as jest.Mock).mock.calls.filter(([url]) => String(url).endsWith("/join-paid"));
+  expect(joinPaidCalls).toHaveLength(1);
+
+  release({ ok: true, status: 200, json: () => Promise.resolve({ clientSecret: "pi_secret", stripeAccountId: "acct_1" }) } as Response);
+  await waitFor(() => expect(join).not.toBeDisabled());
+});

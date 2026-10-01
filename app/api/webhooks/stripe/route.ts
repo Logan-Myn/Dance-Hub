@@ -13,6 +13,7 @@ import {
   markBroadcastSubscriptionStatus,
 } from '@/lib/broadcasts/billing';
 import { claimWebhookEvent, finishWebhookEvent } from '@/lib/stripe-webhook-events';
+import { LIVE_SUBSCRIPTION_STATUSES, memberSubscriptionStatus } from '@/lib/membership-ended';
 import React from 'react';
 import Stripe from 'stripe';
 
@@ -104,17 +105,6 @@ async function handleBroadcastSubscriptionLifecycle(sub: Stripe.Subscription): P
     );
   }
   return true;
-}
-
-// Subscription statuses under which a member keeps access. past_due keeps it
-// while Stripe retries a failed renewal.
-const LIVE_SUBSCRIPTION_STATUSES: readonly string[] = ['active', 'trialing', 'past_due'];
-
-/** Our subscription_status for a subscription: Stripe's, or 'canceling' once it is set to end. */
-function memberSubscriptionStatus(subscription: Stripe.Subscription): string {
-  return subscription.status === 'active' && subscription.cancel_at_period_end
-    ? 'canceling'
-    : subscription.status;
 }
 
 /**

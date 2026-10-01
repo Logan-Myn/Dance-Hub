@@ -3,6 +3,8 @@ import { queryOne, sql } from "@/lib/db";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { requireSession } from "@/lib/community-auth";
+import { LIVE_SUBSCRIPTION_STATUSES, memberSubscriptionStatus } from "@/lib/membership-ended";
+import { isMissingStripeResource } from "@/lib/subscription-cancel";
 
 interface Community {
   id: string;
@@ -22,6 +24,8 @@ interface ExistingMember {
   subscription_status: string | null;
   stripe_subscription_id: string | null;
 }
+
+const PRE_REGISTERED_STATUSES = ['pre_registered', 'pending_pre_registration'];
 
 export async function POST(request: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
@@ -97,6 +101,15 @@ export async function POST(request: Request, props: { params: Promise<{ communit
       );
     }
 
+    // Pre-registered users already hold a subscription that starts on the
+    // opening date; replacing it here would charge them now.
+    if (existingMember && PRE_REGISTERED_STATUSES.includes(existingMember.status)) {
+      return NextResponse.json(
+        { error: "You are already pre-registered for this community" },
+        { status: 400 }
+      );
+    }
+
     // Enforce the promo code's per-plan scope on the money path too. Validation
     // is bypassable via a direct request, and because monthly and yearly reuse
     // one Stripe product we cannot rely on Stripe to scope the coupon. A missing
@@ -118,175 +131,254 @@ export async function POST(request: Request, props: { params: Promise<{ communit
       }
     }
 
-    // Cleanup of any prior non-active membership (incomplete signup,
-    // left/auto-cancelled, grace-period 'canceling') runs in parallel with the
-    // new Stripe customer creation — they're independent, and the next call
-    // (subscription.create) is the only one that depends on the new customer.
-    // Skip the leftover-sub cancel when we already know it's terminal (would
-    // just round-trip to an "already canceled" error).
+    const stripeAccount = community.stripe_account_id!;
+
+    // A leftover row from an earlier checkout. Its subscription may already be
+    // paid while the webhook hasn't marked the row active yet, so ask Stripe
+    // before replacing it: cancelling a paid subscription keeps the payment
+    // and the member would pay twice. Only an unpaid ('incomplete') one is
+    // cancelled. Skip the lookup when we already know it is terminal.
     const subAlreadyTerminal =
       existingMember?.subscription_status === 'canceled' ||
       existingMember?.subscription_status === 'incomplete_expired' ||
       existingMember?.subscription_status === 'unpaid';
 
-    const cleanupOldSubscription = async () => {
-      if (!existingMember?.stripe_subscription_id || subAlreadyTerminal) return;
+    let oldSubscriptionToCancel: string | null = null;
+    if (existingMember?.stripe_subscription_id && !subAlreadyTerminal) {
+      let oldSubscription: Stripe.Subscription | null = null;
       try {
-        await stripe.subscriptions.cancel(
+        oldSubscription = await stripe.subscriptions.retrieve(
           existingMember.stripe_subscription_id,
-          { stripeAccount: community.stripe_account_id! }
+          { stripeAccount }
         );
-      } catch (cancelError) {
-        console.error("Error canceling old subscription:", cancelError);
+      } catch (retrieveError) {
+        if (!isMissingStripeResource(retrieveError)) throw retrieveError;
       }
-    };
 
-    const cleanupOldRow = async () => {
-      if (!existingMember) return;
+      if (oldSubscription && LIVE_SUBSCRIPTION_STATUSES.includes(oldSubscription.status)) {
+        await sql`
+          UPDATE community_members
+          SET status = 'active',
+              subscription_status = ${memberSubscriptionStatus(oldSubscription)}
+          WHERE id = ${existingMember.id}
+            AND stripe_subscription_id = ${oldSubscription.id}
+        `;
+        return NextResponse.json(
+          { error: "You're already a member of this community.", alreadyMember: true },
+          { status: 409 }
+        );
+      }
+      if (oldSubscription?.status === 'incomplete') {
+        oldSubscriptionToCancel = oldSubscription.id;
+      }
+    }
+
+    // Claim the (community, user) row before creating anything in Stripe, so
+    // two requests at once (a double click) can't both create a subscription:
+    // the unique (user_id, community_id) key lets only one INSERT through. The
+    // leftover row is removed only if it is unchanged since we read it. A
+    // pending row without a subscription is another join still running; it is
+    // replaced only once it is 2 minutes old (that request died mid-way).
+    if (existingMember?.stripe_subscription_id) {
       await sql`
         DELETE FROM community_members
         WHERE id = ${existingMember.id}
+          AND status <> 'active'
+          AND stripe_subscription_id = ${existingMember.stripe_subscription_id}
       `;
+    } else if (existingMember) {
+      await sql`
+        DELETE FROM community_members
+        WHERE id = ${existingMember.id}
+          AND status <> 'active'
+          AND stripe_subscription_id IS NULL
+          AND (status <> 'pending' OR joined_at < NOW() - INTERVAL '2 minutes')
+      `;
+    }
+
+    const [claim] = await sql<{ id: string }[]>`
+      INSERT INTO community_members (
+        community_id,
+        user_id,
+        joined_at,
+        role,
+        status,
+        subscription_status,
+        platform_fee_percentage
+      ) VALUES (
+        ${community.id},
+        ${userId},
+        NOW(),
+        'member',
+        'pending',
+        'incomplete',
+        ${feePercentage}
+      )
+      ON CONFLICT (user_id, community_id) DO NOTHING
+      RETURNING id
+    `;
+
+    if (!claim) {
+      // The leftover row may have become active in the meantime (the webhook).
+      const current = await queryOne<{ status: string }>`
+        SELECT status FROM community_members
+        WHERE community_id = ${community.id}
+          AND user_id = ${userId}
+      `;
+      if (current?.status === 'active') {
+        return NextResponse.json(
+          { error: "You're already a member of this community.", alreadyMember: true },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { error: "Your checkout is already being set up. Please wait a moment and try again." },
+        { status: 409 }
+      );
+    }
+
+    let newSubscriptionId: string | null = null;
+    // Undo a join that failed after the claim: cancel the new subscription (if
+    // any) and drop the row, so the user can simply try again.
+    const releaseClaim = async () => {
+      if (newSubscriptionId) {
+        try {
+          await stripe.subscriptions.cancel(newSubscriptionId, { stripeAccount });
+        } catch (cancelError) {
+          console.error("Error canceling subscription:", cancelError);
+        }
+      }
+      try {
+        await sql`DELETE FROM community_members WHERE id = ${claim.id}`;
+      } catch (deleteError) {
+        console.error("Error releasing the membership row:", deleteError);
+      }
     };
 
-    const [, , customer] = await Promise.all([
-      cleanupOldSubscription(),
-      cleanupOldRow(),
-      stripe.customers.create(
-        {
-          email,
-          metadata: {
-            user_id: userId,
-            community_id: community.id,
+    try {
+      const cancelOldSubscription = async () => {
+        if (!oldSubscriptionToCancel) return;
+        try {
+          await stripe.subscriptions.cancel(oldSubscriptionToCancel, { stripeAccount });
+        } catch (cancelError) {
+          console.error("Error canceling old subscription:", cancelError);
+        }
+      };
+
+      const [, customer] = await Promise.all([
+        cancelOldSubscription(),
+        stripe.customers.create(
+          {
+            email,
+            metadata: {
+              user_id: userId,
+              community_id: community.id,
+            },
           },
-        },
-        { stripeAccount: community.stripe_account_id! }
-      ),
-    ]);
+          { stripeAccount }
+        ),
+      ]);
 
-    // Create a subscription with the calculated platform fee
-    // Note: In Clover API version, use 'latest_invoice.confirmation_secret' instead of 'latest_invoice.payment_intent'
-    const subscription = await stripe.subscriptions.create(
-      {
-        customer: customer.id,
-        items: [{ price: selectedPriceId }],
-        payment_behavior: 'default_incomplete',
-        payment_settings: {
-          payment_method_types: ['card'],
-          save_default_payment_method: 'on_subscription'
-        },
-        metadata: {
-          user_id: userId,
-          community_id: community.id,
-          platform_fee_percentage: feePercentage
-        },
-        application_fee_percent: feePercentage,
-        ...(promotionCodeId ? { discounts: [{ promotion_code: promotionCodeId }] } : {}),
-        expand: ['latest_invoice.confirmation_secret'],
-      },
-      {
-        stripeAccount: community.stripe_account_id!,
-      }
-    );
-
-    // Get the client secret from the subscription's invoice confirmation_secret (Clover API)
-    const latestInvoice = subscription.latest_invoice as Stripe.Invoice | null;
-    const confirmationSecret = (latestInvoice as any)?.confirmation_secret;
-    const amountDue = (latestInvoice as any)?.amount_due ?? null;
-
-    // Normal path: there is a payment to confirm on the first invoice.
-    let clientSecret: string | null = confirmationSecret?.client_secret ?? null;
-    let requiresSetup = false;
-
-    // Fully-discounted first invoice (e.g. a 100%-off code): Stripe creates no
-    // PaymentIntent, so there is nothing to confirm. Collect a card via a
-    // SetupIntent so renewals at full price can charge later. A webhook
-    // (setup_intent.succeeded) sets it as the subscription's default method.
-    if (!clientSecret && amountDue === 0) {
-      const setupIntent = await stripe.setupIntents.create(
+      // Create a subscription with the calculated platform fee
+      // Note: In Clover API version, use 'latest_invoice.confirmation_secret' instead of 'latest_invoice.payment_intent'
+      const subscription = await stripe.subscriptions.create(
         {
           customer: customer.id,
-          usage: 'off_session',
-          payment_method_types: ['card'],
-          metadata: {
-            subscription_id: subscription.id,
-            community_id: community.id,
-            user_id: userId,
+          items: [{ price: selectedPriceId }],
+          payment_behavior: 'default_incomplete',
+          payment_settings: {
+            payment_method_types: ['card'],
+            save_default_payment_method: 'on_subscription'
           },
+          metadata: {
+            user_id: userId,
+            community_id: community.id,
+            platform_fee_percentage: feePercentage
+          },
+          application_fee_percent: feePercentage,
+          ...(promotionCodeId ? { discounts: [{ promotion_code: promotionCodeId }] } : {}),
+          expand: ['latest_invoice.confirmation_secret'],
         },
-        { stripeAccount: community.stripe_account_id! }
+        { stripeAccount }
       );
-      clientSecret = setupIntent.client_secret;
-      requiresSetup = true;
-    }
+      newSubscriptionId = subscription.id;
 
-    if (!clientSecret) {
-      console.error("No confirmation secret or setup intent for subscription:", {
-        subscriptionId: subscription.id,
-        latestInvoiceId: latestInvoice?.id,
-        amountDue,
-      });
-      // Clean up - cancel the subscription since we can't complete payment
-      await stripe.subscriptions.cancel(subscription.id, {
-        stripeAccount: community.stripe_account_id!,
-      });
-      return NextResponse.json(
-        { error: "Failed to initialize payment. Please try again." },
-        { status: 500 }
-      );
-    }
-
-    // Add member to community_members table with the platform fee percentage
-    try {
-      await sql`
-        INSERT INTO community_members (
-          community_id,
-          user_id,
-          joined_at,
-          role,
-          status,
-          subscription_status,
-          stripe_customer_id,
-          stripe_subscription_id,
-          platform_fee_percentage
-        ) VALUES (
-          ${community.id},
-          ${userId},
-          NOW(),
-          'member',
-          'pending',
-          'incomplete',
-          ${customer.id},
-          ${subscription.id},
-          ${feePercentage}
-        )
+      // Link the subscription to the claimed row right away: the webhook
+      // matches rows on stripe_subscription_id, and a fully-discounted first
+      // invoice is paid (and reported) as soon as the subscription exists.
+      const attached = await sql<{ id: string }[]>`
+        UPDATE community_members
+        SET stripe_customer_id = ${customer.id},
+            stripe_subscription_id = ${subscription.id}
+        WHERE id = ${claim.id}
+          AND stripe_subscription_id IS NULL
+        RETURNING id
       `;
-    } catch (memberError) {
-      console.error("Error adding member:", memberError);
-      // Cancel the subscription if member creation fails
-      try {
-        await stripe.subscriptions.cancel(
-          subscription.id,
-          {
-            stripeAccount: community.stripe_account_id!,
-          }
+      if (attached.length === 0) {
+        console.error("Membership row disappeared while joining:", { memberId: claim.id });
+        await releaseClaim();
+        return NextResponse.json(
+          { error: "Failed to add member" },
+          { status: 500 }
         );
-      } catch (cancelError) {
-        console.error("Error canceling subscription:", cancelError);
       }
-      return NextResponse.json(
-        { error: "Failed to add member" },
-        { status: 500 }
-      );
-    }
 
-    return NextResponse.json({
-      clientSecret,
-      requiresSetup,
-      amountDue,
-      stripeAccountId: community.stripe_account_id,
-      subscriptionId: subscription.id
-    });
+      // Get the client secret from the subscription's invoice confirmation_secret (Clover API)
+      const latestInvoice = subscription.latest_invoice as Stripe.Invoice | null;
+      const confirmationSecret = (latestInvoice as any)?.confirmation_secret;
+      const amountDue = (latestInvoice as any)?.amount_due ?? null;
+
+      // Normal path: there is a payment to confirm on the first invoice.
+      let clientSecret: string | null = confirmationSecret?.client_secret ?? null;
+      let requiresSetup = false;
+
+      // Fully-discounted first invoice (e.g. a 100%-off code): Stripe creates no
+      // PaymentIntent, so there is nothing to confirm. Collect a card via a
+      // SetupIntent so renewals at full price can charge later. A webhook
+      // (setup_intent.succeeded) sets it as the subscription's default method.
+      if (!clientSecret && amountDue === 0) {
+        const setupIntent = await stripe.setupIntents.create(
+          {
+            customer: customer.id,
+            usage: 'off_session',
+            payment_method_types: ['card'],
+            metadata: {
+              subscription_id: subscription.id,
+              community_id: community.id,
+              user_id: userId,
+            },
+          },
+          { stripeAccount }
+        );
+        clientSecret = setupIntent.client_secret;
+        requiresSetup = true;
+      }
+
+      if (!clientSecret) {
+        console.error("No confirmation secret or setup intent for subscription:", {
+          subscriptionId: subscription.id,
+          latestInvoiceId: latestInvoice?.id,
+          amountDue,
+        });
+        // Clean up - cancel the subscription since we can't complete payment
+        await releaseClaim();
+        return NextResponse.json(
+          { error: "Failed to initialize payment. Please try again." },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        clientSecret,
+        requiresSetup,
+        amountDue,
+        stripeAccountId: community.stripe_account_id,
+        subscriptionId: subscription.id
+      });
+    } catch (joinError) {
+      await releaseClaim();
+      throw joinError;
+    }
   } catch (error) {
     console.error("Error creating subscription:", error);
     return NextResponse.json(
