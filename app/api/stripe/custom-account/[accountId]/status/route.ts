@@ -6,9 +6,6 @@ import { requireStripeAccountManager } from '@/lib/community-auth';
 interface OnboardingProgress {
   current_step: number;
   completed_steps: number[];
-  business_info: Record<string, unknown>;
-  personal_info: Record<string, unknown>;
-  bank_account: Record<string, unknown>;
   documents: unknown[];
   updated_at: string;
 }
@@ -31,7 +28,7 @@ export async function GET(request: Request, props: { params: Promise<{ accountId
 
     // Get onboarding progress from database
     const progress = await queryOne<OnboardingProgress>`
-      SELECT *
+      SELECT current_step, completed_steps, documents, updated_at
       FROM stripe_onboarding_progress
       WHERE stripe_account_id = ${accountId}
     `;
@@ -119,14 +116,13 @@ export async function GET(request: Request, props: { params: Promise<{ accountId
       // Requirements
       requirements,
 
-      // Progress tracking
+      // Progress tracking. The stored step details are never sent back: rows
+      // written before they were redacted can still hold bank numbers, dates
+      // of birth and ID numbers. Bank accounts are listed below by last 4.
       progress: progress ? {
         currentStep: progress.current_step,
         completedSteps: progress.completed_steps || [],
-        businessInfo: progress.business_info || {},
-        personalInfo: progress.personal_info || {},
-        bankAccount: progress.bank_account || {},
-        documents: progress.documents || [],
+        documentsUploaded: (progress.documents || []).length,
         updatedAt: progress.updated_at
       } : null,
 

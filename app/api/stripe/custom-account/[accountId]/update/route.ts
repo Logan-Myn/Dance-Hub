@@ -250,13 +250,21 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
     }
 
     // Update onboarding progress in database (one jsonb column per branch).
+    // Stripe holds the submitted details; we keep only what identifies the
+    // step, never dates of birth, ID numbers, addresses, phones or bank numbers.
     if (businessInfo) {
       await sql`
         UPDATE stripe_onboarding_progress
         SET
           updated_at = NOW(),
           current_step = COALESCE(${currentStep ?? null}, current_step),
-          business_info = ${sql.json(businessInfo as any)}
+          business_info = ${sql.json({
+            type: businessInfo.type,
+            ...(businessInfo.name && { name: businessInfo.name }),
+            ...(businessInfo.url && { url: businessInfo.url }),
+            ...(businessInfo.mcc && { mcc: businessInfo.mcc }),
+            ...(businessInfo.address?.country && { country: businessInfo.address.country }),
+          })}
         WHERE stripe_account_id = ${accountId}
       `;
     } else if (personalInfo) {
@@ -265,7 +273,11 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
         SET
           updated_at = NOW(),
           current_step = COALESCE(${currentStep ?? null}, current_step),
-          personal_info = ${sql.json(personalInfo as any)}
+          personal_info = ${sql.json({
+            ...(personalInfo.first_name && { first_name: personalInfo.first_name }),
+            ...(personalInfo.last_name && { last_name: personalInfo.last_name }),
+            ...(personalInfo.email && { email: personalInfo.email }),
+          })}
         WHERE stripe_account_id = ${accountId}
       `;
     } else if (bankAccount) {

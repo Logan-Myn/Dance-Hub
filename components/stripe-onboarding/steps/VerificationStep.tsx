@@ -11,7 +11,7 @@ interface VerificationStepProps {
     accountId?: string;
     businessInfo: any;
     personalInfo: any;
-    bankAccount: any;
+    bankAccount?: any;
     documents: any[];
   };
   onPrevious: () => void;

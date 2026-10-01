@@ -400,3 +400,50 @@ describe('personal_info', () => {
     expect((await res.json()).error).toContain('Invalid date of birth');
   });
 });
+
+describe('onboarding progress', () => {
+  it('does not store date of birth, ID number, address or phone', async () => {
+    await PUT(
+      put({
+        step: 'personal_info',
+        currentStep: 2,
+        personalInfo: {
+          first_name: 'Ana',
+          last_name: 'Lopez',
+          email: 'ana@example.com',
+          phone: '+3725550000',
+          dob: { day: 17, month: 3, year: 1987 },
+          address: { line1: 'Secret street 1', city: 'Tallinn', state: 'Harju', postal_code: '10117', country: 'EE' },
+          ssn_last_4: '9876',
+        },
+      }),
+      params
+    );
+
+    const written = JSON.stringify(progressJsonWrites());
+    expect(written).toContain('Ana');
+    for (const value of ['+3725550000', '1987', 'Secret street', '9876']) {
+      expect(written).not.toContain(value);
+    }
+  });
+
+  it('does not store the business address or phone', async () => {
+    await PUT(
+      put({
+        step: 'business_info',
+        businessInfo: {
+          type: 'individual',
+          name: 'Ana Lopez',
+          phone: '+3725550000',
+          address: { line1: 'Secret street 1', city: 'Tallinn', state: 'Harju', postal_code: '10117', country: 'EE' },
+        },
+      }),
+      params
+    );
+
+    const written = JSON.stringify(progressJsonWrites());
+    expect(written).toContain('Ana Lopez');
+    expect(written).not.toContain('+3725550000');
+    expect(written).not.toContain('Secret street');
+  });
+});
