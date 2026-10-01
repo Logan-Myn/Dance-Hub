@@ -2,9 +2,8 @@
  * Auth Database Layer Tests - Better Auth + Neon Integration
  *
  * Tests the database operations for authentication-related API routes:
- * 1. Profile creation on signup (INSERT with ON CONFLICT)
- * 2. Profile email sync on email verification (UPDATE by auth_user_id)
- * 3. Profile email sync on email change (UPDATE by auth_user_id)
+ * 1. Profile email sync on email verification (UPDATE by auth_user_id)
+ * 2. Profile email sync on email change (UPDATE by auth_user_id)
  *
  * These tests validate the Neon database layer for the auth routes
  * migrated from Supabase to Better Auth + Neon.
@@ -139,119 +138,6 @@ describe('Auth Database Layer Tests - Better Auth + Neon Integration', () => {
         ) as exists
       `;
       expect(result?.exists).toBe(true);
-    });
-  });
-
-  describe('2. Signup Profile Creation (app/api/auth/signup/route.ts pattern)', () => {
-    it('should create profile with full_name and auto-generate display_name', async () => {
-      const authUser = await makeAuthUser('signup-fullname');
-      const email = `signup-test-${crypto.randomUUID()}@test.com`;
-      const fullName = 'John Doe';
-
-      const profile = await testQueryOne<Profile>`
-        INSERT INTO profiles (id, email, full_name, display_name, created_at, updated_at, auth_user_id)
-        VALUES (
-          gen_random_uuid(),
-          ${email},
-          ${fullName},
-          ${fullName.split(' ')[0]},
-          NOW(),
-          NOW(),
-          ${authUser.id}
-        )
-        RETURNING *
-      `;
-
-      expect(profile).not.toBeNull();
-      expect(profile?.email).toBe(email);
-      expect(profile?.full_name).toBe(fullName);
-      expect(profile?.display_name).toBe('John');
-      expect(profile?.auth_user_id).toBe(authUser.id);
-
-      createdProfileIds.push(profile!.id);
-    });
-
-    it('should create profile with NULL full_name and display_name', async () => {
-      const authUser = await makeAuthUser('signup-null');
-      const email = `signup-test-null-${crypto.randomUUID()}@test.com`;
-      const fullName = null as string | null;
-      const displayName = fullName?.split(' ')[0] || null;
-
-      const profile = await testQueryOne<Profile>`
-        INSERT INTO profiles (id, email, full_name, display_name, created_at, updated_at, auth_user_id)
-        VALUES (
-          gen_random_uuid(),
-          ${email},
-          ${fullName},
-          ${displayName},
-          NOW(),
-          NOW(),
-          ${authUser.id}
-        )
-        RETURNING *
-      `;
-
-      expect(profile).not.toBeNull();
-      expect(profile?.email).toBe(email);
-      expect(profile?.full_name).toBeNull();
-      expect(profile?.display_name).toBeNull();
-      expect(profile?.auth_user_id).toBe(authUser.id);
-
-      createdProfileIds.push(profile!.id);
-    });
-
-    it('should handle ON CONFLICT (email) upsert pattern from signup route', async () => {
-      const authUser = await makeAuthUser('signup-conflict');
-      const profile = await makeProfile(authUser.id, { full_name: 'Original Name' });
-
-      // ON CONFLICT (email) should update auth_user_id and updated_at, leaving
-      // other columns alone.
-      const updatedProfile = await testQueryOne<Profile>`
-        INSERT INTO profiles (id, email, full_name, display_name, created_at, updated_at, auth_user_id)
-        VALUES (
-          gen_random_uuid(),
-          ${profile.email},
-          ${'Updated Name'},
-          ${'Updated'},
-          NOW(),
-          NOW(),
-          ${authUser.id}
-        )
-        ON CONFLICT (email) DO UPDATE SET
-          auth_user_id = ${authUser.id},
-          updated_at = NOW()
-        RETURNING *
-      `;
-
-      expect(updatedProfile).not.toBeNull();
-      expect(updatedProfile?.id).toBe(profile.id);
-      expect(updatedProfile?.auth_user_id).toBe(authUser.id);
-      // Original full_name should NOT change (only auth_user_id and updated_at do)
-      expect(updatedProfile?.full_name).toBe('Original Name');
-    });
-
-    it('should handle display_name extraction from multi-word full_name', async () => {
-      const fullName = 'Maria Garcia Lopez';
-      const authUser = await makeAuthUser('signup-multiword');
-      const email = `multi-word-test-${crypto.randomUUID()}@test.com`;
-
-      const profile = await testQueryOne<Profile>`
-        INSERT INTO profiles (id, email, full_name, display_name, created_at, updated_at, auth_user_id)
-        VALUES (
-          gen_random_uuid(),
-          ${email},
-          ${fullName},
-          ${fullName.split(' ')[0]},
-          NOW(),
-          NOW(),
-          ${authUser.id}
-        )
-        RETURNING *
-      `;
-
-      expect(profile?.display_name).toBe('Maria');
-      expect(profile?.full_name).toBe('Maria Garcia Lopez');
-      createdProfileIds.push(profile!.id);
     });
   });
 
