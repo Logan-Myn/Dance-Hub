@@ -15,6 +15,8 @@ import { VerificationStep } from "./steps/VerificationStep";
 
 interface OnboardingData {
   accountId?: string;
+  /** Country the payout account was created in; drives the bank fields. */
+  accountCountry?: string;
   businessInfo: {
     businessType: "individual" | "company";
     legalBusinessName: string;
@@ -146,7 +148,13 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
         const statusResponse = await fetch(`/api/stripe/custom-account/${data.stripe_account_id}/status`);
         if (cancelled) return;
         if (statusResponse.ok) {
-          setOnboardingData(prev => ({ ...prev, accountId: data.stripe_account_id }));
+          const statusData = await statusResponse.json().catch(() => ({}));
+          if (cancelled) return;
+          setOnboardingData(prev => ({
+            ...prev,
+            accountId: data.stripe_account_id,
+            accountCountry: statusData.country ?? prev.accountCountry,
+          }));
           toast.success("Loaded existing Stripe account");
         } else {
           toast("Previous Stripe account was invalid, you can create a new one");
@@ -279,7 +287,7 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
       }
 
       const result = await response.json();
-      setOnboardingData(prev => ({ ...prev, accountId: result.accountId }));
+      setOnboardingData(prev => ({ ...prev, accountId: result.accountId, accountCountry: result.country }));
       toast.success("Stripe account created successfully!");
       return result.accountId;
     } catch (error) {

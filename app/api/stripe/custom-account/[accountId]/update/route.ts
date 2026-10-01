@@ -3,6 +3,8 @@ import { stripe } from '@/lib/stripe';
 import { sql } from '@/lib/db';
 import { requireStripeAccountManager } from '@/lib/community-auth';
 import { getClientIp } from '@/lib/client-ip';
+import { buildPayoutBankAccount } from '@/lib/payout-bank-formats';
+import { replaceBankAccount } from '@/lib/stripe-external-accounts';
 
 interface BusinessInfo {
   type: 'individual' | 'company';
@@ -43,13 +45,11 @@ interface PersonalInfo {
 }
 
 interface BankAccountInfo {
-  account_number?: string;
-  routing_number?: string;
   account_holder_name?: string;
-  account_holder_type?: 'individual' | 'company';
-  country?: string;
-  currency?: string;
-  iban?: string;
+  /** Raw form values, keyed as in lib/payout-bank-formats (iban, routingNumber, ...). */
+  fields?: Record<string, string>;
+  /** GB only: an IBAN was entered instead of sort code and account number. */
+  use_iban?: boolean;
   skipped?: boolean;
 }
 
@@ -94,6 +94,7 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
     }
 
     let updateParams: any = {};
+    let progressBankAccount: Record<string, unknown> | undefined;
 
     // Handle different steps of the onboarding process
     switch (step) {
@@ -155,45 +156,50 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
             break;
           }
 
-          try {
-            // For US accounts using routing/account numbers
-            if (bankAccount.routing_number && bankAccount.account_number) {
-              // Create external account with routing/account numbers
-              await stripe.accounts.createExternalAccount(accountId, {
-                external_account: {
-                  object: 'bank_account',
-                  country: bankAccount.country || 'US',
-                  currency: bankAccount.currency || 'usd',
-                  account_holder_name: bankAccount.account_holder_name,
-                  account_holder_type: bankAccount.account_holder_type || 'individual',
-                  routing_number: bankAccount.routing_number,
-                  account_number: bankAccount.account_number,
-                }
-              } as any);
-            }
-            // For international accounts using IBAN (according to Perplexity solution)
-            else if (bankAccount.iban || (bankAccount.account_number && bankAccount.account_number.startsWith('EE'))) {
-              const ibanValue = bankAccount.iban || bankAccount.account_number;
+          // Bank fields and currency follow the Stripe account's country,
+          // whatever country or currency the browser sent.
+          const built = buildPayoutBankAccount(
+            account.country,
+            bankAccount.fields ?? {},
+            bankAccount.use_iban === true
+          );
+          if (!built.ok) {
+            return NextResponse.json(
+              { error: built.errors.form ?? 'Please check your bank details', fieldErrors: built.errors },
+              { status: 400 }
+            );
+          }
+          const holderName = bankAccount.account_holder_name?.trim();
+          if (!holderName) {
+            return NextResponse.json(
+              { error: 'Account holder name is required', fieldErrors: { accountHolderName: 'Account holder name is required' } },
+              { status: 400 }
+            );
+          }
 
-              // Create external account with IBAN as account_number (Perplexity solution)
-              await stripe.accounts.createExternalAccount(accountId, {
-                external_account: {
-                  object: 'bank_account',
-                  country: bankAccount.country, // Must be European country
-                  currency: bankAccount.currency, // Must match IBAN country (eur for EE)
-                  account_holder_name: bankAccount.account_holder_name,
-                  account_holder_type: bankAccount.account_holder_type || 'individual',
-                  account_number: ibanValue, // IBAN goes here, NOT in iban field
-                  // NO routing_number for European accounts
-                }
-              } as any);
-            }
-            else {
-              throw new Error('Invalid bank account information. Please provide either routing_number + account_number (US) or IBAN (international).');
-            }
+          try {
+            const { bankAccount: created } = await replaceBankAccount(accountId, {
+              object: 'bank_account',
+              country: built.country,
+              currency: built.currency,
+              account_holder_name: holderName,
+              account_holder_type: account.business_type === 'company' ? 'company' : 'individual',
+              account_number: built.accountNumber,
+              ...(built.routingNumber && { routing_number: built.routingNumber }),
+            });
+            // Only what's needed to recognise the account later; never the numbers.
+            progressBankAccount = {
+              account_holder_name: holderName,
+              country: built.country,
+              currency: built.currency,
+              last4: created.last4 ?? built.accountNumber.slice(-4),
+            };
           } catch (stripeError: any) {
             console.error('Error creating external account:', stripeError);
-            throw new Error(`Failed to create bank account: ${stripeError.message}`);
+            return NextResponse.json(
+              { error: `Failed to add bank account: ${stripeError.message}` },
+              { status: 400 }
+            );
           }
         }
         break;
@@ -243,7 +249,7 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
         SET
           updated_at = NOW(),
           current_step = COALESCE(${currentStep ?? null}, current_step),
-          bank_account = ${sql.json(bankAccount as any)}
+          bank_account = ${sql.json((progressBankAccount ?? { skipped: true }) as any)}
         WHERE stripe_account_id = ${accountId}
       `;
     } else if (currentStep !== undefined) {
