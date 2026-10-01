@@ -30,9 +30,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Note: Better Auth verifyEmail updates the user's email in the user table
-    // The profiles table will be synced via the auth_user_id foreign key relationship
-    // If we need to sync email to profiles, we can do it via a session refresh
+    // Better Auth's verifyEmail updates the email in the user table; the
+    // user.update hook in lib/auth-server.ts copies it to profiles.email.
 
     return NextResponse.json({
       message: "Email updated successfully"

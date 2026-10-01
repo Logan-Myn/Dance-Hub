@@ -5,7 +5,7 @@ import { getEmailService } from "@/lib/resend/email-service";
 import { SignupVerificationEmail } from "@/lib/resend/templates/auth/signup-verification";
 import { PasswordResetEmail } from "@/lib/resend/templates/auth/password-reset";
 import { EmailChangeVerification } from "@/lib/resend/templates/auth/email-change";
-import { revokeUnverifiedPassword, sqlAccountStore } from "@/lib/auth-hooks";
+import { revokeUnverifiedPassword, sqlAccountStore, syncProfileEmail } from "@/lib/auth-hooks";
 
 // Better Auth signs verification tokens as JWTs and verifies them server-side
 // when the link is hit. We only inspect the payload to pick the right template.
@@ -176,6 +176,14 @@ export const auth = betterAuth({
   },
 
   databaseHooks: {
+    user: {
+      update: {
+        // Email changes land in "user"; the app reads profiles.email.
+        after: async (user) => {
+          await syncProfileEmail(user);
+        },
+      },
+    },
     account: {
       create: {
         // Linking Google to a user whose email was never verified removes

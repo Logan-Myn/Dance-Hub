@@ -69,3 +69,33 @@ export const sqlAccountStore: AuthAccountStore = {
     return sql`DELETE FROM session WHERE "userId" = ${userId}`;
   },
 };
+
+/**
+ * Copies the auth user's email to profiles.email and email_preferences.email,
+ * which the app reads for broadcasts, welcome and booking emails and member
+ * lists. Run after every user update; it only writes when the email differs.
+ * Never throws: the email change itself has already been saved by then.
+ */
+export async function syncProfileEmail(
+  user: { id?: string | null; email?: string | null } | null | undefined
+): Promise<void> {
+  if (!user?.id || !user.email) return;
+  try {
+    await sql`
+      UPDATE profiles
+      SET email = ${user.email}, updated_at = NOW()
+      WHERE auth_user_id = ${user.id}
+        AND email IS DISTINCT FROM ${user.email}
+    `;
+    await sql`
+      UPDATE email_preferences ep
+      SET email = ${user.email}, updated_at = NOW()
+      FROM profiles p
+      WHERE ep.user_id = p.id
+        AND p.auth_user_id = ${user.id}
+        AND ep.email IS DISTINCT FROM ${user.email}
+    `;
+  } catch (error) {
+    console.error(`[Auth] Failed to sync the new email of user ${user.id} to profiles:`, error);
+  }
+}
