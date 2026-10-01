@@ -6,6 +6,7 @@ import { SignupVerificationEmail } from "@/lib/resend/templates/auth/signup-veri
 import { PasswordResetEmail } from "@/lib/resend/templates/auth/password-reset";
 import { EmailChangeVerification } from "@/lib/resend/templates/auth/email-change";
 import { revokeUnverifiedPassword, sqlAccountStore, syncProfileEmail } from "@/lib/auth-hooks";
+import { CLIENT_IP_HEADER } from "@/lib/client-ip";
 
 // Better Auth signs verification tokens as JWTs and verifies them server-side
 // when the link is hit. We only inspect the payload to pick the right template.
@@ -201,6 +202,11 @@ export const auth = betterAuth({
   advanced: {
     useSecureCookies: process.env.NODE_ENV === "production",
     cookiePrefix: "dancehub",
+    // Rate limits and session IPs use the header nginx sets, not the default
+    // X-Forwarded-For, which a client can fill with a new fake IP per request.
+    ipAddress: {
+      ipAddressHeaders: [CLIENT_IP_HEADER],
+    },
   },
 });
 

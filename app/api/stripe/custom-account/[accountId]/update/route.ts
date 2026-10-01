@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { sql } from '@/lib/db';
 import { requireStripeAccountManager } from '@/lib/community-auth';
+import { getClientIp } from '@/lib/client-ip';
 
 interface BusinessInfo {
   type: 'individual' | 'company';
@@ -118,10 +119,7 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
 
           // Handle Terms of Service acceptance for Custom accounts
           if (tosAcceptance && tosAcceptance.accepted) {
-            const clientIP = request.headers.get('x-forwarded-for')?.split(',')[0] ||
-                           request.headers.get('x-real-ip') ||
-                           request.headers.get('cf-connecting-ip') ||
-                           '127.0.0.1';
+            const clientIP = getClientIp(request.headers) || '127.0.0.1';
 
             updateParams.tos_acceptance = {
               date: Math.floor(new Date(tosAcceptance.date).getTime() / 1000),
