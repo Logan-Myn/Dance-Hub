@@ -12,6 +12,7 @@ import {
   upsertBroadcastSubscription,
   markBroadcastSubscriptionStatus,
 } from '@/lib/broadcasts/billing';
+import { claimWebhookEvent, finishWebhookEvent } from '@/lib/stripe-webhook-events';
 import React from 'react';
 import Stripe from 'stripe';
 
@@ -105,6 +106,208 @@ async function handleBroadcastSubscriptionLifecycle(sub: Stripe.Subscription): P
   return true;
 }
 
+// Subscription statuses under which a member keeps access. past_due keeps it
+// while Stripe retries a failed renewal.
+const LIVE_SUBSCRIPTION_STATUSES: readonly string[] = ['active', 'trialing', 'past_due'];
+
+/** Our subscription_status for a subscription: Stripe's, or 'canceling' once it is set to end. */
+function memberSubscriptionStatus(subscription: Stripe.Subscription): string {
+  return subscription.status === 'active' && subscription.cancel_at_period_end
+    ? 'canceling'
+    : subscription.status;
+}
+
+/**
+ * Brings the member row in line with a paid membership subscription. Access
+ * follows the subscription's live status, so a late or replayed invoice for a
+ * subscription that has since ended can't re-grant it. Rows are matched on
+ * the subscription id, so events for a replaced subscription never touch the
+ * member's current row. The welcome (or "now open") email goes out only when
+ * this payment is what made the row active, not on renewals or upgrades.
+ */
+async function applyPaidMembership(
+  connectedStripe: Stripe,
+  subscription: Stripe.Subscription,
+): Promise<void> {
+  const { user_id, community_id } = subscription.metadata;
+  console.log('🔍 Processing invoice payment for:', { user_id, community_id });
+
+  // Check if this member should transition from promotional to standard pricing
+  const community = await queryOne<Community>`
+    SELECT id, name, slug, description, image_url, membership_price, created_at, active_member_count, status, opening_date
+    FROM communities
+    WHERE id = ${community_id}
+  `;
+  if (!community) return;
+
+  const communityAge = Date.now() - new Date(community.created_at).getTime();
+  const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
+  const isStillPromotional = communityAge < thirtyDaysInMs;
+
+  let newFeePercentage = 0;
+  if (!isStillPromotional) {
+    // Calculate standard tiered pricing
+    if (community.active_member_count <= 50) {
+      newFeePercentage = 8.0;
+    } else if (community.active_member_count <= 100) {
+      newFeePercentage = 6.0;
+    } else {
+      newFeePercentage = 4.0;
+    }
+
+    // Update the subscription's application fee if it has changed
+    if (subscription.application_fee_percent !== newFeePercentage) {
+      console.log(`🔄 Updating subscription ${subscription.id} fee from ${subscription.application_fee_percent}% to ${newFeePercentage}%`);
+
+      await connectedStripe.subscriptions.update(subscription.id, {
+        application_fee_percent: newFeePercentage,
+        metadata: {
+          ...subscription.metadata,
+          fee_updated_at: new Date().toISOString(),
+          previous_fee: subscription.application_fee_percent?.toString() || '0'
+        }
+      });
+    }
+  }
+
+  // Check if this is a pre-registration payment and community should be activated
+  const isPreRegistration = subscription.metadata?.is_pre_registration === 'true';
+  let communityJustOpened = false;
+
+  if (isPreRegistration && community.status === 'pre_registration') {
+    const now = new Date();
+    const openingDate = community.opening_date ? new Date(community.opening_date) : null;
+
+    // If opening date has passed, activate the community
+    if (openingDate && openingDate <= now) {
+      console.log('🚀 Activating community after pre-registration payment');
+      await sql`
+        UPDATE communities
+        SET status = 'active'
+        WHERE id = ${community_id}
+      `;
+      console.log('✅ Community status updated to active');
+      communityJustOpened = true;
+    }
+  }
+
+  // A pre-registration subscription can report a payment (a €0 first invoice)
+  // before the community opens. The member stays pre-registered until then.
+  const waitingForOpening =
+    isPreRegistration && community.status === 'pre_registration' && !communityJustOpened;
+  const grantsAccess =
+    LIVE_SUBSCRIPTION_STATUSES.includes(subscription.status) && !waitingForOpening;
+
+  // Update member status and platform fee percentage. The CTE reads the row's
+  // status before the update (and locks it), so a concurrent delivery of a
+  // related event can't also see the transition.
+  const [row] = await sql<{ previous_status: string; status: string }[]>`
+    WITH prev AS (
+      SELECT id, status
+      FROM community_members
+      WHERE community_id = ${community_id}
+        AND user_id = ${user_id}
+        AND stripe_subscription_id = ${subscription.id}
+      FOR UPDATE
+    )
+    UPDATE community_members cm
+    SET
+      status = COALESCE(${grantsAccess ? 'active' : null}, cm.status),
+      subscription_status = ${memberSubscriptionStatus(subscription)},
+      platform_fee_percentage = ${isStillPromotional ? 0 : newFeePercentage}
+    FROM prev
+    WHERE cm.id = prev.id
+    RETURNING prev.status AS previous_status, cm.status
+  `;
+
+  if (!row) {
+    console.warn('⚠️ No member row for this subscription:', { subscriptionId: subscription.id, community_id, user_id });
+    return;
+  }
+
+  // Renewals, the upgrade proration and replays find the row already active.
+  // The members_count column is kept by a trigger on community_members
+  // (row insert/delete), so there is nothing to count here.
+  const becameMember = row.previous_status !== 'active' && row.status === 'active';
+  if (!becameMember) return;
+
+  // Get user profile for email
+  const userProfile = await queryOne<UserProfile>`
+    SELECT full_name, email
+    FROM profiles
+    WHERE auth_user_id = ${user_id}
+  `;
+
+  // Send appropriate welcome email
+  if (userProfile?.email) {
+    try {
+      const emailService = getEmailService();
+      const communityUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://dance-hub.io'}/${community.slug}`;
+      const memberName = userProfile.full_name || 'there';
+
+      const defaultBenefits = [
+        'Access to all community courses and content',
+        'Join live dance classes',
+        'Connect with fellow dancers',
+        'Exclusive member resources',
+      ];
+
+      const nextSteps = [
+        {
+          title: 'Explore the Classroom',
+          description: 'Check out available courses and start learning',
+          url: `${communityUrl}/classroom`,
+        },
+        {
+          title: 'Join Live Classes',
+          description: 'See the calendar for upcoming live sessions',
+          url: `${communityUrl}/calendar`,
+        },
+        {
+          title: 'Meet the Community',
+          description: 'Introduce yourself in the community feed',
+          url: communityUrl,
+        },
+      ];
+
+      if (communityJustOpened || isPreRegistration) {
+        // Send Community Opening email for pre-registration members
+        await emailService.sendNotificationEmail(
+          userProfile.email,
+          `${community.name} is Now Open!`,
+          React.createElement(CommunityOpeningEmail, {
+            memberName,
+            communityName: community.name,
+            communityDescription: community.description || undefined,
+            communityUrl,
+            membershipPrice: (community.membership_price || 0) * 100,
+            currency: 'EUR',
+            benefits: defaultBenefits,
+            nextSteps,
+          })
+        );
+        console.log('✅ Community opening email sent to:', userProfile.email);
+      } else {
+        // Send Member Welcome email for regular new members
+        await emailService.sendNotificationEmail(
+          userProfile.email,
+          `Welcome to ${community.name}!`,
+          React.createElement(MemberWelcomeEmail, {
+            memberName,
+            communityName: community.name,
+            communityLogo: community.image_url || undefined,
+            communityUrl,
+          })
+        );
+        console.log('✅ Member welcome email sent to:', userProfile.email);
+      }
+    } catch (emailError) {
+      console.error('❌ Error sending welcome email (non-critical):', emailError);
+      // Don't fail the webhook for email errors
+    }
+  }
+}
+
 export async function POST(request: Request) {
   try {
     console.log('🎯🎯🎯 WEBHOOK ENDPOINT HIT - TIMESTAMP:', new Date().toISOString());
@@ -157,6 +360,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
     }
 
+    // Stripe redelivers an event after a timeout or a non-2xx. Skip one that
+    // was already handled; ask Stripe to retry one another attempt is still
+    // handling (if that attempt fails, the retry runs it again).
+    const claim = await claimWebhookEvent(event);
+    if (claim === 'duplicate') {
+      console.log('⏭️ Event already processed, skipping:', event.id);
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+    if (claim === 'in_progress') {
+      console.log('⏳ Event is being processed by another attempt:', event.id);
+      return NextResponse.json({ error: 'Event is already being processed' }, { status: 409 });
+    }
+
+    const response = await handleEvent(event);
+    await finishWebhookEvent(event.id, response.ok);
+    return response;
+  } catch (error) {
+    console.error('Webhook error:', error);
+    return NextResponse.json(
+      { error: 'Webhook handler failed' },
+      { status: 500 }
+    );
+  }
+}
+
+// Runs the handler for a verified event. Never throws: any error becomes a
+// 500, so the caller can release the event claim and Stripe retries it.
+async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
+  try {
     console.log('Received webhook event:', event.type);
 
     const connectedStripe = event.account
@@ -236,7 +468,8 @@ export async function POST(request: Request) {
               console.warn('Failed to parse contact_info, using empty object');
             }
 
-            // Create the booking record
+            // Create the booking record. A redelivered event finds the booking
+            // already there (stripe_payment_intent_id is unique) and stops.
             const newBooking = await queryOne<LessonBooking>`
               INSERT INTO lesson_bookings (
                 private_lesson_id,
@@ -273,15 +506,13 @@ export async function POST(request: Request) {
                 NULL,
                 NULL
               )
+              ON CONFLICT (stripe_payment_intent_id) DO NOTHING
               RETURNING id
             `;
 
             if (!newBooking) {
-              console.error('❌ Error creating booking record: no row returned');
-              return NextResponse.json({
-                error: 'Failed to create booking record',
-                payment_intent_id: paymentIntent.id
-              }, { status: 500 });
+              console.log('⏭️ Booking already recorded for payment intent:', paymentIntent.id);
+              return NextResponse.json({ received: true, duplicate: true });
             }
 
             console.log('✅ Successfully created new booking:', newBooking.id);
@@ -447,15 +678,11 @@ export async function POST(request: Request) {
           console.log('🔍 Found metadata from subscription:', { user_id, community_id });
 
           try {
-            // Update member status to active
-            await sql`
-              UPDATE community_members
-              SET status = 'active'
-              WHERE community_id = ${community_id}
-                AND user_id = ${user_id}
-            `;
+            // Same path as invoice.payment_succeeded, so whichever of the two
+            // events arrives first activates the member and sends the email.
+            await applyPaidMembership(connectedStripe, subscription);
 
-            console.log('✅ Successfully updated member status to active');
+            console.log('✅ Successfully updated member status');
             return NextResponse.json({ received: true });
           } catch (error) {
             console.error('❌ Error in payment_intent.succeeded handler:', error);
@@ -559,9 +786,12 @@ export async function POST(request: Request) {
       }
 
       case 'invoice.payment_succeeded':
-        console.log('📄 Invoice payment succeeded');
         const invoice = event.data.object as Stripe.Invoice;
-        console.log('📄 Full invoice:', JSON.stringify(invoice, null, 2));
+        // Ids only: the invoice carries the customer's email, name and address.
+        console.log('📄 Invoice payment succeeded:', {
+          invoiceId: invoice.id,
+          billingReason: (invoice as any).billing_reason,
+        });
 
         // In Clover API, subscription is now in parent.subscription_details.subscription
         // instead of invoice.subscription
@@ -586,163 +816,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Missing metadata' }, { status: 400 });
           }
 
-          const { user_id, community_id } = subscription.metadata;
-          console.log('🔍 Processing invoice payment for:', { user_id, community_id });
-
-          // Check if this member should transition from promotional to standard pricing
-          const community = await queryOne<Community>`
-            SELECT id, name, slug, description, image_url, membership_price, created_at, active_member_count, status, opening_date
-            FROM communities
-            WHERE id = ${community_id}
-          `;
-
-          // Get user profile for email
-          const userProfile = await queryOne<UserProfile>`
-            SELECT full_name, email
-            FROM profiles
-            WHERE auth_user_id = ${user_id}
-          `;
-
-          if (community) {
-            const communityAge = Date.now() - new Date(community.created_at).getTime();
-            const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
-            const isStillPromotional = communityAge < thirtyDaysInMs;
-
-            let newFeePercentage = 0;
-            if (!isStillPromotional) {
-              // Calculate standard tiered pricing
-              if (community.active_member_count <= 50) {
-                newFeePercentage = 8.0;
-              } else if (community.active_member_count <= 100) {
-                newFeePercentage = 6.0;
-              } else {
-                newFeePercentage = 4.0;
-              }
-
-              // Update the subscription's application fee if it has changed
-              if (subscription.application_fee_percent !== newFeePercentage) {
-                console.log(`🔄 Updating subscription ${subscription.id} fee from ${subscription.application_fee_percent}% to ${newFeePercentage}%`);
-
-                await connectedStripe.subscriptions.update(subscription.id, {
-                  application_fee_percent: newFeePercentage,
-                  metadata: {
-                    ...subscription.metadata,
-                    fee_updated_at: new Date().toISOString(),
-                    previous_fee: subscription.application_fee_percent?.toString() || '0'
-                  }
-                });
-              }
-            }
-
-            // Update member status and platform fee percentage
-            await sql`
-              UPDATE community_members
-              SET
-                status = 'active',
-                subscription_status = ${subscription.status},
-                platform_fee_percentage = ${isStillPromotional ? 0 : newFeePercentage}
-              WHERE community_id = ${community_id}
-                AND user_id = ${user_id}
-            `;
-
-            // Check if this is a pre-registration payment and community should be activated
-            const isPreRegistration = subscription.metadata?.is_pre_registration === 'true';
-            let communityJustOpened = false;
-
-            if (isPreRegistration && community.status === 'pre_registration') {
-              const now = new Date();
-              const openingDate = community.opening_date ? new Date(community.opening_date) : null;
-
-              // If opening date has passed, activate the community
-              if (openingDate && openingDate <= now) {
-                console.log('🚀 Activating community after pre-registration payment');
-                await sql`
-                  UPDATE communities
-                  SET status = 'active'
-                  WHERE id = ${community_id}
-                `;
-                console.log('✅ Community status updated to active');
-                communityJustOpened = true;
-              }
-            }
-
-            // Send appropriate welcome email
-            if (userProfile?.email && community) {
-              try {
-                const emailService = getEmailService();
-                const communityUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://dance-hub.io'}/${community.slug}`;
-                const memberName = userProfile.full_name || 'there';
-
-                const defaultBenefits = [
-                  'Access to all community courses and content',
-                  'Join live dance classes',
-                  'Connect with fellow dancers',
-                  'Exclusive member resources',
-                ];
-
-                const nextSteps = [
-                  {
-                    title: 'Explore the Classroom',
-                    description: 'Check out available courses and start learning',
-                    url: `${communityUrl}/classroom`,
-                  },
-                  {
-                    title: 'Join Live Classes',
-                    description: 'See the calendar for upcoming live sessions',
-                    url: `${communityUrl}/calendar`,
-                  },
-                  {
-                    title: 'Meet the Community',
-                    description: 'Introduce yourself in the community feed',
-                    url: communityUrl,
-                  },
-                ];
-
-                if (communityJustOpened || isPreRegistration) {
-                  // Send Community Opening email for pre-registration members
-                  await emailService.sendNotificationEmail(
-                    userProfile.email,
-                    `${community.name} is Now Open!`,
-                    React.createElement(CommunityOpeningEmail, {
-                      memberName,
-                      communityName: community.name,
-                      communityDescription: community.description || undefined,
-                      communityUrl,
-                      membershipPrice: (community.membership_price || 0) * 100,
-                      currency: 'EUR',
-                      benefits: defaultBenefits,
-                      nextSteps,
-                    })
-                  );
-                  console.log('✅ Community opening email sent to:', userProfile.email);
-                } else {
-                  // Send Member Welcome email for regular new members
-                  await emailService.sendNotificationEmail(
-                    userProfile.email,
-                    `Welcome to ${community.name}!`,
-                    React.createElement(MemberWelcomeEmail, {
-                      memberName,
-                      communityName: community.name,
-                      communityLogo: community.image_url || undefined,
-                      communityUrl,
-                    })
-                  );
-                  console.log('✅ Member welcome email sent to:', userProfile.email);
-                }
-              } catch (emailError) {
-                console.error('❌ Error sending welcome email (non-critical):', emailError);
-                // Don't fail the webhook for email errors
-              }
-            }
-
-            // Increment member count if member just became active
-            try {
-              await sql`SELECT increment_members_count(${community_id})`;
-              console.log('✅ Incremented member count');
-            } catch (countError) {
-              console.error('Error incrementing member count:', countError);
-            }
-          }
+          await applyPaidMembership(connectedStripe, subscription);
 
           console.log('✅ Successfully updated member status');
           return NextResponse.json({ received: true });
@@ -768,17 +842,16 @@ export async function POST(request: Request) {
 
         // Determine the effective subscription status
         // If subscription is active but set to cancel at period end, use 'canceling'
-        let effectiveStatus: string = subscription.status;
-        if (subscription.status === 'active' && subscription.cancel_at_period_end) {
-          effectiveStatus = 'canceling';
-        }
+        const effectiveStatus = memberSubscriptionStatus(subscription);
 
         // In Clover API, current_period_end is now on subscription items, not the subscription itself
         // Use type assertion since SDK types may not reflect latest API version
         const subscriptionItem = subscription.items.data[0] as any;
         const subCurrentPeriodEnd = subscriptionItem?.current_period_end;
 
-        // Update member subscription status
+        // Update member subscription status. Only the row that holds this
+        // subscription: after a re-join or a re-applied promo code the member
+        // has a new one, and events for the old one must not touch it.
         try {
           await sql`
             UPDATE community_members
@@ -787,6 +860,7 @@ export async function POST(request: Request) {
               current_period_end = ${subCurrentPeriodEnd ? new Date(subCurrentPeriodEnd * 1000).toISOString() : null}
             WHERE community_id = ${subscription.metadata.community_id}
               AND user_id = ${subscription.metadata.user_id}
+              AND stripe_subscription_id = ${subscription.id}
           `;
         } catch (statusUpdateError) {
           console.error('Error updating subscription status:', statusUpdateError);
@@ -796,7 +870,8 @@ export async function POST(request: Request) {
           );
         }
 
-        // If subscription is canceled or expired, update member status and decrement count
+        // If subscription is canceled or expired, update member status. The
+        // members_count column is kept by a trigger on row insert/delete.
         if (subscription.status === 'canceled' || subscription.status === 'unpaid') {
           try {
             await sql`
@@ -806,21 +881,13 @@ export async function POST(request: Request) {
                 cancelled_at = NOW()
               WHERE community_id = ${subscription.metadata.community_id}
                 AND user_id = ${subscription.metadata.user_id}
+                AND stripe_subscription_id = ${subscription.id}
+                AND status <> 'inactive'
             `;
           } catch (memberStatusError) {
             console.error('Error updating member status:', memberStatusError);
             return NextResponse.json(
               { error: 'Failed to update member status' },
-              { status: 500 }
-            );
-          }
-
-          try {
-            await sql`SELECT decrement_members_count(${subscription.metadata.community_id})`;
-          } catch (countError) {
-            console.error('Error updating members count:', countError);
-            return NextResponse.json(
-              { error: 'Failed to update members count' },
               { status: 500 }
             );
           }
@@ -863,9 +930,10 @@ export async function POST(request: Request) {
             await sql`
               UPDATE community_members
               SET
-                subscription_status = ${failedSubscription.status}
+                subscription_status = ${memberSubscriptionStatus(failedSubscription)}
               WHERE community_id = ${failedSubscription.metadata.community_id}
                 AND user_id = ${failedSubscription.metadata.user_id}
+                AND stripe_subscription_id = ${failedSubscription.id}
             `;
           } catch (failureUpdateError) {
             console.error('Error updating subscription status:', failureUpdateError);
