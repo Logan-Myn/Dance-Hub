@@ -12,7 +12,8 @@ import sanitizeHtml from 'sanitize-html';
 const LINK_REL = 'noopener noreferrer nofollow';
 
 const TEXT_ALIGN = [/^(left|center|right|justify)$/];
-const FONT_SIZE = [/^\d+(\.\d+)?(rem|em|px|%)$/];
+// The three sizes the editor's H1/H2/H3 buttons set inside list items.
+const FONT_SIZE = [/^(2\.25|1\.875|1\.5)rem$/];
 
 const baseOptions: sanitizeHtml.IOptions = {
   allowedTags: [

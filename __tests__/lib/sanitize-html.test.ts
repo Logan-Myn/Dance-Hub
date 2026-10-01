@@ -80,6 +80,17 @@ describe('sanitizeRichText (thread bodies)', () => {
     );
   });
 
+  it('only keeps the font sizes the editor offers', () => {
+    for (const size of ['2.25rem', '1.875rem', '1.5rem']) {
+      expect(sanitizeRichText(`<span style="font-size: ${size}">x</span>`)).toBe(
+        `<span style="font-size:${size}">x</span>`
+      );
+    }
+    for (const size of ['9999px', '50rem', '1em', '100%']) {
+      expect(sanitizeRichText(`<span style="font-size: ${size}">x</span>`)).toBe('<span>x</span>');
+    }
+  });
+
   it('returns an empty string for anything that is not a string', () => {
     expect(sanitizeRichText(undefined)).toBe('');
     expect(sanitizeRichText(null)).toBe('');
