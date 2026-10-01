@@ -14,6 +14,7 @@ import toast from "react-hot-toast";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -24,7 +25,10 @@ interface AuthModalProps {
 
 type TabType = "signin" | "signup";
 
-export default function AuthModal({ isOpen, onClose, initialTab, redirectUrl }: AuthModalProps) {
+export default function AuthModal({ isOpen, onClose, initialTab, redirectUrl: requestedRedirect }: AuthModalProps) {
+  // The redirect can come from the URL (?redirect=), so only same-origin
+  // paths are kept. Anything else is dropped and the default applies.
+  const redirectUrl = safeRedirectPath(requestedRedirect) ?? undefined;
   const { refreshUser } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");

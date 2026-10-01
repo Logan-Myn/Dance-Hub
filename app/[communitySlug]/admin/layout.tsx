@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth-session';
+import { loginPath } from '@/lib/safe-redirect';
 import { getCommunityBySlug, getUserIsAdmin } from '@/lib/community-data';
 
 export default async function AdminLayout(
@@ -12,7 +13,7 @@ export default async function AdminLayout(
   const { children } = props;
 
   const session = await getSession();
-  if (!session) redirect('/auth/login');
+  if (!session) redirect(loginPath(`/${params.communitySlug}/admin`));
 
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) redirect(`/${params.communitySlug}`);

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, CheckCircle } from 'lucide-react';
+import { safeRedirectPath } from '@/lib/safe-redirect';
 
 function VerifySignupContent() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -38,9 +39,11 @@ function VerifySignupContent() {
         if (response.ok) {
           setStatus('success');
           setMessage('Email verified successfully!');
-          // Check localStorage for stored redirect URL (from auth modal)
+          // Check localStorage for stored redirect URL (from auth modal). Only
+          // same-origin paths are followed.
           const storedRedirectUrl = localStorage.getItem('auth_redirect_url');
-          const redirectTo = storedRedirectUrl || data.redirectTo || '/dashboard';
+          const redirectTo =
+            safeRedirectPath(storedRedirectUrl) || safeRedirectPath(data.redirectTo) || '/dashboard';
           console.log('Will redirect to:', redirectTo); // Debug log
           setRedirectPath(redirectTo);
           // Clear the stored redirect URL

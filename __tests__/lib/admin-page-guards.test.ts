@@ -45,7 +45,7 @@ beforeEach(() => {
 describe('requirePlatformAdminPage', () => {
   it('sends a signed-out visitor to log in', async () => {
     mockSession.mockResolvedValue(null);
-    await expect(requirePlatformAdminPage()).rejects.toThrow('REDIRECT /auth/login');
+    await expect(requirePlatformAdminPage()).rejects.toThrow('REDIRECT /?auth=login&redirect=%2Fadmin');
   });
 
   it('sends a signed-in non-admin home', async () => {
@@ -63,7 +63,9 @@ describe('requirePlatformAdminPage', () => {
 describe('requireCommunityManagerPage', () => {
   it('sends a signed-out visitor to log in', async () => {
     mockSession.mockResolvedValue(null);
-    await expect(requireCommunityManagerPage('salsa')).rejects.toThrow('REDIRECT /auth/login');
+    await expect(requireCommunityManagerPage('salsa')).rejects.toThrow(
+      'REDIRECT /?auth=login&redirect=%2Fsalsa%2Fadmin'
+    );
     expect(mockQueryOne).not.toHaveBeenCalled();
   });
 

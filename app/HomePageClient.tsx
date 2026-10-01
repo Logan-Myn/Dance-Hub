@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAuthModal } from "@/contexts/AuthModalContext";
+import { authModalRequestFromSearch } from "@/lib/safe-redirect";
 
 // Paste the Mux playback ID here once the product tour finishes rendering and
 // uploading. Until then, the section renders the static placeholder below.
@@ -1071,14 +1072,16 @@ export default function HomePageClient() {
   const { showAuthModal } = useAuthModal();
   const promptedRef = useRef(false);
 
-  // /onboarding sends signed-out visitors here with ?auth=signup so the modal
-  // opens over the landing page rather than on an empty page of its own.
+  // /onboarding sends signed-out visitors here with ?auth=signup, and the
+  // admin page guards with ?auth=login, so the modal opens over the landing
+  // page rather than on an empty page of its own. ?redirect= is only followed
+  // when it is a same-origin path.
   useEffect(() => {
     if (promptedRef.current) return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("auth") !== "signup") return;
+    const request = authModalRequestFromSearch(window.location.search);
+    if (!request) return;
     promptedRef.current = true;
-    showAuthModal("signup", params.get("redirect") || "/onboarding");
+    showAuthModal(request.tab, request.redirect);
     window.history.replaceState({}, "", window.location.pathname);
   }, [showAuthModal]);
 

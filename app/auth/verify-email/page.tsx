@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
+import { loginPath, safeRedirectPath } from "@/lib/safe-redirect";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
@@ -43,9 +44,10 @@ function VerifyEmailContent() {
         setStatus("success");
         setMessage("Your email has been verified successfully!");
 
-        // Check localStorage for stored redirect URL (from auth modal)
+        // Check localStorage for stored redirect URL (from auth modal). Only
+        // same-origin paths are followed.
         const storedRedirectUrl = localStorage.getItem('auth_redirect_url');
-        const redirectTo = storedRedirectUrl || '/dashboard';
+        const redirectTo = safeRedirectPath(storedRedirectUrl) || '/dashboard';
 
         // Clear the stored redirect URL
         if (storedRedirectUrl) {
@@ -113,7 +115,7 @@ function VerifyEmailContent() {
 
           {status === "error" && (
             <div className="flex flex-col gap-2">
-              <Button onClick={() => router.push("/auth/login")} className="w-full">
+              <Button onClick={() => router.push(loginPath("/dashboard"))} className="w-full">
                 Go to Login
               </Button>
               <Button

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth-session';
+import { loginPath } from '@/lib/safe-redirect';
 import AdminLayoutClient from './AdminLayoutClient';
 
 // Gate /admin/* on the server side using auth.api.getSession() directly,
@@ -14,7 +15,7 @@ export default async function AdminLayout({
   const session = await getSession();
 
   if (!session) {
-    redirect('/auth/login');
+    redirect(loginPath('/admin'));
   }
   if (!session.user.isAdmin) {
     redirect('/');
