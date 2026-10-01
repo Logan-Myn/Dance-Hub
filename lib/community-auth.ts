@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { redirect } from 'next/navigation';
 import { queryOne } from '@/lib/db';
 import { getSession, type Session } from '@/lib/auth-session';
 import { getMembershipStatus, getUserIsAdmin } from '@/lib/community-data';
@@ -145,6 +146,34 @@ export async function canViewCommunity(
   ]);
   if (isAdmin || membership.isMember) return true;
   return !!opts.allowPreRegistered && membership.isPreRegistered;
+}
+
+// ---------------------------------------------------------------------------
+// Page guards. A layout and its page render at the same time, so a redirect()
+// in a layout does NOT stop the page from running its queries and sending the
+// data in the response. Every protected page calls one of these itself, before
+// loading anything. Each one applies the same rule as its admin layout.
+// ---------------------------------------------------------------------------
+
+/** Platform admin (same flag as app/admin/layout.tsx), or redirect away. */
+export async function requirePlatformAdminPage(): Promise<Session> {
+  const session = await getSession();
+  if (!session) redirect('/auth/login');
+  if (!session.user.isAdmin) redirect('/');
+  return session;
+}
+
+/** Community owner or platform admin, or redirect to the community. */
+export async function requireCommunityManagerPage(
+  slug: string
+): Promise<{ session: Session; community: GuardedCommunity }> {
+  const session = await getSession();
+  if (!session) redirect('/auth/login');
+  const community = await loadCommunityBySlug(slug);
+  if (!community || !(await userCanManageCommunity(session.user.id, community.id))) {
+    redirect(`/${slug}`);
+  }
+  return { session, community };
 }
 
 /** Owner or admin of the community whose Stripe Connect account is accountId. */

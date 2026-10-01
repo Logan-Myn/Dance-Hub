@@ -1,3 +1,4 @@
+import { requirePlatformAdminPage } from '@/lib/community-auth';
 import { getAllAdminCourses } from '@/lib/admin-platform/courses';
 import { CoursesTable } from '@/components/admin/platform/CoursesTable';
 
@@ -5,6 +6,7 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
 export default async function CoursesPage() {
+  await requirePlatformAdminPage();
   const courses = await getAllAdminCourses();
 
   return (

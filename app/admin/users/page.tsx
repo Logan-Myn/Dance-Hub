@@ -1,3 +1,4 @@
+import { requirePlatformAdminPage } from '@/lib/community-auth';
 import { getAllAdminUsers } from '@/lib/admin-platform/users';
 import { UsersTable } from '@/components/admin/platform/UsersTable';
 
@@ -5,6 +6,7 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
 export default async function UsersPage() {
+  await requirePlatformAdminPage();
   const users = await getAllAdminUsers();
 
   return (

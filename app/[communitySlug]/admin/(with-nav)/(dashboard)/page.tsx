@@ -1,3 +1,4 @@
+import { requireCommunityManagerPage } from '@/lib/community-auth';
 import { queryOne, query } from '@/lib/db';
 import { getCommunityBySlug } from '@/lib/community-data';
 import {
@@ -31,6 +32,7 @@ export default async function AdminDashboardPage(
   }
 ) {
   const params = await props.params;
+  await requireCommunityManagerPage(params.communitySlug);
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 

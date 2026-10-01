@@ -1,3 +1,4 @@
+import { requirePlatformAdminPage } from '@/lib/community-auth';
 import { getAllAdminCommunities } from '@/lib/admin-platform/communities';
 import { CommunitiesTable } from '@/components/admin/platform/CommunitiesTable';
 
@@ -5,6 +6,7 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
 export default async function CommunitiesPage() {
+  await requirePlatformAdminPage();
   const communities = await getAllAdminCommunities();
 
   return (

@@ -1,3 +1,4 @@
+import { requireCommunityManagerPage } from '@/lib/community-auth';
 import { queryOne } from '@/lib/db';
 import { SubscriptionsEditor } from '@/components/admin/SubscriptionsEditor';
 
@@ -26,6 +27,7 @@ export default async function SubscriptionsPage(
   }
 ) {
   const params = await props.params;
+  await requireCommunityManagerPage(params.communitySlug);
   const community = await queryOne<SubscriptionsRow>`
     SELECT id, stripe_account_id, membership_enabled, membership_price,
            yearly_enabled, yearly_price, yearly_benefits, created_at

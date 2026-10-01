@@ -1,3 +1,4 @@
+import { requireCommunityManagerPage } from '@/lib/community-auth';
 import { queryOne } from '@/lib/db';
 import { StripeOnboardingClient } from '@/components/stripe-onboarding/StripeOnboardingClient';
 
@@ -12,6 +13,7 @@ export default async function StripeOnboardingPage(
   props: { params: Promise<{ communitySlug: string }> }
 ) {
   const params = await props.params;
+  await requireCommunityManagerPage(params.communitySlug);
   const community = await queryOne<CommunityRow>`
     SELECT id FROM communities WHERE slug = ${params.communitySlug}
   `;

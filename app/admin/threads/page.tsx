@@ -1,3 +1,4 @@
+import { requirePlatformAdminPage } from '@/lib/community-auth';
 import { getAllAdminThreads } from '@/lib/admin-platform/threads';
 import { ThreadsTable } from '@/components/admin/platform/ThreadsTable';
 
@@ -5,6 +6,7 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
 export default async function ThreadsPage() {
+  await requirePlatformAdminPage();
   const threads = await getAllAdminThreads();
 
   return (

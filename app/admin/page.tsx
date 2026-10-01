@@ -1,3 +1,4 @@
+import { requirePlatformAdminPage } from '@/lib/community-auth';
 import {
   getUserStats,
   getCommunityStats,
@@ -24,6 +25,7 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
 export default async function AdminDashboard() {
+  await requirePlatformAdminPage();
   const now = new Date();
 
   const [

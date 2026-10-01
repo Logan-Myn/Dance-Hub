@@ -1,3 +1,4 @@
+import { requireCommunityManagerPage } from '@/lib/community-auth';
 import { queryOne } from '@/lib/db';
 import { PromoCodesManager } from '@/components/admin/PromoCodesManager';
 
@@ -15,6 +16,7 @@ interface Row {
 
 export default async function PromoCodesPage(props: { params: Promise<{ communitySlug: string }> }) {
   const { communitySlug } = await props.params;
+  await requireCommunityManagerPage(communitySlug);
   const community = await queryOne<Row>`
     SELECT id, membership_enabled, membership_price, stripe_account_id, stripe_price_id, yearly_enabled
     FROM communities WHERE slug = ${communitySlug}

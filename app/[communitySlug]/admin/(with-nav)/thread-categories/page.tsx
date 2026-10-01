@@ -1,3 +1,4 @@
+import { requireCommunityManagerPage } from '@/lib/community-auth';
 import { queryOne } from '@/lib/db';
 import { ThreadCategoriesEditor } from '@/components/admin/ThreadCategoriesEditor';
 import type { ThreadCategory } from '@/types/community';
@@ -19,6 +20,7 @@ export default async function ThreadCategoriesPage(
   }
 ) {
   const params = await props.params;
+  await requireCommunityManagerPage(params.communitySlug);
   // `thread_categories` is a JSONB column on the communities table storing the
   // full ordered array of ThreadCategory objects (see supabase/migrations/001
   // and app/api/community/[communitySlug]/categories/route.ts, which PUTs the

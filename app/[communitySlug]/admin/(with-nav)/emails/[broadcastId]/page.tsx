@@ -1,3 +1,4 @@
+import { requireCommunityManagerPage } from '@/lib/community-auth';
 import Link from 'next/link';
 import { queryOne } from '@/lib/db';
 import { getCommunityBySlug } from '@/lib/community-data';
@@ -39,6 +40,7 @@ export default async function BroadcastDetailPage(
   }
 ) {
   const params = await props.params;
+  await requireCommunityManagerPage(params.communitySlug);
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 

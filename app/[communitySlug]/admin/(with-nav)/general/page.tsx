@@ -1,3 +1,4 @@
+import { requireCommunityManagerPage } from '@/lib/community-auth';
 import { queryOne } from '@/lib/db';
 import { GeneralSettingsForm } from '@/components/admin/GeneralSettingsForm';
 
@@ -27,6 +28,7 @@ export default async function GeneralSettingsPage(
   }
 ) {
   const params = await props.params;
+  await requireCommunityManagerPage(params.communitySlug);
   const community = await queryOne<CommunityRow>`
     SELECT id, name, description, image_url, image_focal_x, image_focal_y, image_zoom,
            custom_links, slug, status, opening_date, can_change_opening_date

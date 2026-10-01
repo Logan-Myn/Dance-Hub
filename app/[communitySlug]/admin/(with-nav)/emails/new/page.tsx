@@ -1,5 +1,5 @@
+import { requireCommunityManagerPage } from '@/lib/community-auth';
 import Link from 'next/link';
-import { getSession } from '@/lib/auth-session';
 import { getCommunityBySlug } from '@/lib/community-data';
 import { getQuota } from '@/lib/broadcasts/quota';
 import { getActiveRecipientsForCommunity } from '@/lib/broadcasts/recipients';
@@ -13,8 +13,7 @@ export default async function NewEmailPage(
   }
 ) {
   const params = await props.params;
-  const session = await getSession();
-  if (!session) return null;
+  const { session } = await requireCommunityManagerPage(params.communitySlug);
 
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;

@@ -1,3 +1,4 @@
+import { requireCommunityManagerPage } from '@/lib/community-auth';
 import { query } from '@/lib/db';
 import { getCommunityBySlug } from '@/lib/community-data';
 import { MembersTable, MemberRow } from '@/components/admin/MembersTable';
@@ -13,6 +14,7 @@ export default async function MembersPage(
   }
 ) {
   const params = await props.params;
+  await requireCommunityManagerPage(params.communitySlug);
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 
