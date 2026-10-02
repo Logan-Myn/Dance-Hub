@@ -81,12 +81,16 @@ src_mode=$(stripe_key_mode "$SRC")
 [[ "$src_mode" == "sk_$MODE" || "$src_mode" == "rk_$MODE" ]] \
   || die "$SRC holds a '$src_mode' key, not a $MODE key. Nothing changed."
 
-cp -p "$ENV_SOURCE" "$ENV_SOURCE.bak.stripe-mode"
+# Hold the preprod deploy lock from here through the rebuild, so a deploy
+# running now cannot build with a half-switched env (and we change nothing
+# if one is running).
+lock_releases
+install -m 600 "$ENV_SOURCE" "$ENV_SOURCE.bak.stripe-mode"
 stripe_env_merge "$SRC" "$ENV_SOURCE"
 echo "Switched $ENV_SOURCE to Stripe $MODE mode ($(stripe_key_mode "$ENV_SOURCE")); backup in $ENV_SOURCE.bak.stripe-mode."
 
 if [[ -n "$(current_release)" ]]; then
-  "$SCRIPT_DIR/deploy-preprod.sh" rebuild
+  DEPLOY_LOCK_HELD="$RELEASES_DIR" "$SCRIPT_DIR/deploy-preprod.sh" rebuild
 else
   echo "Preprod has no release yet. Build one with: ./deploy-preprod.sh restart <branch>"
 fi

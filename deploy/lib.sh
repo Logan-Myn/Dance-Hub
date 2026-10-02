@@ -36,7 +36,12 @@ init_releases() {
 }
 
 # One deploy at a time per app. The lock is released when the script exits.
+# A caller that already holds it (stripe-mode.sh) passes it down on fd 9 with
+# DEPLOY_LOCK_HELD set to this app's releases dir.
 lock_releases() {
+  if [[ "${DEPLOY_LOCK_HELD:-}" == "$RELEASES_DIR" ]] && { true >&9; } 2> /dev/null; then
+    return 0
+  fi
   mkdir -p "$RELEASES_DIR"
   exec 9>"$RELEASES_DIR/.deploy.lock"
   flock -n 9 || die "Another deploy of $APP_NAME is running."

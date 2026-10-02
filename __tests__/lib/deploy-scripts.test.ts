@@ -139,6 +139,65 @@ describe('stripe-mode.sh status', () => {
   });
 });
 
+describe('stripe-mode.sh switching', () => {
+  const repo = () => path.join(tmp, 'switch-repo');
+  const releasesRoot = () => path.join(tmp, 'switch-releases');
+  const lockFile = () => path.join(releasesRoot(), 'dance-hub-preprod/.deploy.lock');
+  const original = 'DATABASE_URL="postgres://local"\nSTRIPE_SECRET_KEY="sk_test_OLDSECRET"\n';
+
+  beforeEach(() => {
+    fs.rmSync(repo(), { recursive: true, force: true });
+    // The mode file must exist here, or the script would look in the real
+    // legacy preprod directory.
+    write(path.join(repo(), '.env.preprod.live'), 'DATABASE_URL="postgres://stale"\nSTRIPE_SECRET_KEY="sk_live_NEWSECRET"\n');
+    write(path.join(repo(), '.env.preprod'), original, 0o640);
+    write(path.join(tmp, 'switch-bin/ss'), '#!/bin/sh\nexit 0\n', 0o755);
+    fs.mkdirSync(path.dirname(lockFile()), { recursive: true });
+  });
+
+  // Runs stripe-mode.sh, optionally while another process holds the deploy lock.
+  const stripeMode = (holdLock: boolean) =>
+    run(
+      'bash',
+      [
+        '-c',
+        holdLock
+          ? 'exec 8>"$LOCK"; flock -n 8 || exit 42; "$SCRIPT" live'
+          : '"$SCRIPT" live',
+      ],
+      {
+        env: {
+          LOCK: lockFile(),
+          SCRIPT: path.join(ROOT, 'stripe-mode.sh'),
+          DEPLOY_MAIN_REPO: repo(),
+          DEPLOY_RELEASES_ROOT: releasesRoot(),
+          PATH: `${path.join(tmp, 'switch-bin')}:${process.env.PATH}`,
+        },
+      }
+    );
+
+  it('changes nothing while a preprod deploy holds the lock', () => {
+    const res = stripeMode(true);
+    expect(res.code).not.toBe(0);
+    expect(res.code).not.toBe(42);
+    expect(res.out).toContain('Another deploy of dance-hub-preprod is running.');
+    expect(fs.readFileSync(path.join(repo(), '.env.preprod'), 'utf8')).toBe(original);
+    expect(fs.existsSync(path.join(repo(), '.env.preprod.bak.stripe-mode'))).toBe(false);
+  });
+
+  it('switches the Stripe lines and keeps a private backup', () => {
+    const res = stripeMode(false);
+    expect(res.code).toBe(0);
+    expect(fs.readFileSync(path.join(repo(), '.env.preprod'), 'utf8')).toBe(
+      'DATABASE_URL="postgres://local"\nSTRIPE_SECRET_KEY="sk_live_NEWSECRET"\n'
+    );
+    const backup = path.join(repo(), '.env.preprod.bak.stripe-mode');
+    expect(fs.readFileSync(backup, 'utf8')).toBe(original);
+    expect(fs.statSync(backup).mode & 0o777).toBe(0o600);
+    expect(res.out).not.toMatch(/OLDSECRET|NEWSECRET/);
+  });
+});
+
 describe('prod deploy refuses until nginx has the real-IP setup', () => {
   const vhost = () => path.join(tmp, 'precheck/dance-hub.io');
   const prod = (args: string[], extra: Record<string, string> = {}) =>
@@ -407,5 +466,21 @@ esac
 
     // Same env: no warning.
     expect(preprod('rollback', releaseNames()[2]).out).not.toContain('env differs');
+  }, 60_000);
+
+  it('stripe-mode.sh rebuilds preprod under the lock it took', () => {
+    const envFile = path.join(repo, '.env.preprod');
+    const original = fs.readFileSync(envFile, 'utf8');
+    const before = current();
+    write(path.join(repo, '.env.preprod.live'), 'STRIPE_SECRET_KEY="sk_live_y"\n');
+
+    spawnSync('sleep', ['1.1']);
+    const res = run(path.join(ROOT, 'stripe-mode.sh'), ['live'], { env });
+    fs.writeFileSync(envFile, original);
+
+    expect(res.code).toBe(0);
+    expect(res.out).not.toContain('Another deploy');
+    expect(current()).not.toBe(before);
+    expect(fs.readFileSync(path.join(releases, current(), '.env.local'), 'utf8')).toBe('STRIPE_SECRET_KEY="sk_live_y"\n');
   }, 60_000);
 });
