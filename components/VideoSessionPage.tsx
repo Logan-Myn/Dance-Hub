@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { formatInTz } from "@/lib/timezone";
 import { useUserTimezone } from "@/hooks/useUserTimezone";
@@ -106,6 +106,14 @@ export default function VideoSessionPage() {
     !isEnded &&
     isWithinJoinWindow;
 
+  // Rejoining asks for a new token, which also re-checks the lesson is on.
+  const getFreshToken = useCallback(async () => {
+    const response = await fetch(`/api/bookings/${bookingId}/video-token`, { method: "POST" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Couldn't rejoin the lesson.");
+    return { token: data.token as string, serverUrl: data.serverUrl as string };
+  }, [bookingId]);
+
   const handleJoinClick = async () => {
     if (!booking) return;
     setIsJoining(true);
@@ -191,6 +199,7 @@ export default function VideoSessionPage() {
             classTitle={booking.lesson_title}
             isTeacher={isTeacher}
             autoEnableMedia
+            getFreshToken={getFreshToken}
           />
         </div>
       </div>

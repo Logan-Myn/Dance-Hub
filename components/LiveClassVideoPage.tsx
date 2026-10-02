@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { parseISO } from "date-fns";
 import { formatInTz } from "@/lib/timezone";
@@ -39,6 +39,11 @@ interface VideoToken {
   token: string;
   serverUrl: string;
   isTeacher: boolean;
+  /** Our identity in the room (the user id). */
+  identity?: string;
+  displayName?: string;
+  /** Moderation messages are only honoured from this identity. */
+  teacherIdentity?: string;
 }
 
 export default function LiveClassVideoPage({ classId, liveClass, canManage = false }: LiveClassVideoPageProps) {
@@ -81,6 +86,48 @@ export default function LiveClassVideoPage({ classId, liveClass, canManage = fal
       setLoading(false);
     }
   };
+
+  // Room identities are user ids; names come from our API, not from the room.
+  const lookupNames = useCallback(
+    async (identities: string[]): Promise<Record<string, string>> => {
+      const ids = identities.map(encodeURIComponent).join(",");
+      const response = await fetch(`/api/live-classes/${classId}/participants?ids=${ids}`);
+      if (!response.ok) throw new Error("Failed to load participant names");
+      const data = await response.json();
+      return data.names ?? {};
+    },
+    [classId]
+  );
+
+  // Rejoining asks for a new token, which also re-checks the class is on.
+  const getFreshToken = useCallback(async () => {
+    const response = await fetch(`/api/live-classes/${classId}/video-token`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Couldn't rejoin the class.");
+    return { token: data.token as string, serverUrl: data.serverUrl as string };
+  }, [classId]);
+
+  const teacherIdentity = videoToken?.teacherIdentity;
+  const moderation = useMemo(
+    () =>
+      teacherIdentity
+        ? {
+            teacherIdentity,
+            setCanPublish: async (identity: string, canPublish: boolean) => {
+              const response = await fetch(
+                `/api/live-classes/${classId}/participants/${encodeURIComponent(identity)}`,
+                {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ canPublish }),
+                }
+              );
+              if (!response.ok) throw new Error("Failed to update participant");
+            },
+          }
+        : undefined,
+    [classId, teacherIdentity]
+  );
 
   const handleJoinClick = () => {
     setHasJoined(true);
@@ -295,6 +342,10 @@ export default function LiveClassVideoPage({ classId, liveClass, canManage = fal
             onEndClass={videoToken.isTeacher ? handleEndClass : undefined}
             classTitle={liveClass.title}
             isTeacher={videoToken.isTeacher}
+            moderation={moderation}
+            lookupNames={lookupNames}
+            localName={videoToken.displayName}
+            getFreshToken={getFreshToken}
           />
         </div>
       )}

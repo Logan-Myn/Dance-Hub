@@ -1,11 +1,11 @@
 import { notFound } from 'next/navigation';
-import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { getSession } from '@/lib/auth-session';
 import {
   getCommunityBySlug,
-  getLiveClassesForWeek,
+  getLiveClassesInRange,
   getUserIsAdmin,
 } from '@/lib/community-data';
+import { initialCalendarRange } from '@/lib/calendar-week';
 import WeekCalendar from '@/components/WeekCalendar';
 
 export const dynamic = 'force-dynamic';
@@ -24,13 +24,14 @@ export default async function CommunityCalendarPage(
   const isCreator = !!session && community.created_by === session.user.id;
   const isAdmin = !!session && (await getUserIsAdmin(session.user.id));
 
-  const now = new Date();
-  const weekStart = startOfWeek(now, { weekStartsOn: 0 });
-  const weekEnd = endOfWeek(now, { weekStartsOn: 0 });
-  const initialClasses = await getLiveClassesForWeek(
+  // The server doesn't know the viewer's timezone, so pre-fetch a window
+  // that holds the current week in every timezone; the calendar trims it.
+  const range = initialCalendarRange(new Date());
+  const initialRange = { start: range.start.toISOString(), end: range.end.toISOString() };
+  const initialClasses = await getLiveClassesInRange(
     community.id,
-    format(weekStart, 'yyyy-MM-dd'),
-    format(weekEnd, 'yyyy-MM-dd'),
+    initialRange.start,
+    initialRange.end,
   );
 
   return (
@@ -49,6 +50,7 @@ export default async function CommunityCalendarPage(
         communitySlug={params.communitySlug}
         isTeacher={isCreator || isAdmin}
         initialClasses={initialClasses}
+        initialRange={initialRange}
       />
     </div>
   );

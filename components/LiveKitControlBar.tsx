@@ -19,6 +19,7 @@ import {
   VideoCameraSlashIcon,
 } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
+import type { RoomMessage } from "@/lib/live-class-messages";
 
 interface LiveKitControlBarProps {
   onLeave: () => void;
@@ -28,8 +29,20 @@ interface LiveKitControlBarProps {
   unreadCount?: number;
   isTeacher?: boolean;
   hasMediaPermission?: boolean;
-  setHasMediaPermission?: (v: boolean) => void;
-  sendAppMessage?: (data: any, destinationIdentities?: string[]) => void;
+  /** Called when a student steps down, to give the permission back. */
+  onStepDown?: () => void;
+  sendAppMessage?: (data: RoomMessage, destinationIdentities?: string[]) => void;
+}
+
+// Defined at module scope: a component created inside render is a new type
+// on every render, so its buttons remount and clicks in flight get lost.
+function ControlBtn({ label, labelClass, children }: { label?: string; labelClass?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {children}
+      {label && <span className={`hidden sm:block text-xs text-center ${labelClass ?? "text-gray-400"}`}>{label}</span>}
+    </div>
+  );
 }
 
 export default function LiveKitControlBar({
@@ -40,7 +53,7 @@ export default function LiveKitControlBar({
   unreadCount = 0,
   isTeacher = false,
   hasMediaPermission = true,
-  setHasMediaPermission,
+  onStepDown,
   sendAppMessage,
 }: LiveKitControlBarProps) {
   const room = useRoomContext();
@@ -78,34 +91,25 @@ export default function LiveKitControlBar({
     onLeave();
   }, [room, onLeave]);
 
+  // The teacher sees who raised a hand from the connection itself, so the
+  // message carries nothing else.
   const requestParticipation = useCallback(() => {
     if (!sendAppMessage) return;
-    sendAppMessage({
-      type: "hand-raise",
-      sender: localParticipant.name || localParticipant.identity || "Student",
-      participantIdentity: localParticipant.identity,
-    });
-  }, [localParticipant, sendAppMessage]);
+    sendAppMessage({ type: "hand-raise" });
+  }, [sendAppMessage]);
 
   const stepDown = useCallback(async () => {
     if (!sendAppMessage) return;
     try { await localParticipant.setMicrophoneEnabled(false); } catch {}
     try { await localParticipant.setCameraEnabled(false); } catch {}
-    setHasMediaPermission?.(false);
-    sendAppMessage({ type: "hand-lowered", sessionId: localParticipant.identity });
-  }, [localParticipant, sendAppMessage, setHasMediaPermission]);
+    onStepDown?.();
+    sendAppMessage({ type: "hand-lowered" });
+  }, [localParticipant, sendAppMessage, onStepDown]);
 
   // Derive muted/camOff states from LiveKit participant state
   const isMuted = !isMicrophoneEnabled;
   const isCamOff = !isCameraEnabled;
   const isSharingScreen = isScreenShareEnabled;
-
-  const ControlBtn = ({ label, labelClass, children }: { label?: string; labelClass?: string; children: React.ReactNode }) => (
-    <div className="flex flex-col items-center gap-1">
-      {children}
-      {label && <span className={`hidden sm:block text-xs text-center ${labelClass ?? "text-gray-400"}`}>{label}</span>}
-    </div>
-  );
 
   return (
     <div className="bg-gray-800 border-t border-gray-700 px-2 py-2 sm:px-6 sm:py-4 pb-safe">

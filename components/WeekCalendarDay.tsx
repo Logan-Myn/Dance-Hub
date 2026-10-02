@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { addDays, format, isSameDay, parseISO } from "date-fns";
-import { toZonedTime } from "date-fns-tz";
+import { useState } from "react";
+import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import LiveClassCard from "./LiveClassCard";
-import { useUserTimezone } from "@/hooks/useUserTimezone";
+import { dateKeyInTz, formatDayKey, hourInTz, zonedTimeToUtc } from "@/lib/calendar-week";
 
 interface LiveClass {
   id: string;
@@ -22,7 +21,10 @@ interface LiveClass {
 }
 
 interface WeekCalendarDayProps {
-  weekStart: Date;
+  /** The week's seven dates ('yyyy-MM-dd', Sunday first) in `timezone`. */
+  weekDays: string[];
+  /** The viewer's timezone; same one the week grid uses. */
+  timezone: string;
   liveClasses: LiveClass[];
   visibleHours: number[];
   isTeacher: boolean;
@@ -34,31 +36,25 @@ const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const HALF_HOURS = [0, 30];
 
 export default function WeekCalendarDay({
-  weekStart,
+  weekDays,
+  timezone,
   liveClasses,
   visibleHours,
   isTeacher,
   communitySlug,
   onClassClick,
 }: WeekCalendarDayProps) {
-  const userTimezone = useUserTimezone();
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const now = new Date();
+  const todayKey = dateKeyInTz(now, timezone);
 
   // Default selection: today if it lives in the current week, otherwise Sunday.
-  // Reset whenever the week changes (via prev/next).
-  const pickDefault = () => {
-    const today = new Date();
-    return weekDays.find((d) => isSameDay(d, today)) ?? weekDays[0];
-  };
-  const [selectedDay, setSelectedDay] = useState<Date>(pickDefault);
+  // The parent remounts this per week (key), which resets the selection.
+  const [selectedDay, setSelectedDay] = useState<string>(() =>
+    weekDays.includes(todayKey) ? todayKey : weekDays[0]
+  );
 
-  useEffect(() => {
-    setSelectedDay(pickDefault());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekStart.toISOString()]);
-
-  const classesForDay = (day: Date) =>
-    liveClasses.filter((lc) => isSameDay(parseISO(lc.scheduled_start_time), day));
+  const classesForDay = (day: string) =>
+    liveClasses.filter((lc) => dateKeyInTz(lc.scheduled_start_time, timezone) === day);
 
   const selectedDayClasses = classesForDay(selectedDay);
 
@@ -67,12 +63,12 @@ export default function WeekCalendarDay({
       {/* Day-picker strip: 7 equal tiles, today highlighted, dot when a day has classes */}
       <div className="grid grid-cols-7 gap-1">
         {weekDays.map((day, i) => {
-          const isSelected = isSameDay(day, selectedDay);
-          const isToday = isSameDay(day, new Date());
+          const isSelected = day === selectedDay;
+          const isToday = day === todayKey;
           const hasClasses = classesForDay(day).length > 0;
           return (
             <button
-              key={day.toISOString()}
+              key={day}
               type="button"
               onClick={() => setSelectedDay(day)}
               className={cn(
@@ -88,7 +84,7 @@ export default function WeekCalendarDay({
                 {DAY_LETTERS[i]}
               </span>
               <span className="text-base font-semibold leading-none mt-1">
-                {format(day, 'd')}
+                {formatDayKey(day, 'd')}
               </span>
               <span
                 className={cn(
@@ -107,7 +103,7 @@ export default function WeekCalendarDay({
 
       {/* Selected day header */}
       <h3 className="text-base font-semibold text-gray-900">
-        {format(selectedDay, 'EEEE, MMMM d')}
+        {formatDayKey(selectedDay, 'EEEE, MMMM d')}
       </h3>
 
       {/* Empty state — nobody taps slots to schedule on mobile, so we show a
@@ -117,7 +113,7 @@ export default function WeekCalendarDay({
         <Card>
           <CardContent className="py-8 text-center">
             <p className="text-sm text-muted-foreground">
-              No classes scheduled on {format(selectedDay, 'EEEE')}.
+              No classes scheduled on {formatDayKey(selectedDay, 'EEEE')}.
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               {isTeacher
@@ -132,12 +128,10 @@ export default function WeekCalendarDay({
             <div className="divide-y divide-gray-100">
               {visibleHours.map((hour) => {
                 const hourClasses = selectedDayClasses.filter(
-                  (lc) => toZonedTime(parseISO(lc.scheduled_start_time), userTimezone).getHours() === hour,
+                  (lc) => hourInTz(lc.scheduled_start_time, timezone) === hour,
                 );
-                const hourEnd = new Date(selectedDay);
-                hourEnd.setHours(hour, 59, 59, 999);
-                const isPastHour = hourEnd < new Date();
-                const isToday = isSameDay(selectedDay, new Date());
+                const isPastHour = zonedTimeToUtc(selectedDay, hour, 59, timezone) < now;
+                const isToday = selectedDay === todayKey;
 
                 return (
                   <div
