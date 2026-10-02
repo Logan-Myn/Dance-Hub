@@ -3,7 +3,8 @@
  * - moderation messages count only from the teacher's identity,
  * - chat names come from the sender's identity (looked up), not the payload,
  * - publishing is granted / revoked on the server and an approved student
- *   stays revocable.
+ *   stays revocable,
+ * - a dropped or kicked connection shows a rejoin screen instead of a frozen room.
  */
 import React from "react";
 import { TextDecoder, TextEncoder } from "util";
@@ -248,5 +249,43 @@ describe("as the teacher", () => {
 
     deliver("u-bob", { type: "hand-lowered" });
     await waitFor(() => expect(screen.queryByTitle("Allow")).not.toBeInTheDocument());
+  });
+});
+
+describe("when the connection ends", () => {
+  it("offers to rejoin after being replaced by another tab", async () => {
+    await renderRoom(false);
+    expect(mockRoomMounts).toBe(1);
+
+    act(() => mockRoomProps.onDisconnected?.(2));
+    expect(screen.queryByTestId("room")).not.toBeInTheDocument();
+    expect(screen.getByText(/another tab or device/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /rejoin/i }));
+    expect(screen.getByTestId("room")).toBeInTheDocument();
+    expect(mockRoomMounts).toBe(2);
+  });
+
+  it("does nothing special when the user leaves on purpose", async () => {
+    await renderRoom(false);
+    act(() => mockRoomProps.onDisconnected?.(1));
+    expect(screen.getByTestId("room")).toBeInTheDocument();
+  });
+
+  it("says the class has ended when the room is gone, with no rejoin", async () => {
+    await renderRoom(false);
+    act(() => mockRoomProps.onDisconnected?.(5));
+    expect(screen.getByText(/class has ended/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /rejoin/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /leave/i }));
+    expect(onLeave).toHaveBeenCalled();
+  });
+
+  it("offers to retry when it could not connect at all", async () => {
+    await renderRoom(false);
+    act(() => mockRoomProps.onError?.(new Error("could not establish signal connection")));
+    expect(screen.getByText(/couldn't connect/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /rejoin/i })).toBeInTheDocument();
   });
 });

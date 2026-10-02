@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
+  useConnectionState,
   useLocalParticipant,
   useLocalParticipantPermissions,
   useParticipants,
@@ -13,10 +14,11 @@ import {
   VideoTrack,
   useTracks,
 } from "@livekit/components-react";
-import { Track } from "livekit-client";
+import { ConnectionState, DisconnectReason, Track } from "livekit-client";
 import LiveKitControlBar from "./LiveKitControlBar";
 import LiveKitChat from "./LiveKitChat";
 import type { ChatMessage } from "./LiveKitChat";
+import { Button } from "@/components/ui/button";
 import { encodeRoomMessage, readRoomMessage, type RoomMessage } from "@/lib/live-class-messages";
 
 /** Live-class moderation. Omitted for 1:1 private lessons. */
@@ -70,6 +72,7 @@ function CallInterface({
   const participants = useParticipants();
   const { localParticipant } = useLocalParticipant();
   const localPermissions = useLocalParticipantPermissions();
+  const connectionState = useConnectionState();
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   // Identities with a raised hand, and those the teacher allowed this session.
@@ -308,6 +311,12 @@ function CallInterface({
           Your mic/camera access was revoked
         </div>
       )}
+      {(connectionState === ConnectionState.Reconnecting ||
+        connectionState === ConnectionState.SignalReconnecting) && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-yellow-500 text-black px-4 py-2 text-sm font-bold rounded-lg">
+          Reconnecting...
+        </div>
+      )}
 
       {/* Header */}
       <div className="bg-gray-800 px-3 py-2 sm:px-6 sm:py-4 border-b border-gray-700">
@@ -428,6 +437,58 @@ function CallInterface({
   );
 }
 
+type EndReason = DisconnectReason | "connect-error";
+
+function describeDisconnect(reason: EndReason): { title: string; body: string; canRejoin: boolean } {
+  switch (reason) {
+    case "connect-error":
+      return {
+        title: "Connection failed",
+        body: "We couldn't connect you to the class. Check your internet connection and try again.",
+        canRejoin: true,
+      };
+    case DisconnectReason.DUPLICATE_IDENTITY:
+      return {
+        title: "You joined somewhere else",
+        body: "You joined this class from another tab or device, so this one was disconnected.",
+        canRejoin: true,
+      };
+    case DisconnectReason.PARTICIPANT_REMOVED:
+      return { title: "You were removed from the class", body: "You can no longer take part in this class.", canRejoin: false };
+    case DisconnectReason.ROOM_DELETED:
+    case DisconnectReason.ROOM_CLOSED:
+      return { title: "This class has ended", body: "The class room was closed.", canRejoin: false };
+    default:
+      return { title: "Connection lost", body: "Your connection to the class was lost.", canRejoin: true };
+  }
+}
+
+function DisconnectedScreen({
+  reason,
+  onRejoin,
+  onLeave,
+}: {
+  reason: EndReason;
+  onRejoin: () => void;
+  onLeave: () => void;
+}) {
+  const { title, body, canRejoin } = describeDisconnect(reason);
+  return (
+    <div className="h-full w-full flex items-center justify-center bg-gray-900 p-4">
+      <div className="w-full max-w-sm text-center space-y-4">
+        <h2 className="text-lg font-semibold text-white">{title}</h2>
+        <p className="text-sm text-gray-400">{body}</p>
+        <div className="flex justify-center gap-3">
+          {canRejoin && <Button onClick={onRejoin}>Rejoin</Button>}
+          <Button variant="outline" onClick={onLeave}>
+            Leave
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LiveKitClassRoom({
   token,
   serverUrl,
@@ -440,12 +501,49 @@ export default function LiveKitClassRoom({
   lookupNames,
   localName,
 }: LiveKitClassRoomProps) {
+  // Bumped to remount the room, which connects again.
+  const [connection, setConnection] = useState(0);
+  const [ended, setEnded] = useState<EndReason | null>(null);
+  const connected = useRef(false);
+
+  const handleDisconnected = useCallback((reason?: DisconnectReason) => {
+    // Leaving (or navigating away) disconnects on purpose.
+    if (reason === DisconnectReason.CLIENT_INITIATED) return;
+    setEnded(reason ?? DisconnectReason.UNKNOWN_REASON);
+  }, []);
+
+  const handleError = useCallback((error: Error) => {
+    console.error("Class room error:", error);
+    // Only a failed connection ends the call; later errors are just logged.
+    if (!connected.current) setEnded("connect-error");
+  }, []);
+
+  if (ended !== null) {
+    return (
+      <DisconnectedScreen
+        reason={ended}
+        onLeave={onLeave}
+        onRejoin={() => {
+          connected.current = false;
+          setEnded(null);
+          setConnection((c) => c + 1);
+        }}
+      />
+    );
+  }
+
   return (
     <LiveKitRoom
+      key={connection}
       token={token}
       serverUrl={serverUrl}
       connectOptions={{ autoSubscribe: true }}
       style={{ height: "100%" }}
+      onConnected={() => {
+        connected.current = true;
+      }}
+      onDisconnected={handleDisconnected}
+      onError={handleError}
     >
       <CallInterface
         onLeave={onLeave}
