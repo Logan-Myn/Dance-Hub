@@ -4,88 +4,35 @@ set -euo pipefail
 APP_NAME="dance-hub-preprod"
 APP_PORT=3009
 DOMAIN="preprod.dance-hub.io"
-BRANCH="${2:-main}"
-
-# Main repo (canonical source of .env.preprod, where you edit it).
-MAIN_REPO="$(cd "$(dirname "$0")" && pwd)"
-# Dedicated worktree where preprod is built and served from. Detached HEAD
-# at origin/$BRANCH; this gives preprod its own cwd / .env.local / .next so it
-# never fights with prod over /home/debian/apps/dance-hub/.env.local.
-PREPROD_DIR="/home/debian/apps/dance-hub-preprod"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Main repo: git source for releases, and home of the canonical preprod env
+# (.env.preprod, where you edit it). Each release gets a copy as .env.local,
+# so preprod never touches prod's /home/debian/apps/dance-hub/.env.local.
+MAIN_REPO="${DEPLOY_MAIN_REPO:-$SCRIPT_DIR}"
+ENV_SOURCE="$MAIN_REPO/.env.preprod"
 NGINX_CONF="/etc/nginx/sites-available/$DOMAIN"
 
-require_preprod_dir() {
-  if [ ! -d "$PREPROD_DIR/.git" ] && [ ! -f "$PREPROD_DIR/.git" ]; then
-    echo "ERROR: $PREPROD_DIR is not a git worktree. Create it with:"
-    echo "  cd $MAIN_REPO && git worktree add $PREPROD_DIR --detach"
-    exit 1
-  fi
-}
+# shellcheck source=deploy/lib.sh
+source "$SCRIPT_DIR/deploy/lib.sh"
+init_releases
 
-sync_preprod_code() {
-  cd "$PREPROD_DIR"
+# Build origin/$1 (fetched fresh) into a new release; sets BUILT_RELEASE.
+build_branch() {
+  local branch="$1" sha
   echo "==> Fetching origin..."
-  git fetch origin
-  echo "==> Checking out origin/$BRANCH (detached)..."
-  git checkout --detach "origin/$BRANCH"
-}
-
-sync_preprod_env() {
-  echo "==> Syncing preprod env from main repo..."
-  cp "$MAIN_REPO/.env.preprod" "$PREPROD_DIR/.env.local"
-}
-
-build_preprod() {
-  cd "$PREPROD_DIR"
-  echo "==> Installing dependencies..."
-  bun install
-  echo "==> Building..."
-  bun run build
-}
-
-# Run the Next.js server directly under PM2. Starting it through `npm start`
-# or `npx next` left the real server orphaned when the wrapper exited: PM2
-# then crash-looped on EADDRINUSE while the orphan kept serving with a dead
-# stdout/stderr, and froze at 100% CPU on its first logged error.
-pm2_start_next() {
-  pm2 start "$1/node_modules/next/dist/bin/next" --name "$APP_NAME" --cwd "$1" \
-    --interpreter node -- start -p "$APP_PORT"
-}
-
-# Fail loudly if something other than PM2's own process holds the port.
-check_port_owner() {
-  sleep 5
-  local holder managed
-  holder=$(ss -ltnp 2>/dev/null | grep ":$APP_PORT " | grep -oE "pid=[0-9]+" | head -1 | cut -d= -f2 || true)
-  managed=$(pm2 pid "$APP_NAME" 2>/dev/null || true)
-  if [[ -z "$holder" || "$holder" != "$managed" ]]; then
-    echo "!! Port $APP_PORT is held by pid '${holder:-none}', PM2 runs '${managed:-none}'."
-    echo "!! An orphaned server may still be serving old code. Kill it, then rerun."
-    exit 1
-  fi
-  echo "==> Port $APP_PORT served by PM2 pid $managed."
-}
-
-start_pm2() {
-  echo "==> (Re)starting PM2 $APP_NAME from $PREPROD_DIR..."
-  pm2 delete "$APP_NAME" 2>/dev/null || true
-  pm2_start_next "$PREPROD_DIR"
-  pm2 save
-  check_port_owner
+  git -C "$MAIN_REPO" fetch origin
+  sha=$(resolve_commit "origin/$branch")
+  build_release "$sha" "origin/$branch" || exit 1
 }
 
 cmd_deploy() {
-  require_preprod_dir
-  sync_preprod_code
-  sync_preprod_env
-  build_preprod
+  lock_releases
+  build_branch "$1"
 
   echo "==> Updating Nginx..."
-  write_nginx_config
-  sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/
-  sudo nginx -t && sudo nginx -s reload
+  install_nginx_vhost "$NGINX_CONF" "$(render_nginx_config)"
 
-  start_pm2
+  switch_to_release "$BUILT_RELEASE"
 
   echo ""
   echo "Done! Preprod running at https://$DOMAIN (port $APP_PORT)"
@@ -93,12 +40,22 @@ cmd_deploy() {
 }
 
 cmd_restart() {
-  require_preprod_dir
-  sync_preprod_code
-  sync_preprod_env
-  build_preprod
-  start_pm2
+  lock_releases
+  build_branch "$1"
+  switch_to_release "$BUILT_RELEASE"
   echo "Done! Preprod restarted."
+}
+
+cmd_rebuild() {
+  lock_releases
+  rebuild_current
+  echo "Done! Preprod rebuilt with the current $ENV_SOURCE."
+}
+
+cmd_rollback() {
+  lock_releases
+  rollback_release "${1:-}"
+  echo "Done! Preprod rolled back."
 }
 
 cmd_stop() {
@@ -107,8 +64,9 @@ cmd_stop() {
   echo "Preprod stopped."
 }
 
-write_nginx_config() {
-  sudo tee "$NGINX_CONF" > /dev/null <<NGINX
+# Preprod is not behind Cloudflare, so $remote_addr is already the visitor.
+render_nginx_config() {
+  cat <<NGINX
 server {
     listen 80;
     server_name $DOMAIN;
@@ -137,8 +95,10 @@ server {
         proxy_http_version 1.1;
 
         proxy_set_header Host \$host;
+        # Both carry only the address nginx saw. Never append to a
+        # client-sent X-Forwarded-For: its first entry is client-controlled.
         proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For \$remote_addr;
         proxy_set_header X-Forwarded-Proto \$scheme;
 
         proxy_set_header Upgrade \$http_upgrade;
@@ -152,18 +112,26 @@ NGINX
 }
 
 case "${1:-}" in
-  deploy)  cmd_deploy ;;
-  restart) cmd_restart ;;
-  stop)    cmd_stop ;;
+  deploy)       cmd_deploy "${2:-main}" ;;
+  restart)      cmd_restart "${2:-main}" ;;
+  rebuild)      cmd_rebuild ;;
+  rollback)     cmd_rollback "${2:-}" ;;
+  releases)     list_releases ;;
+  stop)         cmd_stop ;;
+  nginx-config) render_nginx_config ;;
   *)
-    echo "Usage: ./deploy-preprod.sh [deploy|restart|stop] [branch]"
+    echo "Usage: ./deploy-preprod.sh [deploy|restart|rebuild|rollback|releases|stop|nginx-config] [branch|release]"
     echo ""
-    echo "  deploy  [branch]  — Full setup: nginx + pm2 + build in $PREPROD_DIR (default: main)"
-    echo "  restart [branch]  — Pull latest, rebuild, restart pm2 in $PREPROD_DIR (default: main)"
-    echo "  stop              — Stop preprod process"
+    echo "  deploy  [branch]    Full setup: build origin/<branch> (default: main), nginx, pm2"
+    echo "  restart [branch]    Build origin/<branch> (default: main) and switch to it"
+    echo "  rebuild             Rebuild the live commit with the current .env.preprod"
+    echo "  rollback [release]  Switch back to the previous release (or the one named)"
+    echo "  releases            List releases (* = live)"
+    echo "  stop                Stop preprod process"
+    echo "  nginx-config        Print the nginx vhost 'deploy' would write"
     echo ""
-    echo "Preprod runs from $PREPROD_DIR (detached HEAD), separate from prod cwd."
-    echo "Edit the canonical preprod env at $MAIN_REPO/.env.preprod — the script syncs it on each run."
+    echo "Releases live in $RELEASES_DIR; pm2 serves $CURRENT_LINK."
+    echo "Edit the canonical preprod env at $ENV_SOURCE; each build copies it in."
     exit 1
     ;;
 esac
