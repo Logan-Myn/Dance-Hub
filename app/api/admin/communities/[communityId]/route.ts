@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { query, queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { cancelMemberSubscriptions, cancelSubscriptionNow } from "@/lib/subscription-cancel";
+import { checkCommunitySlug } from "@/lib/community-slug";
 
 interface Profile {
   id: string;
@@ -155,21 +156,29 @@ export async function PATCH(request: Request, props: { params: Promise<{ communi
     }
 
     // Get the update data from the request body
-    const updates = await request.json();
+    const updates = await request.json().catch(() => ({}));
 
     // Validate the updates
-    if (!updates.name || !updates.slug) {
+    const name = typeof updates?.name === "string" ? updates.name.trim() : "";
+    if (!name || !updates.slug) {
       return NextResponse.json(
         { error: "Name and slug are required" },
         { status: 400 }
       );
     }
 
+    // Same slug rule as create and the owner's settings.
+    const slugCheck = checkCommunitySlug(updates.slug);
+    if (!slugCheck.ok) {
+      return NextResponse.json({ error: slugCheck.error }, { status: 400 });
+    }
+    const slug = slugCheck.slug;
+
     // Check if the slug is already taken by another community
     const existingCommunity = await queryOne<Community>`
       SELECT id
       FROM communities
-      WHERE slug = ${updates.slug}
+      WHERE LOWER(slug) = ${slug}
         AND id != ${communityId}
     `;
 
@@ -180,15 +189,22 @@ export async function PATCH(request: Request, props: { params: Promise<{ communi
       );
     }
 
+    // An omitted description keeps its value (postgres.js rejects undefined).
+    const description = typeof updates.description === "string" ? updates.description : null;
+
     // Update the community
-    await sql`
+    const updated = await queryOne<Community>`
       UPDATE communities
       SET
-        name = ${updates.name},
-        description = ${updates.description},
-        slug = ${updates.slug}
+        name = ${name},
+        description = COALESCE(${description}, description),
+        slug = ${slug}
       WHERE id = ${communityId}
+      RETURNING id
     `;
+    if (!updated) {
+      return NextResponse.json({ error: "Community not found" }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -218,11 +218,12 @@ describe('platform admin deletes a user', () => {
   const params = Promise.resolve({ userId: 'u1' });
   const req = () => new Request('http://x', { method: 'DELETE' });
 
-  /** queryOne answers: admin profile, then how many communities the user owns. */
+  /** queryOne answers: admin profile, the user, then how many communities the user owns. */
   function stubQueryOne(ownedCommunities = 0) {
     mockQueryOne.mockImplementation((strings: string[]) => {
       const t = strings.join('?');
       if (/FROM profiles/.test(t)) return Promise.resolve({ id: 'p1', is_admin: true });
+      if (/FROM "user"/.test(t)) return Promise.resolve({ id: 'u1' });
       if (/FROM communities/.test(t)) return Promise.resolve({ count: ownedCommunities });
       return Promise.resolve(null);
     });

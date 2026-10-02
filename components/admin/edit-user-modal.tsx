@@ -12,13 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useAuth } from '@/contexts/AuthContext';
 import toast from "react-hot-toast";
 import { Loader2 } from "lucide-react";
@@ -27,12 +20,6 @@ interface EditUserModalProps {
   isOpen: boolean;
   onClose: () => void;
   userId: string;
-}
-
-interface Community {
-  id: string;
-  name: string;
-  slug: string;
 }
 
 interface UserData {
@@ -44,14 +31,11 @@ interface UserData {
 export default function EditUserModal({ isOpen, onClose, userId }: EditUserModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);
-  const [communities, setCommunities] = useState<Community[]>([]);
-  const [selectedCommunity, setSelectedCommunity] = useState<string>('');
   const { session } = useAuth();
 
   useEffect(() => {
     if (isOpen) {
       loadUserData();
-      loadCommunities();
     }
   }, [isOpen, userId]);
 
@@ -75,21 +59,6 @@ export default function EditUserModal({ isOpen, onClose, userId }: EditUserModal
     }
   };
 
-  const loadCommunities = async () => {
-    try {
-      const response = await fetch('/api/communities');
-      if (!response.ok) {
-        throw new Error('Failed to load communities');
-      }
-      const data = await response.json();
-      if (data) {
-        setCommunities(data);
-      }
-    } catch (error) {
-      console.error('Error loading communities:', error);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -109,25 +78,8 @@ export default function EditUserModal({ isOpen, onClose, userId }: EditUserModal
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update user');
-      }
-
-      // Add to community if selected
-      if (selectedCommunity) {
-        const membershipResponse = await fetch(`/api/admin/users/${userId}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            addToCommunity: selectedCommunity,
-          })
-        });
-
-        if (!membershipResponse.ok) {
-          console.error('Error adding to community');
-          toast.error('Failed to add user to community');
-        }
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to update user');
       }
 
       toast.success('User updated successfully');
@@ -135,7 +87,7 @@ export default function EditUserModal({ isOpen, onClose, userId }: EditUserModal
       window.location.reload();
     } catch (error) {
       console.error('Error updating user:', error);
-      toast.error('Failed to update user');
+      toast.error(error instanceof Error ? error.message : 'Failed to update user');
     } finally {
       setIsLoading(false);
     }
@@ -151,7 +103,7 @@ export default function EditUserModal({ isOpen, onClose, userId }: EditUserModal
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
           <DialogDescription>
-            Make changes to the user's profile and community memberships.
+            Make changes to the user's profile.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -180,24 +132,6 @@ export default function EditUserModal({ isOpen, onClose, userId }: EditUserModal
                 value={userData.email || ''}
                 onChange={(e) => setUserData({ ...userData, email: e.target.value })}
               />
-            </div>
-            <div className="grid gap-2">
-              <Label>Add to Community</Label>
-              <Select
-                value={selectedCommunity}
-                onValueChange={setSelectedCommunity}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a community" />
-                </SelectTrigger>
-                <SelectContent>
-                  {communities.map((community) => (
-                    <SelectItem key={community.id} value={community.id}>
-                      {community.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           </div>
           <DialogFooter>

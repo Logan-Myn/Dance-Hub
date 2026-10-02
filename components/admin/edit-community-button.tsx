@@ -61,7 +61,8 @@ export function EditCommunityButton({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to update community");
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update community");
       }
 
       toast.success("Community updated successfully");
@@ -69,7 +70,7 @@ export function EditCommunityButton({
       setShowEditDialog(false);
     } catch (error) {
       console.error("Error updating community:", error);
-      toast.error("Failed to update community");
+      toast.error(error instanceof Error ? error.message : "Failed to update community");
     } finally {
       setIsLoading(false);
     }

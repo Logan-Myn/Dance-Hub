@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import { query, queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { cancelMemberSubscriptions, type MemberSubscriptionRef } from "@/lib/subscription-cancel";
+import { syncProfileEmail } from "@/lib/auth-hooks";
+
+// Loose check (something@something.tld); the user confirms the address by
+// receiving mail there.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** A trimmed string, or undefined when the field is absent or not a string. */
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value.trim() : undefined;
+}
 
 interface Profile {
   id: string;
@@ -28,6 +38,15 @@ export async function DELETE(request: Request, props: { params: Promise<{ userId
 
     if (!requesterProfile?.is_admin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // The id is the auth user id ("user".id). Anything else (a profile id,
+    // say) used to match no rows and still report success.
+    const targetUser = await queryOne<{ id: string }>`
+      SELECT id FROM "user" WHERE id = ${userId}
+    `;
+    if (!targetUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     // Nothing ties a community to its owner in the database, so deleting the
@@ -104,7 +123,7 @@ export async function PATCH(request: Request, props: { params: Promise<{ userId:
   const params = await props.params;
   try {
     const { userId } = params;
-    const updates = await request.json();
+    const updates = await request.json().catch(() => null);
 
     // Verify that the requester is authenticated and is an admin
     const session = await getSession();
@@ -123,38 +142,81 @@ export async function PATCH(request: Request, props: { params: Promise<{ userId:
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Update user profile
+    if (!updates || typeof updates !== "object") {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    }
+    // The edit dialog used to send this and show success while it was
+    // silently ignored. Memberships go through the join flows (and payment).
+    if ("addToCommunity" in updates) {
+      return NextResponse.json(
+        { error: "Adding a user to a community is not supported here" },
+        { status: 400 }
+      );
+    }
+
+    const fullName = optionalString(updates.full_name);
+    const displayName = optionalString(updates.display_name);
+    const email = optionalString(updates.email)?.toLowerCase();
+
+    const currentUser = await queryOne<{ id: string; email: string }>`
+      SELECT id, email
+      FROM "user"
+      WHERE id = ${userId}
+    `;
+    if (!currentUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Email lives on the auth user (sign-in reads it, and it is unique there);
+    // profiles.email and email_preferences.email are copies the app mails to.
+    // Change "user" first, then copy it, like the user's own change-email flow.
+    const emailChanged = email !== undefined && email !== currentUser.email.toLowerCase();
+    if (email !== undefined && !EMAIL_PATTERN.test(email)) {
+      return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
+    }
+    if (emailChanged) {
+      const taken = await queryOne<{ id: string }>`
+        SELECT id FROM "user"
+        WHERE LOWER(email) = ${email}
+          AND id != ${userId}
+      `;
+      if (taken) {
+        return NextResponse.json(
+          { error: "Another account already uses this email" },
+          { status: 409 }
+        );
+      }
+    }
+
+    // Optional fields: an omitted one keeps its value (postgres.js rejects
+    // undefined parameters, which used to turn a partial edit into a 500).
     await sql`
       UPDATE profiles
       SET
-        full_name = ${updates.full_name},
-        display_name = ${updates.display_name},
-        email = ${updates.email},
+        full_name = COALESCE(${fullName ?? null}, full_name),
+        display_name = COALESCE(${displayName ?? null}, display_name),
         updated_at = NOW()
       WHERE auth_user_id = ${userId}
     `;
 
-    // Update user email in Better Auth users table if changed
-    if (updates.email) {
-      // Get current user email
-      const currentUser = await queryOne<{ id: string; email: string }>`
-        SELECT id, email
-        FROM "user"
+    if (emailChanged) {
+      await sql`
+        UPDATE "user"
+        SET email = ${email}, "updatedAt" = NOW()
         WHERE id = ${userId}
       `;
-
-      // Only update if email has changed
-      if (currentUser && currentUser.email !== updates.email) {
-        await sql`
-          UPDATE "user"
-          SET email = ${updates.email}
-          WHERE id = ${userId}
-        `;
-      }
+      await syncProfileEmail({ id: userId, email });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    // Lost a race with another account taking the same email.
+    if ((error as { code?: string })?.code === "23505") {
+      return NextResponse.json(
+        { error: "Another account already uses this email" },
+        { status: 409 }
+      );
+    }
     console.error("Error updating user:", error);
     return NextResponse.json(
       { error: "Failed to update user" },
