@@ -7,9 +7,22 @@
 --
 -- Data cleanup only, no schema change. The code no longer reads or writes
 -- these keys, so it can run before or after the deploy. Safe to run twice:
--- each UPDATE only matches rows that still hold one of the keys.
+-- each UPDATE only matches rows that are still string-encoded or still hold
+-- one of the keys.
 
 BEGIN;
+
+-- Rows written during the July jsonb double-encode bug can hold a JSON
+-- string instead of an object, which the key removals below would skip.
+-- Decode those first so their details are redacted too.
+UPDATE stripe_onboarding_progress SET business_info = (business_info #>> '{}')::jsonb
+WHERE jsonb_typeof(business_info) = 'string';
+UPDATE stripe_onboarding_progress SET personal_info = (personal_info #>> '{}')::jsonb
+WHERE jsonb_typeof(personal_info) = 'string';
+UPDATE stripe_onboarding_progress SET bank_account = (bank_account #>> '{}')::jsonb
+WHERE jsonb_typeof(bank_account) = 'string';
+UPDATE stripe_onboarding_progress SET documents = (documents #>> '{}')::jsonb
+WHERE jsonb_typeof(documents) = 'string';
 
 -- Bank account: keep holder name, country, currency; replace numbers by last 4.
 UPDATE stripe_onboarding_progress
