@@ -68,11 +68,11 @@ it('uses the user id as the identity, so a member named like the teacher gets th
   const body = await res.json();
 
   expect(res.status).toBe(200);
-  const [room, identity, role, name] = mockGenerateToken.mock.calls[0];
+  const [room, identity, role, options] = mockGenerateToken.mock.calls[0];
   expect(room).toBe('live-class-lc1');
   expect(identity).toBe('u-copycat');
   expect(identity).not.toBe('Anna');
-  expect(name).toBe('Anna');
+  expect(options.name).toBe('Anna');
   expect(role).toBe('viewer');
   expect(body).toMatchObject({
     token: 'jwt',
@@ -94,6 +94,15 @@ it('gives two members with the same name different identities', async () => {
 it('gives the teacher an admin token under their user id', async () => {
   as('u-teacher');
   const body = await (await call()).json();
-  expect(mockGenerateToken).toHaveBeenCalledWith('live-class-lc1', 'u-teacher', 'admin', 'Anna');
+  expect(mockGenerateToken).toHaveBeenCalledWith('live-class-lc1', 'u-teacher', 'admin', expect.objectContaining({ name: 'Anna' }));
   expect(body).toMatchObject({ isTeacher: true, identity: 'u-teacher', teacherIdentity: 'u-teacher' });
+});
+
+it('lets the client set its own display name, so recordings show names rather than ids', async () => {
+  as('u-copycat');
+  await call();
+  expect(mockGenerateToken.mock.calls[0][3]).toEqual({
+    name: 'Anna',
+    permissions: { canUpdateOwnMetadata: true },
+  });
 });

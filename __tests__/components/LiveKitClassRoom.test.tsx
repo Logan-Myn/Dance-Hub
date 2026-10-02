@@ -28,8 +28,9 @@ let mockRoomProps: RoomProps = {};
 let mockRoomMounts = 0;
 let mockParticipants: Array<Record<string, unknown>> = [];
 let mockLocal: Record<string, unknown> = {};
-let mockPermissions: { canPublish: boolean } | undefined;
+let mockPermissions: { canPublish: boolean; canUpdateMetadata?: boolean } | undefined;
 let mockDataHandler: ((msg: Msg) => void) | undefined;
+let mockConnectionState = "connected";
 const mockSend = jest.fn();
 
 const mockToastError = jest.fn();
@@ -65,7 +66,7 @@ jest.mock("@livekit/components-react", () => {
       return { send: mockSend };
     },
     useTracks: () => [],
-    useConnectionState: () => "connected",
+    useConnectionState: () => mockConnectionState,
   };
 });
 jest.mock("livekit-client", () => ({
@@ -114,6 +115,7 @@ async function renderRoom(isTeacher: boolean) {
     setMicrophoneEnabled: jest.fn().mockResolvedValue(undefined),
     setCameraEnabled: jest.fn().mockResolvedValue(undefined),
     setScreenShareEnabled: jest.fn().mockResolvedValue(undefined),
+    setName: jest.fn().mockResolvedValue(undefined),
   };
   mockParticipants = [mockLocal, ...mockParticipants];
   const view = render(
@@ -134,6 +136,7 @@ async function renderRoom(isTeacher: boolean) {
 beforeEach(() => {
   mockParticipants = [];
   mockPermissions = { canPublish: false };
+  mockConnectionState = "connected";
   mockRoomMounts = 0;
   mockSend.mockReset();
   mockToastError.mockReset();
@@ -141,6 +144,31 @@ beforeEach(() => {
   lookupNames.mockClear();
   onLeave.mockReset();
   getFreshToken.mockReset().mockResolvedValue({ token: "fresh", serverUrl: "wss://media" });
+});
+
+describe("names", () => {
+  it("sets the local participant's name once connected, so recordings show it", async () => {
+    mockPermissions = { canPublish: false, canUpdateMetadata: true };
+    await renderRoom(false);
+    await waitFor(() => expect(mockLocal.setName).toHaveBeenCalledWith("Sam"));
+  });
+
+  it("doesn't try when the token doesn't allow it", async () => {
+    await renderRoom(false);
+    await act(async () => {});
+    expect(mockLocal.setName).not.toHaveBeenCalled();
+  });
+
+  it("never shows a name a participant gave themselves, even before names load", async () => {
+    // The token lets everyone rename themselves, so the room's name is untrusted.
+    lookupNames.mockImplementationOnce(() => new Promise(() => {}));
+    mockParticipants = [{ ...participant("u-mallory"), name: "Anna (teacher)" }];
+    await renderRoom(false);
+    await userEvent.click(screen.getByTitle("Open chat"));
+    deliver("u-mallory", { type: "chat", text: "hello" });
+    expect(screen.getByText("Participant")).toBeInTheDocument();
+    expect(screen.queryByText("Anna (teacher)")).not.toBeInTheDocument();
+  });
 });
 
 describe("as a student", () => {

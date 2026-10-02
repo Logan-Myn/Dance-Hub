@@ -15,11 +15,24 @@ const lastCall = () => {
   return { url: url as string, init: init as RequestInit, body: JSON.parse((init as RequestInit).body as string) };
 };
 
-it('sends the display name next to the identity when asking for a token', async () => {
-  await generateToken('live-class-lc1', 'u1', 'viewer', 'Anna');
+it('sends the display name and extra grants next to the identity when asking for a token', async () => {
+  await generateToken('live-class-lc1', 'u1', 'viewer', {
+    name: 'Anna',
+    permissions: { canUpdateOwnMetadata: true },
+  });
   const { url, body } = lastCall();
   expect(url).toMatch(/\/rooms\/live-class-lc1\/tokens$/);
-  expect(body).toEqual({ identity: 'u1', role: 'viewer', name: 'Anna' });
+  expect(body).toEqual({
+    identity: 'u1',
+    role: 'viewer',
+    name: 'Anna',
+    permissions: { canUpdateOwnMetadata: true },
+  });
+});
+
+it('still asks for a plain token', async () => {
+  await generateToken('booking-b1', 'Teacher', 'admin');
+  expect(lastCall().body).toEqual({ identity: 'Teacher', role: 'admin' });
 });
 
 it('sets all three permission flags so subscribe and data stay on', async () => {

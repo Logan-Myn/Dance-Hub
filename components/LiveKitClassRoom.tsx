@@ -111,11 +111,24 @@ function CallInterface({
   const nameFor = (identity: string): string => {
     if (identity === localIdentity && localName) return localName;
     if (names[identity]) return names[identity];
+    // Live-class tokens let everyone set their own room name (for the
+    // recording), so it can't be trusted here; and identities are user ids,
+    // so don't show those either while names load.
+    if (lookupNames) return "Participant";
     const participant = participants.find((p) => p.identity === identity);
-    if (participant?.name) return participant.name;
-    // Live-class identities are user ids; don't show those while names load.
-    return lookupNames ? "Participant" : identity;
+    return participant?.name || identity;
   };
+
+  // Put our display name on our room participant so the recording labels us
+  // by name rather than by identity (only where the token allows it).
+  const canSetOwnName = !!localPermissions?.canUpdateMetadata;
+  const nameInRoom = localParticipant?.name;
+  useEffect(() => {
+    if (!canSetOwnName || !localName || !localParticipant || nameInRoom === localName) return;
+    localParticipant.setName(localName).catch((err) => {
+      console.error("Failed to set display name:", err);
+    });
+  }, [canSetOwnName, localName, localParticipant, nameInRoom]);
 
   const { send: sendData } = useDataChannel(
     "app-messages",

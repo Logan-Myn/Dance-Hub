@@ -66,21 +66,33 @@ export async function deleteRoom(name: string): Promise<void> {
   await streamHubFetch(`/rooms/${name}`, { method: "DELETE" });
 }
 
+interface TokenOptions {
+  /** Label to show. Stream-Hub doesn't put it in the token yet (it ignores
+   *  the field), so clients look names up by identity instead. */
+  name?: string;
+  /** Extra grants on top of the role's. Stream-Hub copies these into the
+   *  token as given. */
+  permissions?: {
+    canPublish?: boolean;
+    canSubscribe?: boolean;
+    canPublishData?: boolean;
+    canUpdateOwnMetadata?: boolean;
+  };
+}
+
 /**
  * `identity` must be unique per user in the room: joining with an identity
- * that's already there disconnects the earlier participant. `name` is the
- * label to show; Stream-Hub doesn't put it in the token yet (it ignores the
- * field), so clients look names up by identity instead.
+ * that's already there disconnects the earlier participant.
  */
 export async function generateToken(
   roomName: string,
   identity: string,
   role: "admin" | "participant" | "viewer",
-  name?: string
+  { name, permissions }: TokenOptions = {}
 ): Promise<StreamHubToken> {
   const res = await streamHubFetch(`/rooms/${roomName}/tokens`, {
     method: "POST",
-    body: JSON.stringify({ identity, role, name }),
+    body: JSON.stringify({ identity, role, name, permissions }),
   });
   return res.json();
 }

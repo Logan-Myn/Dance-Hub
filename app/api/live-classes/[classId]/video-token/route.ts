@@ -143,8 +143,15 @@ export async function GET(request: NextRequest, props: { params: Promise<{ class
     // the earlier participant (a name is not unique; anyone could take the
     // teacher's). Students join subscribe-only ("viewer"); the teacher grants
     // publishing through /participants/[identity] when approving a hand.
+    // canUpdateOwnMetadata lets the client set its display name once
+    // connected, so recordings label people by name rather than by user id.
+    // Stream-Hub doesn't put `name` in the token itself yet. A self-set name
+    // is untrusted: the class UI shows names from our own lookup instead.
     const role = isTeacher ? "admin" : "viewer";
-    const tokenData = await generateToken(roomName, user.id, role, userName);
+    const tokenData = await generateToken(roomName, user.id, role, {
+      name: userName,
+      permissions: { canUpdateOwnMetadata: true },
+    });
 
     return NextResponse.json({
       token: tokenData.token,
