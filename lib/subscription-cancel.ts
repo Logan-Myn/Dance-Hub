@@ -47,30 +47,46 @@ export interface MemberSubscriptionRef {
   stripe_account_id: string | null;
 }
 
+// Stripe calls in flight at once when cancelling many subscriptions (a
+// community delete), to stay well inside the API rate limit.
+const CANCEL_CONCURRENCY = 5;
+
 /**
  * Cancels the membership subscriptions of rows that are about to be deleted
- * (a removed member, a deleted community or user). Free members and
- * subscriptions that already ended are skipped. Returns the ids that could
- * not be cancelled; the caller must not delete anything if there are any.
+ * (a removed member, a deleted community or user), up to 5 at a time. Free
+ * members and subscriptions that already ended are skipped. Returns the ids
+ * that could not be cancelled; the caller must not delete anything if there
+ * are any.
  */
 export async function cancelMemberSubscriptions(rows: MemberSubscriptionRef[]): Promise<string[]> {
   const failed: string[] = [];
-  for (const row of rows) {
-    const subscriptionId = row.stripe_subscription_id;
-    if (!subscriptionId) continue;
-    if (row.subscription_status && ENDED_SUBSCRIPTION_STATUSES.includes(row.subscription_status)) continue;
-    if (!row.stripe_account_id) {
-      // The subscription lives on a connected account we no longer know.
-      console.error('[subscriptions] no connected account to cancel on:', subscriptionId);
-      failed.push(subscriptionId);
-      continue;
+  const toCancel = rows.filter(
+    (row) =>
+      row.stripe_subscription_id &&
+      !(row.subscription_status && ENDED_SUBSCRIPTION_STATUSES.includes(row.subscription_status)),
+  );
+
+  let next = 0;
+  const worker = async () => {
+    while (next < toCancel.length) {
+      const row = toCancel[next++];
+      const subscriptionId = row.stripe_subscription_id!;
+      if (!row.stripe_account_id) {
+        // The subscription lives on a connected account we no longer know.
+        console.error('[subscriptions] no connected account to cancel on:', subscriptionId);
+        failed.push(subscriptionId);
+        continue;
+      }
+      try {
+        await cancelSubscriptionNow(subscriptionId, row.stripe_account_id);
+      } catch (err) {
+        console.error('[subscriptions] failed to cancel:', subscriptionId, err);
+        failed.push(subscriptionId);
+      }
     }
-    try {
-      await cancelSubscriptionNow(subscriptionId, row.stripe_account_id);
-    } catch (err) {
-      console.error('[subscriptions] failed to cancel:', subscriptionId, err);
-      failed.push(subscriptionId);
-    }
-  }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(CANCEL_CONCURRENCY, toCancel.length) }, worker),
+  );
   return failed;
 }

@@ -113,6 +113,27 @@ describe('cancelMemberSubscriptions', () => {
     expect(mockCancel).toHaveBeenCalledTimes(2);
   });
 
+  it('cancels at most 5 at a time', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    mockCancel.mockImplementation(async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return { status: 'canceled' };
+    });
+    const rows = Array.from({ length: 12 }, (_, i) => ({
+      stripe_subscription_id: `sub_${i}`, subscription_status: 'active', stripe_account_id: 'acct_1',
+    }));
+
+    const failed = await cancelMemberSubscriptions(rows);
+
+    expect(failed).toEqual([]);
+    expect(mockCancel).toHaveBeenCalledTimes(12);
+    expect(maxInFlight).toBe(5);
+  });
+
   it('counts a subscription with no connected account to cancel it on as a failure', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
     const failed = await cancelMemberSubscriptions([

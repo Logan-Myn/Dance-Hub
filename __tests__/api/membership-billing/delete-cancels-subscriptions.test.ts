@@ -108,7 +108,7 @@ describe('platform admin deletes a community', () => {
       const t = strings.join('?');
       if (/FROM profiles/.test(t)) return Promise.resolve({ id: 'p1', is_admin: true });
       if (/FROM lesson_bookings/.test(t)) return Promise.resolve({ count: upcoming });
-      if (/FROM communities/.test(t)) return Promise.resolve({ id: 'c1', stripe_account_id: 'acct_1' });
+      if (/FROM communities/.test(t)) return Promise.resolve({ id: 'c1', stripe_account_id: 'acct_1', status: 'active' });
       if (/FROM community_broadcast_subscriptions/.test(t)) return Promise.resolve(broadcast);
       return Promise.resolve(null);
     });
@@ -133,6 +133,42 @@ describe('platform admin deletes a community', () => {
     expect(deletes()).toHaveLength(1);
   });
 
+  const statusUpdates = () =>
+    mockSql.mock.calls
+      .filter((c) => /UPDATE communities/.test(text(c)))
+      .map((c) => ({ text: text(c), values: c.slice(1) }));
+
+  it('closes the community to new members before cancelling, then deletes it', async () => {
+    stubQueryOne({});
+    mockQuery.mockResolvedValueOnce([{ stripe_subscription_id: 'sub_1', subscription_status: 'active' }]);
+
+    const res = await deleteCommunity(req(), { params });
+
+    expect(res.status).toBe(200);
+    const [close, ...rest] = statusUpdates();
+    expect(close.text).toMatch(/SET status = 'inactive'/);
+    expect(close.values).toContain('c1');
+    expect(rest).toHaveLength(0);
+    const closeOrder = mockSql.mock.invocationCallOrder[mockSql.mock.calls.findIndex((c) => /UPDATE communities/.test(text(c)))];
+    expect(closeOrder).toBeLessThan(mockQuery.mock.invocationCallOrder[0]);
+    expect(closeOrder).toBeLessThan(mockCancelMembers.mock.invocationCallOrder[0]);
+  });
+
+  it('reopens the community when a cancel fails and the delete is abandoned', async () => {
+    stubQueryOne({});
+    mockQuery.mockResolvedValueOnce([{ stripe_subscription_id: 'sub_1', subscription_status: 'active' }]);
+    mockCancelMembers.mockResolvedValueOnce(['sub_1']);
+
+    const res = await deleteCommunity(req(), { params });
+
+    expect(res.status).toBe(502);
+    const updates = statusUpdates();
+    expect(updates).toHaveLength(2);
+    expect(updates[1].text).toMatch(/SET status = \?/);
+    expect(updates[1].values).toEqual(expect.arrayContaining(['active', 'c1']));
+    expect(deletes()).toHaveLength(0);
+  });
+
   it('refuses while paid private lessons are still to come', async () => {
     stubQueryOne({ upcoming: 2 });
 
@@ -140,6 +176,7 @@ describe('platform admin deletes a community', () => {
 
     expect(res.status).toBe(409);
     expect((await res.json()).error).toMatch(/2 paid private lessons/);
+    expect(statusUpdates()).toHaveLength(0);
     expect(mockCancelMembers).not.toHaveBeenCalled();
     expect(deletes()).toHaveLength(0);
   });

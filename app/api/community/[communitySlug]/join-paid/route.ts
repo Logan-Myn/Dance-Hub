@@ -8,6 +8,7 @@ import { isMissingStripeResource } from "@/lib/subscription-cancel";
 
 interface Community {
   id: string;
+  status: string | null;
   membership_price: number | null;
   stripe_account_id: string | null;
   stripe_price_id: string | null;
@@ -40,7 +41,7 @@ export async function POST(request: Request, props: { params: Promise<{ communit
 
     // Get community with its membership price and stripe account
     const community = await queryOne<Community>`
-      SELECT id, membership_price, stripe_account_id, stripe_price_id, stripe_yearly_price_id, yearly_enabled, active_member_count, created_at, promotional_fee_percentage
+      SELECT id, status, membership_price, stripe_account_id, stripe_price_id, stripe_yearly_price_id, yearly_enabled, active_member_count, created_at, promotional_fee_percentage
       FROM communities
       WHERE slug = ${params.communitySlug}
     `;
@@ -49,6 +50,14 @@ export async function POST(request: Request, props: { params: Promise<{ communit
       return NextResponse.json(
         { error: "Community not found" },
         { status: 404 }
+      );
+    }
+
+    // An inactive community (also: one being deleted) takes no new members.
+    if (community.status === 'inactive') {
+      return NextResponse.json(
+        { error: "This community is not accepting new members" },
+        { status: 400 }
       );
     }
 

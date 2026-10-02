@@ -11,6 +11,7 @@ const emailService = getEmailService();
 interface Community {
   id: string;
   name: string;
+  status: string | null;
   membership_price: number | null;
   stripe_account_id: string | null;
   stripe_price_id: string | null;
@@ -37,7 +38,7 @@ export async function POST(request: Request, props: { params: Promise<{ communit
 
     // Get community details
     const community = await queryOne<Community>`
-      SELECT id, name, membership_price, stripe_account_id, stripe_price_id, opening_date
+      SELECT id, name, status, membership_price, stripe_account_id, stripe_price_id, opening_date
       FROM communities
       WHERE slug = ${params.communitySlug}
     `;
@@ -46,6 +47,14 @@ export async function POST(request: Request, props: { params: Promise<{ communit
       return NextResponse.json(
         { error: "Community not found" },
         { status: 404 }
+      );
+    }
+
+    // An inactive community (also: one being deleted) takes no new members.
+    if (community.status === 'inactive') {
+      return NextResponse.json(
+        { error: "This community is not accepting new members" },
+        { status: 400 }
       );
     }
 

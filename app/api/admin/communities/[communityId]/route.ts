@@ -54,45 +54,61 @@ export async function DELETE(request: Request, props: { params: Promise<{ commun
       );
     }
 
-    const community = await queryOne<{ id: string; stripe_account_id: string | null }>`
-      SELECT id, stripe_account_id FROM communities WHERE id = ${communityId}
+    const community = await queryOne<{ id: string; stripe_account_id: string | null; status: string | null }>`
+      SELECT id, stripe_account_id, status FROM communities WHERE id = ${communityId}
     `;
     if (!community) {
       return NextResponse.json({ error: "Community not found" }, { status: 404 });
     }
 
+    // Close the community to new members first (every join route refuses an
+    // inactive community), so nobody starts a subscription while we cancel
+    // the existing ones. Reopened below if the delete is abandoned.
+    await sql`UPDATE communities SET status = 'inactive' WHERE id = ${communityId}`;
+    const reopen = () => sql`
+      UPDATE communities SET status = ${community.status}
+      WHERE id = ${communityId} AND status = 'inactive'
+    `;
+
     // Cancel every member subscription (on the community's connected account)
     // and the community's broadcast subscription (on the platform account)
     // first: after the delete nothing links them to anyone, and they would
     // keep billing.
-    const memberSubscriptions = await query<{
-      stripe_subscription_id: string | null;
-      subscription_status: string | null;
-    }>`
-      SELECT stripe_subscription_id, subscription_status
-      FROM community_members
-      WHERE community_id = ${communityId}
-        AND stripe_subscription_id IS NOT NULL
-    `;
-    const notCancelled = await cancelMemberSubscriptions(
-      memberSubscriptions.map((m) => ({ ...m, stripe_account_id: community.stripe_account_id }))
-    );
+    let notCancelled: string[];
+    try {
+      const memberSubscriptions = await query<{
+        stripe_subscription_id: string | null;
+        subscription_status: string | null;
+      }>`
+        SELECT stripe_subscription_id, subscription_status
+        FROM community_members
+        WHERE community_id = ${communityId}
+          AND stripe_subscription_id IS NOT NULL
+      `;
+      notCancelled = await cancelMemberSubscriptions(
+        memberSubscriptions.map((m) => ({ ...m, stripe_account_id: community.stripe_account_id }))
+      );
 
-    const broadcast = await queryOne<{ stripe_subscription_id: string; status: string }>`
-      SELECT stripe_subscription_id, status
-      FROM community_broadcast_subscriptions
-      WHERE community_id = ${communityId}
-    `;
-    if (broadcast && broadcast.status !== "canceled") {
-      try {
-        await cancelSubscriptionNow(broadcast.stripe_subscription_id, null);
-      } catch (cancelError) {
-        console.error("Error canceling broadcast subscription:", cancelError);
-        notCancelled.push(broadcast.stripe_subscription_id);
+      const broadcast = await queryOne<{ stripe_subscription_id: string; status: string }>`
+        SELECT stripe_subscription_id, status
+        FROM community_broadcast_subscriptions
+        WHERE community_id = ${communityId}
+      `;
+      if (broadcast && broadcast.status !== "canceled") {
+        try {
+          await cancelSubscriptionNow(broadcast.stripe_subscription_id, null);
+        } catch (cancelError) {
+          console.error("Error canceling broadcast subscription:", cancelError);
+          notCancelled.push(broadcast.stripe_subscription_id);
+        }
       }
+    } catch (error) {
+      await reopen();
+      throw error;
     }
 
     if (notCancelled.length > 0) {
+      await reopen();
       return NextResponse.json(
         {
           error: `We couldn't cancel ${notCancelled.length} ${notCancelled.length === 1 ? "subscription" : "subscriptions"}, so the community was not deleted. Please try again.`,

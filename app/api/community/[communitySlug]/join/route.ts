@@ -46,6 +46,13 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
       );
     }
 
+    if (community.status === 'inactive') {
+      return NextResponse.json(
+        { error: "This community is not accepting new members" },
+        { status: 400 }
+      );
+    }
+
     // numeric columns can arrive as strings ("20.00"), so coerce.
     const price = Number(community.membership_price ?? 0);
     if (community.membership_enabled && price > 0) {
