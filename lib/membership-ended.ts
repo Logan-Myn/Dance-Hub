@@ -21,8 +21,9 @@ export function memberSubscriptionStatus(
 /**
  * Brings our row in line with a subscription Stripe has already ended, for
  * when the customer.subscription.deleted webhook never reached this app.
- * Returns the updated row, or undefined if it was already inactive (so the
- * member isn't counted out twice).
+ * Returns the updated row, or undefined if it was already inactive (its
+ * cancelled_at is left alone). members_count is kept by a trigger on
+ * community_members, so there is nothing to count here.
  */
 export async function markMembershipEnded(
   communityId: string,
@@ -39,12 +40,5 @@ export async function markMembershipEnded(
       AND status <> 'inactive'
     RETURNING status, subscription_status, current_period_end
   `;
-  if (!row) return undefined;
-
-  try {
-    await sql`SELECT decrement_members_count(${communityId})`;
-  } catch (countError) {
-    console.error('Error updating members count on reconcile:', countError);
-  }
-  return row;
+  return row ?? undefined;
 }

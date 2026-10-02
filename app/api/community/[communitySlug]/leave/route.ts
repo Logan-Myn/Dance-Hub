@@ -183,48 +183,13 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
       }
     }
 
-    // For free members or if there's no subscription, remove immediately
+    // For free members or if there's no subscription, remove immediately.
+    // members_count is kept by a trigger on community_members.
     await sql`
       DELETE FROM community_members
       WHERE community_id = ${community.id}
         AND user_id = ${userId}
     `;
-
-    // Update members_count in communities table
-    try {
-      await sql`SELECT decrement_members_count(${community.id})`;
-    } catch (rpcError) {
-      console.error('Error updating members count:', rpcError);
-      // Try to rollback the member deletion
-      await sql`
-        INSERT INTO community_members (
-          community_id,
-          user_id,
-          role,
-          status,
-          joined_at,
-          subscription_status,
-          payment_intent_id,
-          stripe_subscription_id,
-          current_period_end
-        ) VALUES (
-          ${community.id},
-          ${userId},
-          ${member.role},
-          ${member.status},
-          ${member.joined_at},
-          ${member.subscription_status},
-          ${member.payment_intent_id},
-          ${member.stripe_subscription_id},
-          ${member.current_period_end}
-        )
-      `;
-
-      return NextResponse.json(
-        { error: 'Failed to update members count' },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({
       success: true,
