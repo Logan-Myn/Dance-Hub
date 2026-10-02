@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { queryOne } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { getSession } from "@/lib/auth-session";
+import { naiveToUtc } from "@/lib/timezone";
 import { CreateLessonBookingData } from "@/types/private-lessons";
 
 interface Community {
@@ -14,6 +15,7 @@ interface Community {
 interface Lesson {
   id: string;
   title: string;
+  teacher_id: string | null;
   regular_price: number;
   member_price: number | null;
   is_active: boolean;
@@ -22,6 +24,17 @@ interface Lesson {
 interface Membership {
   id: string;
 }
+
+// Availability slot as the student saw it: a date and time in the teacher's
+// timezone. The lesson time is derived from it, never taken from the client.
+interface BookableSlot {
+  id: string;
+  availability_date: string;
+  start_time: string;
+  teacher_timezone: string;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(
   request: Request,
@@ -66,7 +79,7 @@ export async function POST(
 
     // Get the private lesson
     const lesson = await queryOne<Lesson>`
-      SELECT id, title, regular_price, member_price, is_active
+      SELECT id, title, teacher_id, regular_price, member_price, is_active
       FROM private_lessons
       WHERE id = ${lessonId}
         AND community_id = ${community.id}
@@ -100,10 +113,62 @@ export async function POST(
       );
     }
 
-    if (!bookingData.scheduled_at) {
+    const slotId = bookingData.availability_slot_id;
+    if (typeof slotId !== "string" || !UUID_RE.test(slotId)) {
       return NextResponse.json(
-        { error: "Scheduled time is required" },
+        { error: "Please select a time slot" },
         { status: 400 }
+      );
+    }
+
+    // The slot must be one of this lesson's teacher's open slots in this
+    // community; slot ids are visible to anyone who can see availability.
+    const slot = await queryOne<BookableSlot>`
+      SELECT
+        tas.id,
+        to_char(tas.availability_date, 'YYYY-MM-DD') AS availability_date,
+        to_char(tas.start_time, 'HH24:MI:SS') AS start_time,
+        COALESCE(p.timezone, 'UTC') AS teacher_timezone
+      FROM teacher_availability_slots tas
+      LEFT JOIN profiles p ON p.auth_user_id = tas.teacher_id
+      WHERE tas.id = ${slotId}
+        AND tas.community_id = ${community.id}
+        AND tas.teacher_id = ${lesson.teacher_id}
+        AND tas.is_active = true
+    `;
+
+    if (!slot) {
+      return NextResponse.json(
+        { error: "This time slot is not available. Please pick another time." },
+        { status: 404 }
+      );
+    }
+
+    // Same conversion the slot picker uses to show the time to the student.
+    const scheduledAt = naiveToUtc(
+      `${slot.availability_date}T${slot.start_time}`,
+      slot.teacher_timezone
+    );
+    if (scheduledAt.getTime() <= Date.now()) {
+      return NextResponse.json(
+        { error: "This time slot has already passed. Please pick another time." },
+        { status: 400 }
+      );
+    }
+
+    // A canceled booking frees its slot (lesson_bookings_active_slot_key is
+    // the database-side guarantee; this check gives a clear error early).
+    const taken = await queryOne<{ id: string }>`
+      SELECT id
+      FROM lesson_bookings
+      WHERE availability_slot_id = ${slot.id}
+        AND lesson_status <> 'canceled'
+      LIMIT 1
+    `;
+    if (taken) {
+      return NextResponse.json(
+        { error: "This time slot was just booked. Please pick another time." },
+        { status: 409 }
       );
     }
 
@@ -124,8 +189,8 @@ export async function POST(
           student_name: bookingData.student_name || "",
           student_message: bookingData.student_message || "",
           contact_info: JSON.stringify(bookingData.contact_info || {}),
-          scheduled_at: bookingData.scheduled_at,
-          availability_slot_id: bookingData.availability_slot_id || "",
+          scheduled_at: scheduledAt.toISOString(),
+          availability_slot_id: slot.id,
           is_member: isMember.toString(),
           price_paid: price.toString(),
           platform_fee_percentage: privateLessonFeePercentage.toString(),

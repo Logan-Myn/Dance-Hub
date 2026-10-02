@@ -157,13 +157,10 @@ export default function LessonBookingModal({
         return;
       }
 
-      // Create booking and get payment intent
+      // Create booking and get payment intent. The server takes the lesson
+      // time from the slot itself.
       const bookingData = {
         ...formData,
-        scheduled_at: naiveToUtc(
-          `${selectedSlot.availability_date}T${selectedSlot.start_time}`,
-          selectedSlot.teacher_timezone ?? 'UTC'
-        ).toISOString(),
         availability_slot_id: selectedSlot.id,
       };
 
@@ -177,6 +174,11 @@ export default function LessonBookingModal({
 
       if (!response.ok) {
         const error = await response.json();
+        if (response.status === 409 || response.status === 404) {
+          // The slot was just taken or removed: show what is still open.
+          setSelectedSlot(null);
+          fetchAvailableSlots();
+        }
         throw new Error(error.error || 'Failed to create booking');
       }
 

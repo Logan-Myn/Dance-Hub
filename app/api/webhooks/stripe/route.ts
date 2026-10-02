@@ -6,6 +6,7 @@ import { getEmailService } from '@/lib/resend/email-service';
 import { BookingConfirmationEmail } from '@/lib/resend/templates/booking/booking-confirmation';
 import { TeacherBookingNotificationEmail } from '@/lib/resend/templates/booking/teacher-booking-notification';
 import { PaymentReceiptEmail } from '@/lib/resend/templates/booking/payment-receipt';
+import { BookingSlotTakenEmail } from '@/lib/resend/templates/booking/booking-slot-taken';
 import { MemberWelcomeEmail } from '@/lib/resend/templates/community/member-welcome';
 import { CommunityOpeningEmail } from '@/lib/resend/templates/community/community-opening';
 import {
@@ -333,6 +334,68 @@ async function applyPaidMembership(
   return 'applied';
 }
 
+// The partial unique index from 2026-10-02_private_lessons.sql: one booking
+// per availability slot unless it is canceled.
+const ACTIVE_SLOT_INDEX = 'lesson_bookings_active_slot_key';
+
+function isSlotTakenError(error: unknown): boolean {
+  const e = error as { code?: string; constraint_name?: string } | null;
+  return e?.code === '23505' && e.constraint_name === ACTIVE_SLOT_INDEX;
+}
+
+/**
+ * Two students paid for the same slot and the other payment was recorded
+ * first. Refund this one in full on the teacher's connected account and tell
+ * the student. Throws when the refund fails, so the event is retried; the
+ * idempotency key keeps a retry from refunding twice.
+ */
+async function refundSlotTakenPayment(
+  paymentIntent: Stripe.PaymentIntent,
+  account: string,
+): Promise<void> {
+  const metadata = paymentIntent.metadata;
+  try {
+    await stripe.refunds.create(
+      {
+        payment_intent: paymentIntent.id,
+        refund_application_fee: true,
+        metadata: { reason: 'slot_already_booked' },
+      },
+      { stripeAccount: account, idempotencyKey: `slot-taken-refund-${paymentIntent.id}` }
+    );
+  } catch (err) {
+    if ((err as { code?: string }).code !== 'charge_already_refunded') throw err;
+  }
+  console.warn('↩️ Slot already booked, refunded payment intent:', paymentIntent.id);
+
+  try {
+    const lesson = await queryOne<{ title: string }>`
+      SELECT title FROM private_lessons WHERE id = ${metadata.lesson_id}
+    `;
+    const lessonDate = metadata.scheduled_at
+      ? new Date(metadata.scheduled_at).toLocaleString('en-GB', {
+          dateStyle: 'long',
+          timeStyle: 'short',
+        })
+      : 'the time you picked';
+    await getEmailService().sendNotificationEmail(
+      metadata.student_email,
+      'Your lesson booking could not be completed',
+      React.createElement(BookingSlotTakenEmail, {
+        studentName: metadata.student_name?.trim() || 'there',
+        lessonTitle: lesson?.title || 'your private lesson',
+        lessonDate,
+        refundedAmount: paymentIntent.amount_received
+          ? paymentIntent.amount_received / 100
+          : parseFloat(metadata.price_paid),
+        currency: paymentIntent.currency || 'eur',
+      })
+    );
+  } catch (emailError) {
+    console.error('❌ Error sending slot-taken email (non-critical):', emailError);
+  }
+}
+
 const retryLater = () =>
   NextResponse.json({ error: 'Member row not ready yet, retry later' }, { status: 503 });
 
@@ -498,45 +561,54 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
 
             // Create the booking record. A redelivered event finds the booking
             // already there (stripe_payment_intent_id is unique) and stops.
-            const newBooking = await queryOne<LessonBooking>`
-              INSERT INTO lesson_bookings (
-                private_lesson_id,
-                community_id,
-                student_id,
-                student_email,
-                student_name,
-                is_community_member,
-                price_paid,
-                stripe_payment_intent_id,
-                payment_status,
-                lesson_status,
-                scheduled_at,
-                availability_slot_id,
-                student_message,
-                contact_info,
-                video_call_started_at,
-                video_call_ended_at
-              ) VALUES (
-                ${metadata.lesson_id},
-                ${metadata.community_id},
-                ${metadata.student_id},
-                ${metadata.student_email},
-                ${metadata.student_name || ''},
-                ${metadata.is_member === 'true'},
-                ${parseFloat(metadata.price_paid)},
-                ${paymentIntent.id},
-                'succeeded',
-                'scheduled',
-                ${metadata.scheduled_at || null},
-                ${metadata.availability_slot_id || null},
-                ${metadata.student_message || ''},
-                ${sql.json(contactInfo)},
-                NULL,
-                NULL
-              )
-              ON CONFLICT (stripe_payment_intent_id) DO NOTHING
-              RETURNING id
-            `;
+            // A different payment already holding the slot makes the insert
+            // fail on lesson_bookings_active_slot_key instead.
+            let newBooking: LessonBooking | null;
+            try {
+              newBooking = await queryOne<LessonBooking>`
+                INSERT INTO lesson_bookings (
+                  private_lesson_id,
+                  community_id,
+                  student_id,
+                  student_email,
+                  student_name,
+                  is_community_member,
+                  price_paid,
+                  stripe_payment_intent_id,
+                  payment_status,
+                  lesson_status,
+                  scheduled_at,
+                  availability_slot_id,
+                  student_message,
+                  contact_info,
+                  video_call_started_at,
+                  video_call_ended_at
+                ) VALUES (
+                  ${metadata.lesson_id},
+                  ${metadata.community_id},
+                  ${metadata.student_id},
+                  ${metadata.student_email},
+                  ${metadata.student_name || ''},
+                  ${metadata.is_member === 'true'},
+                  ${parseFloat(metadata.price_paid)},
+                  ${paymentIntent.id},
+                  'succeeded',
+                  'scheduled',
+                  ${metadata.scheduled_at || null},
+                  ${metadata.availability_slot_id || null},
+                  ${metadata.student_message || ''},
+                  ${sql.json(contactInfo)},
+                  NULL,
+                  NULL
+                )
+                ON CONFLICT (stripe_payment_intent_id) DO NOTHING
+                RETURNING id
+              `;
+            } catch (insertError) {
+              if (!isSlotTakenError(insertError)) throw insertError;
+              await refundSlotTakenPayment(paymentIntent, event.account);
+              return NextResponse.json({ received: true, refunded: true });
+            }
 
             if (!newBooking) {
               console.log('⏭️ Booking already recorded for payment intent:', paymentIntent.id);
