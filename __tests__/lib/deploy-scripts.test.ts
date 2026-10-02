@@ -389,4 +389,23 @@ esac
     expect(preprod('rollback', 'current').code).not.toBe(0);
     expect(current()).toBe(names[2]);
   }, 120_000);
+
+  it('rollback warns (by key name only) when the release env differs from the env file', () => {
+    const envFile = path.join(repo, '.env.preprod');
+    const original = fs.readFileSync(envFile, 'utf8');
+    const target = releaseNames()[1];
+    expect(current()).not.toBe(target);
+
+    fs.writeFileSync(envFile, 'STRIPE_SECRET_KEY="sk_live_CHANGEDVALUE"\nNEW_FLAG="on"\n');
+    const res = preprod('rollback', target);
+    fs.writeFileSync(envFile, original);
+
+    expect(res.code).toBe(0);
+    expect(current()).toBe(target);
+    expect(res.out).toContain('env differs: NEW_FLAG, STRIPE_SECRET_KEY');
+    expect(res.out).not.toMatch(/CHANGEDVALUE|sk_test_x|"on"/);
+
+    // Same env: no warning.
+    expect(preprod('rollback', releaseNames()[2]).out).not.toContain('env differs');
+  }, 60_000);
 });
