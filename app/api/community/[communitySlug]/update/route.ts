@@ -104,7 +104,9 @@ export async function PUT(request: Request, props: { params: Promise<{ community
     // Pre-registration subscriptions charge first on the opening date they
     // were created with. Changing the date or the status would leave those
     // charges where they are, so once anyone has pre-registered we do it.
-    if (statusChange.changed) {
+    // Only before the opening: afterwards a member whose first charge failed
+    // can stay pre_registered for weeks, and must not lock an open community.
+    if (statusChange.changed && community.status === 'pre_registration') {
       const preRegistered = await queryOne<{ count: number }>`
         SELECT COUNT(*)::int AS count
         FROM community_members

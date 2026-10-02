@@ -42,9 +42,12 @@ describe('resolveStatusChange', () => {
     expect(result).toEqual({ ok: false, httpStatus: 403, error: OPENING_DATE_LOCKED_MESSAGE });
   });
 
-  it('refuses to clear a locked date by leaving pre-registration', () => {
-    const result = resolveStatusChange({ ...preReg, can_change_opening_date: false }, { status: 'active', openingDate: null }, NOW);
-    expect(result).toMatchObject({ ok: false, httpStatus: 403 });
+  it('lets a community with a locked date leave pre-registration (the date is cleared)', () => {
+    const locked = { ...preReg, can_change_opening_date: false };
+    expect(resolveStatusChange(locked, { status: 'active', openingDate: null }, NOW)).toEqual({
+      ok: true, status: 'active', openingDate: null, changed: true,
+    });
+    expect(resolveStatusChange(locked, { status: 'inactive', openingDate: null }, NOW)).toMatchObject({ ok: true, status: 'inactive' });
   });
 
   it('refuses pre-registration without a date, or with a date in the past', () => {

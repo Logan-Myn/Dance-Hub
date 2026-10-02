@@ -47,14 +47,18 @@ export default async function GeneralSettingsPage(
   // when null so first-time editors aren't blocked.
   const canChangeOpeningDate = community.can_change_opening_date ?? true;
 
-  // Once someone has pre-registered, the update route refuses status and
-  // opening-date changes; the form disables those fields and says why.
-  const preRegistered = await queryOne<{ count: number }>`
-    SELECT COUNT(*)::int AS count
-    FROM community_members
-    WHERE community_id = ${community.id}
-      AND status = ANY(${PRE_REGISTERED_STATUSES as string[]})
-  `;
+  // Once someone has pre-registered (and until the community opens), the
+  // update route refuses status and opening-date changes; the form disables
+  // those fields and says why.
+  const preRegistered =
+    community.status === 'pre_registration'
+      ? await queryOne<{ count: number }>`
+          SELECT COUNT(*)::int AS count
+          FROM community_members
+          WHERE community_id = ${community.id}
+            AND status = ANY(${PRE_REGISTERED_STATUSES as string[]})
+        `
+      : null;
   const hasPreRegistrations = (preRegistered?.count ?? 0) > 0;
 
   return (

@@ -76,7 +76,11 @@ export function resolveStatusChange(
     return { ok: true, status, openingDate: currentDate, changed: false };
   }
 
-  if (dateChanged && current.can_change_opening_date === false) {
+  // The platform's lock guards a pre-registration date. Leaving
+  // pre-registration (which clears the date) isn't a date change it covers;
+  // pre-registered members are protected by the caller's own check.
+  const staysInPreRegistration = currentStatus === 'pre_registration' && status === 'pre_registration';
+  if (staysInPreRegistration && dateChanged && current.can_change_opening_date === false) {
     return { ok: false, httpStatus: 403, error: OPENING_DATE_LOCKED_MESSAGE };
   }
 

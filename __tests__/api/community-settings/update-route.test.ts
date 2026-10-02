@@ -113,6 +113,18 @@ describe('opening date and status', () => {
     expect(updated('opening_date')).toEqual(FUTURE);
   });
 
+  it('lets an open community change status while first charges are still pending', async () => {
+    // After the opening cron, members whose first charge failed can stay
+    // pre_registered for weeks; that must not lock an active community.
+    community.status = 'active';
+    community.opening_date = null;
+    preRegistrations = 4;
+    const res = await put({ ...base, status: 'inactive', opening_date: null });
+    expect(res.status).toBe(200);
+    expect(updated('status')).toBe('inactive');
+    expect(mockQueryOne.mock.calls.some((c) => /FROM community_members/.test(text(c)))).toBe(false);
+  });
+
   it('opens early and clears the date when nobody has pre-registered', async () => {
     const res = await put({ ...base, status: 'active', opening_date: null });
     expect(res.status).toBe(200);
