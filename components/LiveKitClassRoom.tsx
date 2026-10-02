@@ -1,11 +1,12 @@
 "use client";
 
 import "@livekit/components-styles";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
   useLocalParticipant,
+  useLocalParticipantPermissions,
   useParticipants,
   useDataChannel,
   useRoomContext,
@@ -16,22 +17,14 @@ import { Track } from "livekit-client";
 import LiveKitControlBar from "./LiveKitControlBar";
 import LiveKitChat from "./LiveKitChat";
 import type { ChatMessage } from "./LiveKitChat";
+import { encodeRoomMessage, readRoomMessage, type RoomMessage } from "@/lib/live-class-messages";
 
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
-
-export interface HandRaise {
-  participantIdentity: string;
-  userName: string;
-}
-
-interface DataMessage {
-  type: string;
-  sender?: string;
-  participantIdentity?: string;
-  text?: string;
-  senderName?: string;
-  timestamp?: number;
+/** Live-class moderation. Omitted for 1:1 private lessons. */
+export interface ClassModeration {
+  /** The teacher's identity. Deny/revoke messages from anyone else are ignored. */
+  teacherIdentity: string;
+  /** Grant or revoke a participant's mic/camera on the server. */
+  setCanPublish: (identity: string, canPublish: boolean) => Promise<void>;
 }
 
 interface LiveKitClassRoomProps {
@@ -44,6 +37,23 @@ interface LiveKitClassRoomProps {
   /** Skip the hand-raise gating and auto-enable camera/mic on join.
    *  Set true for 1:1 private lessons where both participants act as peers. */
   autoEnableMedia?: boolean;
+  moderation?: ClassModeration;
+  /** Names for identities. Live-class identities are user ids, so the room
+   *  has no readable names of its own. */
+  lookupNames?: (identities: string[]) => Promise<Record<string, string>>;
+  /** Name shown on the local participant's own chat messages. */
+  localName?: string;
+}
+
+interface CallInterfaceProps {
+  onLeave: () => void;
+  onEndClass?: () => void;
+  classTitle?: string;
+  isTeacher?: boolean;
+  autoEnableMedia?: boolean;
+  moderation?: ClassModeration;
+  lookupNames?: (identities: string[]) => Promise<Record<string, string>>;
+  localName?: string;
 }
 
 function CallInterface({
@@ -52,90 +62,180 @@ function CallInterface({
   classTitle,
   isTeacher = false,
   autoEnableMedia = false,
-}: {
-  onLeave: () => void;
-  onEndClass?: () => void;
-  classTitle?: string;
-  isTeacher?: boolean;
-  autoEnableMedia?: boolean;
-}) {
+  moderation,
+  lookupNames,
+  localName,
+}: CallInterfaceProps) {
   const room = useRoomContext();
   const participants = useParticipants();
   const { localParticipant } = useLocalParticipant();
+  const localPermissions = useLocalParticipantPermissions();
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [hasMediaPermission, setHasMediaPermission] = useState(
-    isTeacher || autoEnableMedia
-  );
-  const [handRaises, setHandRaises] = useState<HandRaise[]>([]);
+  // Identities with a raised hand, and those the teacher allowed this session.
+  const [raisedHands, setRaisedHands] = useState<string[]>([]);
+  const [approved, setApproved] = useState<string[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [deniedFeedback, setDeniedFeedback] = useState(false);
   const [revokedFeedback, setRevokedFeedback] = useState(false);
+  const [names, setNames] = useState<Record<string, string>>({});
+  const requestedNames = useRef(new Set<string>());
+  const messageSeq = useRef(0);
 
-  const { send: sendData } = useDataChannel("app-messages", useCallback((msg: any) => {
-    const data: DataMessage = JSON.parse(decoder.decode(msg.payload));
-    const fromIdentity = msg.from?.identity ?? "";
+  const teacherIdentity = moderation?.teacherIdentity;
+  const localIdentity = localParticipant?.identity;
+  // Live-class students join subscribe-only; the server grants publishing
+  // when the teacher approves them, so its answer is what counts.
+  const canPublishNow = !!localPermissions?.canPublish;
+  const hasMediaPermission = isTeacher || autoEnableMedia || canPublishNow;
 
-    // Chat messages
-    if (data.type === "chat" && data.text) {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `${fromIdentity}-${data.timestamp ?? Date.now()}`,
-          sender: data.senderName || data.sender || "?",
-          text: data.text || "",
-          timestamp: new Date(data.timestamp || Date.now()),
-          type: "chat",
-          isLocal: false,
-        },
-      ]);
-      if (!isChatOpen) setUnreadCount((c) => c + 1);
-    }
+  const participantIds = participants.map((p) => p.identity).join(",");
 
-    // Hand-raise flow
-    if (isTeacher) {
-      if (data.type === "hand-raise" && data.sender && data.participantIdentity) {
-        setHandRaises((prev) => {
-          if (prev.some((r) => r.participantIdentity === data.participantIdentity)) return prev;
-          return [...prev, { participantIdentity: data.participantIdentity!, userName: data.sender! }];
-        });
-        if (!isChatOpen) setUnreadCount((c) => c + 1);
-      }
-      if (data.type === "hand-lowered" && data.participantIdentity) {
-        setHandRaises((prev) => prev.filter((r) => r.participantIdentity !== data.participantIdentity));
-      }
-    } else {
-      if (data.type === "hand-approved") {
-        setHasMediaPermission(true);
-      }
-      if (data.type === "hand-denied") {
-        setHasMediaPermission(false);
-        setDeniedFeedback(true);
-      }
-      if (data.type === "hand-revoked") {
-        setHasMediaPermission(false);
-        setRevokedFeedback(true);
-        localParticipant?.setMicrophoneEnabled(false);
-        localParticipant?.setCameraEnabled(false);
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTeacher, isChatOpen, localParticipant]));
+  // Look up names for identities we haven't asked about yet.
+  useEffect(() => {
+    if (!lookupNames || !participantIds) return;
+    const missing = participantIds.split(",").filter((id) => !requestedNames.current.has(id));
+    if (missing.length === 0) return;
+    missing.forEach((id) => requestedNames.current.add(id));
+    lookupNames(missing)
+      .then((found) => setNames((prev) => ({ ...prev, ...found })))
+      .catch(() => missing.forEach((id) => requestedNames.current.delete(id)));
+  }, [participantIds, lookupNames]);
+
+  const nameFor = (identity: string): string => {
+    if (identity === localIdentity && localName) return localName;
+    if (names[identity]) return names[identity];
+    const participant = participants.find((p) => p.identity === identity);
+    if (participant?.name) return participant.name;
+    // Live-class identities are user ids; don't show those while names load.
+    return lookupNames ? "Participant" : identity;
+  };
+
+  const { send: sendData } = useDataChannel(
+    "app-messages",
+    useCallback(
+      (msg: { payload: Uint8Array; from?: { identity: string } }) => {
+        // The sender is whoever the media server says it is, never the payload.
+        const event = readRoomMessage(msg.payload, msg.from?.identity, { isTeacher, teacherIdentity });
+        if (!event) return;
+        switch (event.kind) {
+          case "chat":
+            setChatMessages((prev) => [
+              ...prev,
+              {
+                id: `msg-${++messageSeq.current}`,
+                senderIdentity: event.from,
+                text: event.text,
+                timestamp: new Date(),
+                type: "chat",
+                isLocal: false,
+              },
+            ]);
+            if (!isChatOpen) setUnreadCount((c) => c + 1);
+            break;
+          case "hand-raised":
+            setRaisedHands((prev) => (prev.includes(event.from) ? prev : [...prev, event.from]));
+            if (!isChatOpen) setUnreadCount((c) => c + 1);
+            break;
+          case "hand-lowered":
+            // Sent when a student steps down; they drop their own permission.
+            setRaisedHands((prev) => prev.filter((id) => id !== event.from));
+            setApproved((prev) => prev.filter((id) => id !== event.from));
+            break;
+          case "denied":
+            setDeniedFeedback(true);
+            break;
+          case "revoked":
+            setRevokedFeedback(true);
+            break;
+        }
+      },
+      [isTeacher, teacherIdentity, isChatOpen]
+    )
+  );
 
   const sendAppMessage = useCallback(
-    (data: DataMessage, destinationIdentities?: string[]) => {
-      const payload = encoder.encode(JSON.stringify(data));
-      sendData(payload, { destinationIdentities });
+    (message: RoomMessage, destinationIdentities?: string[]) => {
+      sendData(encodeRoomMessage(message), { destinationIdentities });
     },
     [sendData]
   );
 
-  // Clean up stale hand raises / active speakers when participants leave
+  const addSystemMessage = (text: string) => {
+    setChatMessages((prev) => [
+      ...prev,
+      { id: `system-${++messageSeq.current}`, text, timestamp: new Date(), type: "system" },
+    ]);
+  };
+
+  // Teacher view: who may use mic/camera right now (server permission, an
+  // approval made this session, or tracks already being sent), and who is
+  // still waiting. People who left drop out of both lists.
+  const speakers =
+    isTeacher && moderation
+      ? participants
+          .filter((p) => p.identity !== localIdentity)
+          .filter(
+            (p) => p.permissions?.canPublish || approved.includes(p.identity) || p.trackPublications.size > 0
+          )
+          .map((p) => p.identity)
+      : [];
+  const presentIds = participantIds.split(",");
+  const pendingHands = raisedHands.filter((id) => presentIds.includes(id) && !speakers.includes(id));
+
+  const allowHand = async (identity: string) => {
+    if (!moderation) return;
+    try {
+      await moderation.setCanPublish(identity, true);
+    } catch {
+      addSystemMessage(`Could not give ${nameFor(identity)} mic/camera access. Try again.`);
+      return;
+    }
+    setApproved((prev) => (prev.includes(identity) ? prev : [...prev, identity]));
+    setRaisedHands((prev) => prev.filter((id) => id !== identity));
+    addSystemMessage(`${nameFor(identity)} was granted mic/camera access`);
+  };
+
+  const denyHand = (identity: string) => {
+    sendAppMessage({ type: "hand-denied" }, [identity]);
+    setRaisedHands((prev) => prev.filter((id) => id !== identity));
+    addSystemMessage(`${nameFor(identity)}'s request was denied`);
+  };
+
+  const revokeSpeaker = async (identity: string) => {
+    if (!moderation) return;
+    try {
+      await moderation.setCanPublish(identity, false);
+    } catch {
+      addSystemMessage(`Could not revoke ${nameFor(identity)}'s access. Try again.`);
+      return;
+    }
+    sendAppMessage({ type: "hand-revoked" }, [identity]);
+    setApproved((prev) => prev.filter((id) => id !== identity));
+    setRaisedHands((prev) => prev.filter((id) => id !== identity));
+    addSystemMessage(`${nameFor(identity)}'s access was revoked`);
+  };
+
+  // A student stepping down gives the permission back on the server too.
+  const stepDown = () => {
+    if (!moderation || !localIdentity) return;
+    moderation.setCanPublish(localIdentity, false).catch((err) => {
+      console.error("Failed to step down:", err);
+    });
+  };
+
+  // When the server takes publishing away (revoked or stepped down), stop
+  // the local camera and mic too.
+  const couldPublish = useRef(canPublishNow);
   useEffect(() => {
-    if (!isTeacher) return;
-    const identities = participants.map((p) => p.identity);
-    setHandRaises((prev) => prev.filter((r) => identities.includes(r.participantIdentity)));
-  }, [participants, isTeacher]);
+    if (isTeacher || autoEnableMedia || !localParticipant) return;
+    if (couldPublish.current && !canPublishNow) {
+      localParticipant.setMicrophoneEnabled(false).catch(() => {});
+      localParticipant.setCameraEnabled(false).catch(() => {});
+      localParticipant.setScreenShareEnabled(false).catch(() => {});
+    }
+    couldPublish.current = canPublishNow;
+  }, [canPublishNow, isTeacher, autoEnableMedia, localParticipant]);
 
   // Auto-enable camera and mic on connect for the teacher (live classes) and
   // for both peers in private lessons (autoEnableMedia).
@@ -180,7 +280,7 @@ function CallInterface({
     if (!isChatOpen) setUnreadCount(0);
   };
 
-  const canSend = isTeacher || hasMediaPermission;
+  const canSend = hasMediaPermission;
 
   // Build the visible track refs: local camera (if enabled) + remote tracks
   const localCameraTrack = trackRefs.find(
@@ -280,11 +380,9 @@ function CallInterface({
                       trackRef={trackRef}
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />
-                    {participant.name && (
-                      <span className="absolute bottom-2 left-2 text-xs text-white bg-black/60 px-2 py-0.5 rounded">
-                        {participant.name}
-                      </span>
-                    )}
+                    <span className="absolute bottom-2 left-2 text-xs text-white bg-black/60 px-2 py-0.5 rounded">
+                      {nameFor(participant.identity)}
+                    </span>
                   </div>
                 );
               })}
@@ -299,12 +397,16 @@ function CallInterface({
             <LiveKitChat
               onClose={toggleChat}
               isTeacher={isTeacher}
-              handRaises={handRaises}
+              raisedHands={pendingHands}
+              speakers={speakers}
+              nameFor={nameFor}
+              onAllow={allowHand}
+              onDeny={denyHand}
+              onRevoke={revokeSpeaker}
               chatMessages={chatMessages}
               setChatMessages={setChatMessages}
               sendAppMessage={sendAppMessage}
-              setHandRaises={setHandRaises}
-              localParticipant={localParticipant}
+              localName={localName || localIdentity || "You"}
             />
           </div>
         )}
@@ -319,7 +421,7 @@ function CallInterface({
         unreadCount={unreadCount}
         isTeacher={isTeacher}
         hasMediaPermission={hasMediaPermission}
-        setHasMediaPermission={setHasMediaPermission}
+        onStepDown={stepDown}
         sendAppMessage={sendAppMessage}
       />
     </div>
@@ -334,6 +436,9 @@ export default function LiveKitClassRoom({
   classTitle,
   isTeacher = false,
   autoEnableMedia = false,
+  moderation,
+  lookupNames,
+  localName,
 }: LiveKitClassRoomProps) {
   return (
     <LiveKitRoom
@@ -348,6 +453,9 @@ export default function LiveKitClassRoom({
         classTitle={classTitle}
         isTeacher={isTeacher}
         autoEnableMedia={autoEnableMedia}
+        moderation={moderation}
+        lookupNames={lookupNames}
+        localName={localName}
       />
     </LiveKitRoom>
   );

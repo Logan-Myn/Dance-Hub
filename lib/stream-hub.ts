@@ -56,16 +56,39 @@ export async function deleteRoom(name: string): Promise<void> {
   await streamHubFetch(`/rooms/${name}`, { method: "DELETE" });
 }
 
+/**
+ * `identity` must be unique per user in the room: joining with an identity
+ * that's already there disconnects the earlier participant. `name` is the
+ * label to show; Stream-Hub doesn't put it in the token yet (it ignores the
+ * field), so clients look names up by identity instead.
+ */
 export async function generateToken(
   roomName: string,
   identity: string,
-  role: "admin" | "participant" | "viewer"
+  role: "admin" | "participant" | "viewer",
+  name?: string
 ): Promise<StreamHubToken> {
   const res = await streamHubFetch(`/rooms/${roomName}/tokens`, {
     method: "POST",
-    body: JSON.stringify({ identity, role }),
+    body: JSON.stringify({ identity, role, name }),
   });
   return res.json();
+}
+
+/**
+ * Grant or revoke a participant's right to publish audio/video. Revoking
+ * also unpublishes what they're sending. The media server replaces the whole
+ * permission set, so subscribe and data are always sent as true.
+ */
+export async function setParticipantCanPublish(
+  roomName: string,
+  identity: string,
+  canPublish: boolean
+): Promise<void> {
+  await streamHubFetch(`/rooms/${roomName}/participants/${encodeURIComponent(identity)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ canPublish, canSubscribe: true, canPublishData: true }),
+  });
 }
 
 export async function startRecording(roomName: string, callbackUrl: string): Promise<StreamHubRecording> {

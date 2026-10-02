@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { createRoom, getRoom, generateToken, startRecording } from "@/lib/stream-hub";
+import { liveClassDisplayName, liveClassRoomName } from "@/lib/live-class-access";
 
 interface LiveClassWithDetails {
   id: string;
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ class
     const profile = await queryOne<Profile>`
       SELECT display_name, full_name FROM profiles WHERE auth_user_id = ${user.id}
     `;
-    const userName = profile?.display_name || profile?.full_name || user.email?.split("@")[0] || "Guest";
+    const userName = liveClassDisplayName(profile, user.email);
 
     // Authorization check
     const isTeacher = liveClass.teacher_id === user.id;
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ class
     // room is still alive — empty rooms auto-close, so a class scheduled days ago
     // points at a room that no longer exists. Egress can't attach to a missing
     // room ("requested room does not exist"), so (re)create it whenever it's gone.
-    const roomName = `live-class-${params.classId}`;
+    const roomName = liveClassRoomName(params.classId);
     const existingRoom = await getRoom(roomName);
     if (!existingRoom) {
       await createRoom(roomName, 100);
@@ -137,14 +138,22 @@ export async function GET(request: NextRequest, props: { params: Promise<{ class
       }
     }
 
-    // Generate token
-    const role = isTeacher ? "admin" : "participant";
-    const tokenData = await generateToken(roomName, userName, role);
+    // Generate token. The identity is the user id: it must be unique in the
+    // room, because joining with an identity that's already there disconnects
+    // the earlier participant (a name is not unique; anyone could take the
+    // teacher's). Students join subscribe-only ("viewer"); the teacher grants
+    // publishing through /participants/[identity] when approving a hand.
+    const role = isTeacher ? "admin" : "viewer";
+    const tokenData = await generateToken(roomName, user.id, role, userName);
 
     return NextResponse.json({
       token: tokenData.token,
       serverUrl: tokenData.serverUrl,
       isTeacher,
+      identity: user.id,
+      displayName: userName,
+      // Moderation messages are only honoured from this identity.
+      teacherIdentity: liveClass.teacher_id,
     });
   } catch (error) {
     console.error("Error generating live class video token:", error);

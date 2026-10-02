@@ -1,17 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { LocalParticipant } from "livekit-client";
-import { PaperAirplaneIcon, XMarkIcon, HandRaisedIcon, CheckIcon, XCircleIcon, UserMinusIcon } from "@heroicons/react/24/solid";
-
-export interface HandRaise {
-  participantIdentity: string;
-  userName: string;
-}
+import { PaperAirplaneIcon, XMarkIcon, HandRaisedIcon, CheckIcon, XCircleIcon, UserMinusIcon, MicrophoneIcon } from "@heroicons/react/24/solid";
+import type { RoomMessage } from "@/lib/live-class-messages";
 
 export interface ChatMessage {
   id: string;
-  sender: string;
+  /** Who sent a remote message; the name is looked up when shown. */
+  senderIdentity?: string;
+  /** Fixed label for local messages. */
+  sender?: string;
   text: string;
   timestamp: Date;
   type?: "chat" | "system";
@@ -21,23 +19,33 @@ export interface ChatMessage {
 interface LiveKitChatProps {
   onClose: () => void;
   isTeacher?: boolean;
-  handRaises?: HandRaise[];
+  /** Teacher only: identities waiting for mic/camera access. */
+  raisedHands?: string[];
+  /** Teacher only: identities currently allowed to use mic/camera. */
+  speakers?: string[];
+  nameFor: (identity: string) => string;
+  onAllow?: (identity: string) => void;
+  onDeny?: (identity: string) => void;
+  onRevoke?: (identity: string) => void;
   chatMessages?: ChatMessage[];
   setChatMessages?: (fn: (prev: ChatMessage[]) => ChatMessage[]) => void;
-  sendAppMessage?: (data: any, destinationIdentities?: string[]) => void;
-  setHandRaises?: (fn: (prev: HandRaise[]) => HandRaise[]) => void;
-  localParticipant: LocalParticipant;
+  sendAppMessage?: (data: RoomMessage, destinationIdentities?: string[]) => void;
+  localName: string;
 }
 
 export default function LiveKitChat({
   onClose,
   isTeacher = false,
-  handRaises = [],
+  raisedHands = [],
+  speakers = [],
+  nameFor,
+  onAllow,
+  onDeny,
+  onRevoke,
   chatMessages = [],
   setChatMessages,
   sendAppMessage,
-  setHandRaises,
-  localParticipant,
+  localName,
 }: LiveKitChatProps) {
   const [inputText, setInputText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -54,16 +62,16 @@ export default function LiveKitChat({
     const text = inputText.trim();
     if (!text || !sendAppMessage) return;
 
-    const senderName = localParticipant.name || localParticipant.identity || "You";
     const timestamp = Date.now();
 
-    sendAppMessage({ type: "chat", text, senderName, timestamp });
+    // Receivers take the sender from the connection, so only the text is sent.
+    sendAppMessage({ type: "chat", text });
 
     setChatMessages?.((prev) => [
       ...prev,
       {
         id: `local-${timestamp}`,
-        sender: senderName,
+        sender: localName,
         text,
         timestamp: new Date(timestamp),
         type: "chat",
@@ -71,7 +79,7 @@ export default function LiveKitChat({
       },
     ]);
     setInputText("");
-  }, [inputText, localParticipant, sendAppMessage, setChatMessages]);
+  }, [inputText, localName, sendAppMessage, setChatMessages]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -79,69 +87,6 @@ export default function LiveKitChat({
       handleSend();
     }
   };
-
-  const handleAllow = useCallback(
-    (raise: HandRaise) => {
-      if (!sendAppMessage) return;
-
-      sendAppMessage({ type: "hand-approved" }, [raise.participantIdentity]);
-      setHandRaises?.((prev) => prev.filter((r) => r.participantIdentity !== raise.participantIdentity));
-
-      setChatMessages?.((prev) => [
-        ...prev,
-        {
-          id: `system-allow-${Date.now()}`,
-          sender: "System",
-          text: `${raise.userName} was granted mic/camera access`,
-          timestamp: new Date(),
-          type: "system",
-        },
-      ]);
-    },
-    [sendAppMessage, setHandRaises, setChatMessages]
-  );
-
-  const handleDeny = useCallback(
-    (raise: HandRaise) => {
-      if (!sendAppMessage) return;
-
-      sendAppMessage({ type: "hand-denied" }, [raise.participantIdentity]);
-      setHandRaises?.((prev) => prev.filter((r) => r.participantIdentity !== raise.participantIdentity));
-
-      setChatMessages?.((prev) => [
-        ...prev,
-        {
-          id: `system-deny-${Date.now()}`,
-          sender: "System",
-          text: `${raise.userName}'s request was denied`,
-          timestamp: new Date(),
-          type: "system",
-        },
-      ]);
-    },
-    [sendAppMessage, setHandRaises, setChatMessages]
-  );
-
-  const handleRevoke = useCallback(
-    (raise: HandRaise) => {
-      if (!sendAppMessage) return;
-
-      sendAppMessage({ type: "hand-revoked" }, [raise.participantIdentity]);
-      setHandRaises?.((prev) => prev.filter((r) => r.participantIdentity !== raise.participantIdentity));
-
-      setChatMessages?.((prev) => [
-        ...prev,
-        {
-          id: `system-revoke-${Date.now()}`,
-          sender: "System",
-          text: `${raise.userName}'s access was revoked`,
-          timestamp: new Date(),
-          type: "system",
-        },
-      ]);
-    },
-    [sendAppMessage, setHandRaises, setChatMessages]
-  );
 
   return (
     <div className="flex flex-col h-full w-full min-w-0 overflow-hidden bg-gray-900 sm:border-l border-gray-700">
@@ -153,45 +98,65 @@ export default function LiveKitChat({
         </button>
       </div>
 
-      {/* Teacher: Hand raises */}
-      {isTeacher && handRaises.length > 0 && (
+      {/* Teacher: raised hands (allow / deny) and people allowed to speak (revoke) */}
+      {isTeacher && (raisedHands.length > 0 || speakers.length > 0) && (
         <div className="px-4 py-3 border-b border-gray-700 bg-gray-800/50 space-y-2">
-          <div className="text-xs font-medium text-yellow-400 flex items-center gap-1">
-            <HandRaisedIcon className="h-3.5 w-3.5" />
-            Raised Hands ({handRaises.length})
-          </div>
-          {handRaises.map((raise) => (
-            <div
-              key={raise.participantIdentity}
-              className="flex items-center justify-between gap-2 bg-gray-700/50 rounded-lg px-3 py-2"
-            >
-              <span className="text-xs text-gray-200 truncate">{raise.userName}</span>
-              <div className="flex gap-1.5 shrink-0">
-                <button
-                  onClick={() => handleAllow(raise)}
-                  className="flex h-6 w-6 items-center justify-center rounded-full bg-green-600 hover:bg-green-700 text-white transition-colors"
-                  title="Allow"
-                >
-                  <CheckIcon className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => handleDeny(raise)}
-                  className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors"
-                  title="Deny"
-                >
-                  <XCircleIcon className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => handleRevoke(raise)}
-                  className="flex h-6 items-center gap-1 px-2 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors text-[10px]"
-                  title="Revoke access"
-                >
-                  <UserMinusIcon className="h-3 w-3" />
-                  Revoke
-                </button>
+          {raisedHands.length > 0 && (
+            <>
+              <div className="text-xs font-medium text-yellow-400 flex items-center gap-1">
+                <HandRaisedIcon className="h-3.5 w-3.5" />
+                Raised Hands ({raisedHands.length})
               </div>
-            </div>
-          ))}
+              {raisedHands.map((identity) => (
+                <div
+                  key={identity}
+                  className="flex items-center justify-between gap-2 bg-gray-700/50 rounded-lg px-3 py-2"
+                >
+                  <span className="text-xs text-gray-200 truncate">{nameFor(identity)}</span>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button
+                      onClick={() => onAllow?.(identity)}
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-green-600 hover:bg-green-700 text-white transition-colors"
+                      title="Allow"
+                    >
+                      <CheckIcon className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => onDeny?.(identity)}
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors"
+                      title="Deny"
+                    >
+                      <XCircleIcon className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+          {speakers.length > 0 && (
+            <>
+              <div className="text-xs font-medium text-green-400 flex items-center gap-1">
+                <MicrophoneIcon className="h-3.5 w-3.5" />
+                Allowed to speak ({speakers.length})
+              </div>
+              {speakers.map((identity) => (
+                <div
+                  key={identity}
+                  className="flex items-center justify-between gap-2 bg-gray-700/50 rounded-lg px-3 py-2"
+                >
+                  <span className="text-xs text-gray-200 truncate">{nameFor(identity)}</span>
+                  <button
+                    onClick={() => onRevoke?.(identity)}
+                    className="flex h-6 items-center gap-1 px-2 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors text-[10px] shrink-0"
+                    title="Revoke access"
+                  >
+                    <UserMinusIcon className="h-3 w-3" />
+                    Revoke
+                  </button>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
 
@@ -213,7 +178,9 @@ export default function LiveKitChat({
 
           return (
             <div key={msg.id} className={`flex flex-col ${msg.isLocal ? "items-end" : "items-start"}`}>
-              <span className="text-xs text-gray-500 mb-1">{msg.sender}</span>
+              <span className="text-xs text-gray-500 mb-1">
+                {!msg.isLocal && msg.senderIdentity ? nameFor(msg.senderIdentity) : msg.sender}
+              </span>
               <div
                 className={`rounded-lg px-3 py-2 max-w-[85%] text-sm break-words ${
                   msg.isLocal ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-100"
