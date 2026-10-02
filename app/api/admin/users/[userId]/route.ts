@@ -30,6 +30,22 @@ export async function DELETE(request: Request, props: { params: Promise<{ userId
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Nothing ties a community to its owner in the database, so deleting the
+    // owner would leave their communities running (and billing members) with
+    // nobody able to manage them.
+    const owned = await queryOne<{ count: number }>`
+      SELECT COUNT(*)::int AS count FROM communities WHERE created_by = ${userId}
+    `;
+    const ownedCount = owned?.count ?? 0;
+    if (ownedCount > 0) {
+      return NextResponse.json(
+        {
+          error: `This user owns ${ownedCount} ${ownedCount === 1 ? "community" : "communities"}. Delete ${ownedCount === 1 ? "it" : "them"} or give ${ownedCount === 1 ? "it" : "them"} a new owner first.`,
+        },
+        { status: 409 }
+      );
+    }
+
     // Cancel the user's membership subscriptions, each on its community's
     // connected account, before their member rows go: afterwards nothing in
     // the app can cancel them, and they would keep being charged.

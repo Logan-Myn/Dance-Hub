@@ -181,9 +181,34 @@ describe('platform admin deletes a user', () => {
   const params = Promise.resolve({ userId: 'u1' });
   const req = () => new Request('http://x', { method: 'DELETE' });
 
+  /** queryOne answers: admin profile, then how many communities the user owns. */
+  function stubQueryOne(ownedCommunities = 0) {
+    mockQueryOne.mockImplementation((strings: string[]) => {
+      const t = strings.join('?');
+      if (/FROM profiles/.test(t)) return Promise.resolve({ id: 'p1', is_admin: true });
+      if (/FROM communities/.test(t)) return Promise.resolve({ count: ownedCommunities });
+      return Promise.resolve(null);
+    });
+  }
+
   beforeEach(() => {
     mockGetSession.mockResolvedValue({ user: { id: 'admin' } });
-    mockQueryOne.mockResolvedValue({ id: 'p1', is_admin: true });
+    stubQueryOne();
+  });
+
+  it('refuses to delete a user who owns a community, before cancelling anything', async () => {
+    stubQueryOne(2);
+
+    const res = await deleteUser(req(), { params });
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/owns 2 communities/);
+    const ownerLookup = mockQueryOne.mock.calls.find((c) => /FROM communities/.test(text(c)));
+    expect(text(ownerLookup!)).toMatch(/created_by = \?/);
+    expect(ownerLookup!.slice(1)).toContain('u1');
+    expect(mockQuery).not.toHaveBeenCalled();
+    expect(mockCancelMembers).not.toHaveBeenCalled();
+    expect(deletes()).toHaveLength(0);
   });
 
   it("cancels the user's membership subscriptions, each on its community account, before deleting", async () => {
