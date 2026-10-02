@@ -206,3 +206,55 @@ describe('POST /private-lessons/[lessonId]/book: platform fee', () => {
   });
 });
 
+
+describe('POST /private-lessons/[lessonId]/book: price and monthly limit', () => {
+  const pi = () => mockPaymentIntentsCreate.mock.calls[0][0];
+
+  it('charges members the member price', async () => {
+    routeQueries({ lesson: { ...lesson, member_price: '40.00' }, membership: { id: 'm1' } });
+
+    await book(validBody);
+
+    expect(pi().amount).toBe(4000);
+  });
+
+  it('charges members the regular price when the member price is 0 (no discount)', async () => {
+    routeQueries({ lesson: { ...lesson, member_price: '0.00' }, membership: { id: 'm1' } });
+
+    await book(validBody);
+
+    expect(pi().amount).toBe(5000);
+  });
+
+  it("refuses a booking once the lesson's monthly limit is reached for that month", async () => {
+    routeQueries({ lesson: { ...lesson, max_bookings_per_month: 3 }, monthCount: { count: 3 } });
+
+    const res = await book(validBody);
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/November 2026/);
+    expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
+    // The month is the slot's month in the teacher's timezone (New York).
+    const [countQuery] = queriesMatching(/COUNT\(\*\)/i);
+    expect(countQuery.text).toMatch(/lesson_status <> 'canceled'/);
+    expect(countQuery.values).toEqual(expect.arrayContaining([
+      LESSON_ID,
+      new Date('2026-11-01T04:00:00.000Z'),
+      new Date('2026-12-01T05:00:00.000Z'),
+    ]));
+  });
+
+  it('allows a booking under the monthly limit', async () => {
+    routeQueries({ lesson: { ...lesson, max_bookings_per_month: 3 }, monthCount: { count: 2 } });
+
+    const res = await book(validBody);
+
+    expect(res.status).toBe(200);
+  });
+
+  it('does not count bookings when the lesson has no monthly limit', async () => {
+    await book(validBody);
+
+    expect(queriesMatching(/COUNT\(\*\)/i)).toHaveLength(0);
+  });
+});

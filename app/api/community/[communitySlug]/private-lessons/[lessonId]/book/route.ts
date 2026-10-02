@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { queryOne } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { getSession } from "@/lib/auth-session";
-import { naiveToUtc } from "@/lib/timezone";
+import { formatInTz, naiveToUtc } from "@/lib/timezone";
 import { privateLessonFeePercentage } from "@/lib/private-lesson-fee";
 import { CreateLessonBookingData } from "@/types/private-lessons";
 
@@ -19,9 +19,10 @@ interface Lesson {
   id: string;
   title: string;
   teacher_id: string | null;
-  regular_price: number;
-  member_price: number | null;
+  regular_price: number | string;
+  member_price: number | string | null;
   is_active: boolean;
+  max_bookings_per_month: number | null;
 }
 
 interface Membership {
@@ -82,7 +83,7 @@ export async function POST(
 
     // Get the private lesson
     const lesson = await queryOne<Lesson>`
-      SELECT id, title, teacher_id, regular_price, member_price, is_active
+      SELECT id, title, teacher_id, regular_price, member_price, is_active, max_bookings_per_month
       FROM private_lessons
       WHERE id = ${lessonId}
         AND community_id = ${community.id}
@@ -106,7 +107,10 @@ export async function POST(
     `;
 
     const isMember = !!membership;
-    const price = isMember && lesson.member_price ? lesson.member_price : lesson.regular_price;
+    // Numeric columns arrive as strings. A member price of 0 means no member
+    // discount, as the lesson cards and the booking modal show it.
+    const memberPrice = Number(lesson.member_price);
+    const price = isMember && memberPrice > 0 ? memberPrice : Number(lesson.regular_price);
 
     // Validate booking data
     if (!bookingData.student_email) {
@@ -173,6 +177,30 @@ export async function POST(
         { error: "This time slot was just booked. Please pick another time." },
         { status: 409 }
       );
+    }
+
+    // The teacher's monthly cap counts bookings in the slot's calendar month,
+    // in the teacher's timezone.
+    if (lesson.max_bookings_per_month) {
+      const [year, month] = slot.availability_date.split("-").map(Number);
+      const nextMonth = month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, "0")}`;
+      const monthStart = naiveToUtc(`${slot.availability_date.slice(0, 7)}-01T00:00:00`, slot.teacher_timezone);
+      const monthEnd = naiveToUtc(`${nextMonth}-01T00:00:00`, slot.teacher_timezone);
+      const booked = await queryOne<{ count: number }>`
+        SELECT COUNT(*)::int AS count
+        FROM lesson_bookings
+        WHERE private_lesson_id = ${lesson.id}
+          AND lesson_status <> 'canceled'
+          AND scheduled_at >= ${monthStart}
+          AND scheduled_at < ${monthEnd}
+      `;
+      if (Number(booked?.count ?? 0) >= lesson.max_bookings_per_month) {
+        const monthLabel = formatInTz(scheduledAt, slot.teacher_timezone, "MMMM yyyy");
+        return NextResponse.json(
+          { error: `This lesson is fully booked for ${monthLabel}. Please pick a time in another month.` },
+          { status: 409 }
+        );
+      }
     }
 
     // Same advertised fee rules as memberships: 0% in the community's first

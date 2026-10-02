@@ -253,7 +253,7 @@ export default function CreatePrivateLessonModal({
             <h3 className="text-lg font-medium">Pricing</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="regular_price">Regular Price ($) *</Label>
+                <Label htmlFor="regular_price">Regular Price (€) *</Label>
                 <Input
                   id="regular_price"
                   type="number"
@@ -267,7 +267,7 @@ export default function CreatePrivateLessonModal({
               </div>
 
               <div>
-                <Label htmlFor="member_price">Member Price ($)</Label>
+                <Label htmlFor="member_price">Member Price (€)</Label>
                 <Input
                   id="member_price"
                   type="number"

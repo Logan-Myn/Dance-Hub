@@ -3,6 +3,12 @@ import { query, queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { userCanManageCommunity } from "@/lib/community-auth";
 import { CreatePrivateLessonData } from "@/types/private-lessons";
+import {
+  lessonPriceError,
+  locationTypeError,
+  maxBookingsError,
+  normalizeRequirements,
+} from "@/lib/private-lesson-validation";
 
 interface Community {
   id: string;
@@ -25,6 +31,21 @@ interface PrivateLesson {
 
 interface Booking {
   id: string;
+}
+
+// The saved values a partial update falls back to. Numeric columns come back
+// from the database as strings.
+interface SavedLessonFields {
+  regular_price: number | string;
+  member_price: number | string | null;
+  max_bookings_per_month: number | null;
+  requirements: string | null;
+}
+
+/** True when the request body sets this field, even to null. */
+function sets(body: object, field: string): boolean {
+  return Object.prototype.hasOwnProperty.call(body, field) &&
+    (body as Record<string, unknown>)[field] !== undefined;
 }
 
 export async function GET(
@@ -121,30 +142,54 @@ export async function PUT(
       );
     }
 
-    // Validate update data
-    if (updateData.regular_price && updateData.regular_price <= 0) {
+    const saved = await queryOne<SavedLessonFields>`
+      SELECT regular_price, member_price, max_bookings_per_month, requirements
+      FROM private_lessons
+      WHERE id = ${lessonId}
+        AND community_id = ${community.id}
+    `;
+
+    if (!saved) {
       return NextResponse.json(
-        { error: "Regular price must be greater than 0" },
-        { status: 400 }
+        { error: "Private lesson not found" },
+        { status: 404 }
       );
     }
 
-    if (updateData.member_price && updateData.regular_price && updateData.member_price > updateData.regular_price) {
-      return NextResponse.json(
-        { error: "Member price cannot be greater than regular price" },
-        { status: 400 }
-      );
+    // A field missing from the body keeps its saved value; an explicit null
+    // clears it (e.g. removing the member discount).
+    const regularPrice = sets(updateData, "regular_price")
+      ? updateData.regular_price
+      : Number(saved.regular_price);
+    const memberPrice = sets(updateData, "member_price")
+      ? updateData.member_price
+      : saved.member_price === null ? null : Number(saved.member_price);
+    const maxBookings = sets(updateData, "max_bookings_per_month")
+      ? updateData.max_bookings_per_month
+      : saved.max_bookings_per_month;
+    const requirements = sets(updateData, "requirements")
+      ? normalizeRequirements(updateData.requirements)
+      : saved.requirements;
+
+    const validationError =
+      lessonPriceError(regularPrice, memberPrice) ??
+      maxBookingsError(maxBookings) ??
+      (sets(updateData, "location_type") ? locationTypeError(updateData.location_type) : null);
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
-    // Build dynamic update query
     const lesson = await queryOne<PrivateLesson>`
       UPDATE private_lessons
       SET
         title = COALESCE(${updateData.title ?? null}, title),
         description = COALESCE(${updateData.description ?? null}, description),
         duration_minutes = COALESCE(${updateData.duration_minutes ?? null}, duration_minutes),
-        regular_price = COALESCE(${updateData.regular_price ?? null}, regular_price),
-        member_price = COALESCE(${updateData.member_price ?? null}, member_price),
+        regular_price = ${regularPrice},
+        member_price = ${memberPrice},
+        location_type = COALESCE(${updateData.location_type ?? null}, location_type),
+        max_bookings_per_month = ${maxBookings},
+        requirements = ${requirements},
         is_active = COALESCE(${updateData.is_active ?? null}, is_active),
         cancellation_cutoff_hours = COALESCE(${updateData.cancellation_cutoff_hours ?? null}, cancellation_cutoff_hours),
         late_refund_policy = COALESCE(${updateData.late_refund_policy ?? null}, late_refund_policy),
