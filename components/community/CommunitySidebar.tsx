@@ -51,7 +51,13 @@ interface CommunitySidebarProps {
   isJoining?: boolean;
 }
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+// Throw on error responses so SWR keeps them out of `data` (an `{ error }`
+// body used to reach `.map` and crash the whole feed).
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
+};
 
 function formatClassTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -118,11 +124,12 @@ export default function CommunitySidebar({
   const [linksExpanded, setLinksExpanded] = useState(true);
   const [, setTick] = useState(0);
 
-  const { data: upcomingClasses } = useSWR<UpcomingClass[]>(
+  const { data } = useSWR<UpcomingClass[]>(
     `/api/community/${communitySlug}/upcoming-classes`,
     fetcher,
     { refreshInterval: 30000 }
   );
+  const upcomingClasses = Array.isArray(data) ? data : [];
 
   // Re-render every minute to update relative times
   useEffect(() => {
@@ -180,7 +187,7 @@ export default function CommunitySidebar({
           </span>
         </div>
 
-        {!upcomingClasses || upcomingClasses.length === 0 ? (
+        {upcomingClasses.length === 0 ? (
           <div className="flex flex-col items-center py-6 text-muted-foreground">
             <Clock className="h-8 w-8 mb-2 opacity-50" />
             <p className="text-sm">No upcoming classes</p>

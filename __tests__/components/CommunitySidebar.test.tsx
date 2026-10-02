@@ -84,3 +84,35 @@ it("hydrates the end date without a mismatch when the browser is in another time
   act(() => root?.unmount());
   container.remove();
 });
+
+it("keeps rendering when the upcoming-classes request fails", async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({ error: "Internal Server Error" }),
+    } as Response)
+  ) as jest.Mock;
+  jest.spyOn(console, "error").mockImplementation(() => {});
+
+  render(sidebar(baseProps));
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 20));
+  });
+
+  expect(screen.getByText("No upcoming classes")).toBeInTheDocument();
+});
+
+it("ignores a successful response that is not a list", async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({ ok: true, json: () => Promise.resolve({ classes: [] }) } as Response)
+  ) as jest.Mock;
+  jest.spyOn(console, "error").mockImplementation(() => {});
+
+  render(sidebar(baseProps));
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 20));
+  });
+
+  expect(screen.getByText("No upcoming classes")).toBeInTheDocument();
+});
