@@ -189,12 +189,13 @@ check_port_owner() {
 # then crash-looped on EADDRINUSE while the orphan kept serving with a dead
 # stdout/stderr, and froze at 100% CPU on its first logged error.
 # PM2 is pointed at the `current` symlink, so `pm2 resurrect` after a reboot
-# starts whatever release is current.
+# starts whatever release is current. The 30s kill timeout (PM2's default is
+# 1.6s) lets broadcast sends still running in after() finish on a restart.
 start_current() {
   say "(Re)starting PM2 $APP_NAME from $CURRENT_LINK..."
   pm2 delete "$APP_NAME" 2> /dev/null || true
   pm2 start "$CURRENT_LINK/node_modules/next/dist/bin/next" --name "$APP_NAME" \
-    --cwd "$CURRENT_LINK" --interpreter node -- start -p "$APP_PORT"
+    --cwd "$CURRENT_LINK" --kill-timeout 30000 --interpreter node -- start -p "$APP_PORT"
   pm2 save
   check_port_owner "$CURRENT_LINK"
 }
