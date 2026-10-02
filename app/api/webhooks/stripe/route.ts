@@ -89,6 +89,17 @@ async function handleBroadcastSubscriptionLifecycle(sub: Stripe.Subscription): P
   if (sub.metadata?.purpose !== 'broadcast_subscription') return false;
   const communityId = sub.metadata?.communityId;
   if (communityId) {
+    // Deleting a community cancels its broadcast subscription, and the
+    // resulting event arrives after the community row (and this row, by
+    // cascade) is gone. Inserting it again would hit the foreign key and make
+    // Stripe retry for days, so there is nothing to record.
+    const community = await queryOne<{ id: string }>`
+      SELECT id FROM communities WHERE id = ${communityId}
+    `;
+    if (!community) {
+      console.log('⏭️ Broadcast subscription event for a deleted community, skipping:', sub.id);
+      return true;
+    }
     // Upsert so we handle both initial activation and subsequent updates
     await upsertBroadcastSubscription({
       communityId,

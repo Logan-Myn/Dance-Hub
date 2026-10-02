@@ -1,5 +1,6 @@
 import { POST } from '@/app/api/webhooks/stripe/route';
 import { claimWebhookEvent, finishWebhookEvent } from '@/lib/stripe-webhook-events';
+import { upsertBroadcastSubscription } from '@/lib/broadcasts/billing';
 
 // The event under test is whatever constructEvent returns; signatures aren't checked here.
 const mockConstructEvent = jest.fn();
@@ -344,5 +345,36 @@ describe('private lesson payment_intent.succeeded', () => {
     expect(insert).toMatch(/INSERT INTO lesson_bookings/);
     expect(insert).toMatch(/ON CONFLICT \(stripe_payment_intent_id\) DO NOTHING/);
     expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe('broadcast subscription lifecycle', () => {
+  const broadcastSub = subscription({
+    id: 'sub_bc',
+    status: 'canceled',
+    customer: 'cus_platform',
+    metadata: { purpose: 'broadcast_subscription', communityId: 'c1' },
+  });
+
+  it('skips with 200 when the community has been deleted', async () => {
+    mockConstructEvent.mockReturnValue({ ...subscriptionEvent('customer.subscription.deleted', broadcastSub), account: undefined });
+    mockQueryOne.mockResolvedValue(null); // community row is gone
+
+    const res = await post();
+
+    expect(res.status).toBe(200);
+    expect(upsertBroadcastSubscription).not.toHaveBeenCalled();
+    expect(mockFinish).toHaveBeenCalledWith('evt_2', true);
+  });
+
+  it('still records the status while the community exists', async () => {
+    mockConstructEvent.mockReturnValue({ ...subscriptionEvent('customer.subscription.updated', broadcastSub), account: undefined });
+
+    const res = await post();
+
+    expect(res.status).toBe(200);
+    expect(upsertBroadcastSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ communityId: 'c1', stripeSubscriptionId: 'sub_bc', status: 'canceled' }),
+    );
   });
 });
