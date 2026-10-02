@@ -369,14 +369,16 @@ describe('private lesson payment_intent.succeeded', () => {
 
   it('answers 200 without a second set of emails when the booking already exists', async () => {
     mockConstructEvent.mockReturnValue(lessonEvent);
-    mockQueryOne.mockResolvedValue(null); // ON CONFLICT DO NOTHING returned no row
+    // The booking for this payment intent is already recorded. (A concurrent
+    // insert is covered by ON CONFLICT, see private-lesson-booking.test.ts.)
+    mockQueryOne.mockResolvedValue({ id: 'booking-1' });
 
     const res = await post();
 
     expect(res.status).toBe(200);
-    const insert = (mockQueryOne.mock.calls[0][0] as string[]).join('?');
-    expect(insert).toMatch(/INSERT INTO lesson_bookings/);
-    expect(insert).toMatch(/ON CONFLICT \(stripe_payment_intent_id\) DO NOTHING/);
+    const lookup = (mockQueryOne.mock.calls[0][0] as string[]).join('?');
+    expect(lookup).toMatch(/FROM lesson_bookings WHERE stripe_payment_intent_id = \?/);
+    expect(mockQueryOne.mock.calls.some(([strings]) => /INSERT INTO lesson_bookings/.test((strings as string[]).join('?')))).toBe(false);
     expect(mockSendEmail).not.toHaveBeenCalled();
   });
 });

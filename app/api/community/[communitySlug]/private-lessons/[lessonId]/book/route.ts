@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { queryOne } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { getSession } from "@/lib/auth-session";
-import { formatInTz, naiveToUtc } from "@/lib/timezone";
+import { findBookableSlot, monthlyLimitReached, slotStartsAt } from "@/lib/private-lesson-booking";
 import { privateLessonFeePercentage } from "@/lib/private-lesson-fee";
 import { CreateLessonBookingData } from "@/types/private-lessons";
 
@@ -27,15 +27,6 @@ interface Lesson {
 
 interface Membership {
   id: string;
-}
-
-// Availability slot as the student saw it: a date and time in the teacher's
-// timezone. The lesson time is derived from it, never taken from the client.
-interface BookableSlot {
-  id: string;
-  availability_date: string;
-  start_time: string;
-  teacher_timezone: string;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -130,19 +121,7 @@ export async function POST(
 
     // The slot must be one of this lesson's teacher's open slots in this
     // community; slot ids are visible to anyone who can see availability.
-    const slot = await queryOne<BookableSlot>`
-      SELECT
-        tas.id,
-        to_char(tas.availability_date, 'YYYY-MM-DD') AS availability_date,
-        to_char(tas.start_time, 'HH24:MI:SS') AS start_time,
-        COALESCE(p.timezone, 'UTC') AS teacher_timezone
-      FROM teacher_availability_slots tas
-      LEFT JOIN profiles p ON p.auth_user_id = tas.teacher_id
-      WHERE tas.id = ${slotId}
-        AND tas.community_id = ${community.id}
-        AND tas.teacher_id = ${lesson.teacher_id}
-        AND tas.is_active = true
-    `;
+    const slot = await findBookableSlot(slotId, community.id, lesson.teacher_id);
 
     if (!slot) {
       return NextResponse.json(
@@ -151,11 +130,7 @@ export async function POST(
       );
     }
 
-    // Same conversion the slot picker uses to show the time to the student.
-    const scheduledAt = naiveToUtc(
-      `${slot.availability_date}T${slot.start_time}`,
-      slot.teacher_timezone
-    );
+    const scheduledAt = slotStartsAt(slot);
     if (scheduledAt.getTime() <= Date.now()) {
       return NextResponse.json(
         { error: "This time slot has already passed. Please pick another time." },
@@ -181,26 +156,12 @@ export async function POST(
 
     // The teacher's monthly cap counts bookings in the slot's calendar month,
     // in the teacher's timezone.
-    if (lesson.max_bookings_per_month) {
-      const [year, month] = slot.availability_date.split("-").map(Number);
-      const nextMonth = month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, "0")}`;
-      const monthStart = naiveToUtc(`${slot.availability_date.slice(0, 7)}-01T00:00:00`, slot.teacher_timezone);
-      const monthEnd = naiveToUtc(`${nextMonth}-01T00:00:00`, slot.teacher_timezone);
-      const booked = await queryOne<{ count: number }>`
-        SELECT COUNT(*)::int AS count
-        FROM lesson_bookings
-        WHERE private_lesson_id = ${lesson.id}
-          AND lesson_status <> 'canceled'
-          AND scheduled_at >= ${monthStart}
-          AND scheduled_at < ${monthEnd}
-      `;
-      if (Number(booked?.count ?? 0) >= lesson.max_bookings_per_month) {
-        const monthLabel = formatInTz(scheduledAt, slot.teacher_timezone, "MMMM yyyy");
-        return NextResponse.json(
-          { error: `This lesson is fully booked for ${monthLabel}. Please pick a time in another month.` },
-          { status: 409 }
-        );
-      }
+    const monthly = await monthlyLimitReached(lesson, slot);
+    if (monthly.reached) {
+      return NextResponse.json(
+        { error: `This lesson is fully booked for ${monthly.monthLabel}. Please pick a time in another month.` },
+        { status: 409 }
+      );
     }
 
     // Same advertised fee rules as memberships: 0% in the community's first

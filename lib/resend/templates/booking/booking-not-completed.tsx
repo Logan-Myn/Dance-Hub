@@ -3,7 +3,16 @@ import { Heading, Text, Section } from '@react-email/components';
 import { BaseLayout } from '../base-layout';
 import { EMAIL_STYLES, EMAIL_COLORS } from '../index';
 
+/**
+ * Why a paid lesson was not booked:
+ * - slot_taken: another payment for the same time was recorded first.
+ * - unavailable: the time or the lesson was removed, or the time passed.
+ * - monthly_limit: the lesson's monthly booking limit filled up.
+ */
+export type BookingNotCompletedReason = 'slot_taken' | 'unavailable' | 'monthly_limit';
+
 interface Props {
+  reason: BookingNotCompletedReason;
   studentName: string;
   lessonTitle: string;
   lessonDate: string;
@@ -11,9 +20,10 @@ interface Props {
   currency: string;
 }
 
-// Sent when two payments for the same time slot raced: the one recorded
-// second is refunded and no booking is created for it.
-export const BookingSlotTakenEmail: React.FC<Props> = ({
+// Sent when a lesson payment went through but the booking could not be
+// created; the payment is refunded in full.
+export const BookingNotCompletedEmail: React.FC<Props> = ({
+  reason,
   studentName,
   lessonTitle,
   lessonDate,
@@ -21,13 +31,25 @@ export const BookingSlotTakenEmail: React.FC<Props> = ({
   currency,
 }) => {
   const preview = `Your ${lessonTitle} booking could not be completed`;
+  const heading =
+    reason === 'slot_taken'
+      ? 'That time was just booked'
+      : reason === 'monthly_limit'
+        ? 'This lesson is fully booked that month'
+        : 'That time is no longer available';
+  const explanation =
+    reason === 'slot_taken'
+      ? 'was booked a moment before your payment went through'
+      : reason === 'monthly_limit'
+        ? "falls in a month the teacher's bookings for this lesson have filled up"
+        : 'is no longer available';
   return (
     <BaseLayout preview={preview}>
-      <Heading style={EMAIL_STYLES.heading}>That time was just booked</Heading>
+      <Heading style={EMAIL_STYLES.heading}>{heading}</Heading>
       <Text style={EMAIL_STYLES.paragraph}>Hi {studentName},</Text>
       <Text style={EMAIL_STYLES.paragraph}>
-        The time you picked for <strong>{lessonTitle}</strong> ({lessonDate}) was booked a
-        moment before your payment went through, so this payment could not reserve it.
+        The time you picked for <strong>{lessonTitle}</strong> ({lessonDate}) {explanation}, so
+        this payment could not book it.
       </Text>
       <Section style={{
         backgroundColor: EMAIL_COLORS.background,
@@ -46,4 +68,4 @@ export const BookingSlotTakenEmail: React.FC<Props> = ({
   );
 };
 
-export default BookingSlotTakenEmail;
+export default BookingNotCompletedEmail;

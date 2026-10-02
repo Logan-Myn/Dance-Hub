@@ -6,7 +6,10 @@ import { getEmailService } from '@/lib/resend/email-service';
 import { BookingConfirmationEmail } from '@/lib/resend/templates/booking/booking-confirmation';
 import { TeacherBookingNotificationEmail } from '@/lib/resend/templates/booking/teacher-booking-notification';
 import { PaymentReceiptEmail } from '@/lib/resend/templates/booking/payment-receipt';
-import { BookingSlotTakenEmail } from '@/lib/resend/templates/booking/booking-slot-taken';
+import {
+  BookingNotCompletedEmail,
+  type BookingNotCompletedReason,
+} from '@/lib/resend/templates/booking/booking-not-completed';
 import { MemberWelcomeEmail } from '@/lib/resend/templates/community/member-welcome';
 import { CommunityOpeningEmail } from '@/lib/resend/templates/community/community-opening';
 import {
@@ -15,6 +18,12 @@ import {
 } from '@/lib/broadcasts/billing';
 import { claimWebhookEvent, finishWebhookEvent } from '@/lib/stripe-webhook-events';
 import { LIVE_SUBSCRIPTION_STATUSES, memberSubscriptionStatus } from '@/lib/membership-ended';
+import {
+  findBookableSlot,
+  lessonTimeForEmail,
+  monthlyLimitReached,
+  slotStartsAt,
+} from '@/lib/private-lesson-booking';
 import React from 'react';
 import Stripe from 'stripe';
 
@@ -40,12 +49,15 @@ interface PrivateLessonDetails {
   title: string;
   duration: number;
   teacher_id: string;
+  is_active: boolean;
+  max_bookings_per_month: number | null;
 }
 
 interface TeacherProfile {
   display_name: string | null;
   full_name: string | null;
   email: string | null;
+  timezone: string | null;
 }
 
 interface Community {
@@ -344,14 +356,52 @@ function isSlotTakenError(error: unknown): boolean {
 }
 
 /**
- * Two students paid for the same slot and the other payment was recorded
- * first. Refund this one in full on the teacher's connected account and tell
- * the student. Throws when the refund fails, so the event is retried; the
- * idempotency key keeps a retry from refunding twice.
+ * A PaymentIntent doesn't expire, so by the time it is paid the lesson may no
+ * longer be bookable. Recheck what the book route checked: the lesson is
+ * still active, the slot is still one of the teacher's active slots and
+ * hasn't started, and the lesson's monthly limit isn't full. Returns why the
+ * payment can't be booked, or null.
  */
-async function refundSlotTakenPayment(
+async function recheckLessonPayment(
+  lesson: PrivateLessonDetails | null,
+  metadata: Stripe.Metadata,
+  paymentIntentId: string,
+): Promise<BookingNotCompletedReason | null> {
+  if (!lesson || !lesson.is_active) return 'unavailable';
+
+  const slotId = metadata.availability_slot_id;
+  if (!slotId) {
+    // PaymentIntents from before slots were required carry only a time.
+    const startsAt = metadata.scheduled_at ? new Date(metadata.scheduled_at) : null;
+    return startsAt && startsAt.getTime() <= Date.now() ? 'unavailable' : null;
+  }
+
+  const slot = await findBookableSlot(slotId, metadata.community_id, lesson.teacher_id);
+  if (!slot || slotStartsAt(slot).getTime() <= Date.now()) return 'unavailable';
+
+  const monthly = await monthlyLimitReached(
+    { id: metadata.lesson_id, max_bookings_per_month: lesson.max_bookings_per_month },
+    slot,
+    paymentIntentId,
+  );
+  return monthly.reached ? 'monthly_limit' : null;
+}
+
+/**
+ * Refunds a lesson payment that could not be booked, in full and on the
+ * teacher's connected account, then tells the student why. Throws when the
+ * refund fails, so the event is retried (the claim is released); the
+ * idempotency key keeps a retry from refunding twice.
+ *
+ * Follow-up (not done): the card was already captured, so the processing fee
+ * isn't returned and the teacher absorbs it. Authorizing with manual capture
+ * and capturing only once the booking is recorded would avoid that.
+ */
+async function refundUnbookedLessonPayment(
   paymentIntent: Stripe.PaymentIntent,
   account: string,
+  reason: BookingNotCompletedReason,
+  details: { lessonTitle: string; studentName: string; studentTimezone: string | null | undefined },
 ): Promise<void> {
   const metadata = paymentIntent.metadata;
   try {
@@ -359,31 +409,37 @@ async function refundSlotTakenPayment(
       {
         payment_intent: paymentIntent.id,
         refund_application_fee: true,
-        metadata: { reason: 'slot_already_booked' },
+        metadata: { reason: `lesson_${reason}` },
       },
-      { stripeAccount: account, idempotencyKey: `slot-taken-refund-${paymentIntent.id}` }
+      { stripeAccount: account, idempotencyKey: `lesson-refund-${reason}-${paymentIntent.id}` }
     );
   } catch (err) {
-    if ((err as { code?: string }).code !== 'charge_already_refunded') throw err;
+    if ((err as { code?: string }).code !== 'charge_already_refunded') {
+      // The app has no ops alert channel; alert on this marker in the logs.
+      console.error('[REFUND_FAILED] lesson payment could not be refunded, the event will be retried', {
+        paymentIntentId: paymentIntent.id,
+        accountId: account,
+        reason,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
   }
-  console.warn('↩️ Slot already booked, refunded payment intent:', paymentIntent.id);
+  console.warn('↩️ Lesson not bookable, refunded payment intent:', paymentIntent.id, reason);
 
   try {
-    const lesson = await queryOne<{ title: string }>`
-      SELECT title FROM private_lessons WHERE id = ${metadata.lesson_id}
-    `;
-    const lessonDate = metadata.scheduled_at
-      ? new Date(metadata.scheduled_at).toLocaleString('en-GB', {
-          dateStyle: 'long',
-          timeStyle: 'short',
-        })
-      : 'the time you picked';
+    let lessonDate = 'the time you picked';
+    if (metadata.scheduled_at) {
+      const { date, time } = lessonTimeForEmail(new Date(metadata.scheduled_at), details.studentTimezone);
+      lessonDate = `${date} at ${time}`;
+    }
     await getEmailService().sendNotificationEmail(
       metadata.student_email,
       'Your lesson booking could not be completed',
-      React.createElement(BookingSlotTakenEmail, {
-        studentName: metadata.student_name?.trim() || 'there',
-        lessonTitle: lesson?.title || 'your private lesson',
+      React.createElement(BookingNotCompletedEmail, {
+        reason,
+        studentName: details.studentName,
+        lessonTitle: details.lessonTitle,
         lessonDate,
         refundedAmount: paymentIntent.amount_received
           ? paymentIntent.amount_received / 100
@@ -392,7 +448,7 @@ async function refundSlotTakenPayment(
       })
     );
   } catch (emailError) {
-    console.error('❌ Error sending slot-taken email (non-critical):', emailError);
+    console.error('❌ Error sending booking-not-completed email (non-critical):', emailError);
   }
 }
 
@@ -551,6 +607,52 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
           }
 
           try {
+            // A redelivered event for a payment that is already booked stops
+            // here, before the rechecks below could refund a valid booking.
+            const recorded = await queryOne<LessonBooking>`
+              SELECT id FROM lesson_bookings WHERE stripe_payment_intent_id = ${paymentIntent.id}
+            `;
+            if (recorded) {
+              console.log('⏭️ Booking already recorded for payment intent:', paymentIntent.id);
+              return NextResponse.json({ received: true, duplicate: true });
+            }
+
+            const lessonDetails = await queryOne<PrivateLessonDetails>`
+              SELECT title, duration_minutes as duration, teacher_id, is_active, max_bookings_per_month
+              FROM private_lessons
+              WHERE id = ${metadata.lesson_id}
+                AND community_id = ${metadata.community_id}
+            `;
+
+            // Get student profile so the emails can greet them by their real
+            // name when the booking form's optional 'Full Name' field is blank,
+            // and show the lesson time in their timezone.
+            let studentProfile: TeacherProfile | null = null;
+            if (metadata.student_id) {
+              studentProfile = await queryOne<TeacherProfile>`
+                SELECT display_name, full_name, email, timezone
+                FROM profiles
+                WHERE auth_user_id = ${metadata.student_id}
+              `;
+            }
+            const studentDisplayName =
+              metadata.student_name?.trim() ||
+              studentProfile?.display_name ||
+              studentProfile?.full_name ||
+              'Student';
+            const lessonTitle = lessonDetails?.title || 'Private Lesson';
+            const refundDetails = {
+              lessonTitle,
+              studentName: studentDisplayName,
+              studentTimezone: studentProfile?.timezone,
+            };
+
+            const unbookable = await recheckLessonPayment(lessonDetails, metadata, paymentIntent.id);
+            if (unbookable) {
+              await refundUnbookedLessonPayment(paymentIntent, event.account, unbookable, refundDetails);
+              return NextResponse.json({ received: true, refunded: true, reason: unbookable });
+            }
+
             // Parse contact_info JSON if it exists
             let contactInfo = {};
             try {
@@ -606,8 +708,8 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
               `;
             } catch (insertError) {
               if (!isSlotTakenError(insertError)) throw insertError;
-              await refundSlotTakenPayment(paymentIntent, event.account);
-              return NextResponse.json({ received: true, refunded: true });
+              await refundUnbookedLessonPayment(paymentIntent, event.account, 'slot_taken', refundDetails);
+              return NextResponse.json({ received: true, refunded: true, reason: 'slot_taken' });
             }
 
             if (!newBooking) {
@@ -617,38 +719,15 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
 
             console.log('✅ Successfully created new booking:', newBooking.id);
 
-            // Get lesson details
-            const lessonDetails = await queryOne<PrivateLessonDetails>`
-              SELECT title, duration_minutes as duration, teacher_id
-              FROM private_lessons
-              WHERE id = ${metadata.lesson_id}
-            `;
-
             // Get teacher profile (teacher_id is Better Auth ID, stored as auth_user_id in profiles)
             let teacherProfile: TeacherProfile | null = null;
             if (lessonDetails?.teacher_id) {
               teacherProfile = await queryOne<TeacherProfile>`
-                SELECT display_name, full_name, email
+                SELECT display_name, full_name, email, timezone
                 FROM profiles
                 WHERE auth_user_id = ${lessonDetails.teacher_id}
               `;
             }
-
-            // Get student profile so the emails can greet them by their real
-            // name when the booking form's optional 'Full Name' field is blank.
-            let studentProfile: TeacherProfile | null = null;
-            if (metadata.student_id) {
-              studentProfile = await queryOne<TeacherProfile>`
-                SELECT display_name, full_name, email
-                FROM profiles
-                WHERE auth_user_id = ${metadata.student_id}
-              `;
-            }
-            const studentDisplayName =
-              metadata.student_name?.trim() ||
-              studentProfile?.display_name ||
-              studentProfile?.full_name ||
-              'Student';
 
             // Video session uses LiveKit and is provisioned lazily on first
             // /video-token request. The email's "Join" link points at the
@@ -659,22 +738,13 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
             try {
               const emailService = getEmailService();
               const scheduledDate = metadata.scheduled_at ? new Date(metadata.scheduled_at) : new Date();
-              const formattedDate = scheduledDate.toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              });
-              const formattedTime = scheduledDate.toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-              });
+              // Each recipient sees the time in their own profile timezone.
+              const studentTime = lessonTimeForEmail(scheduledDate, studentProfile?.timezone);
+              const teacherTime = lessonTimeForEmail(scheduledDate, teacherProfile?.timezone);
 
               const teacherName = teacherProfile?.display_name || teacherProfile?.full_name || 'Teacher';
               const teacherEmail = teacherProfile?.email;
               const pricePaid = parseFloat(metadata.price_paid);
-              const lessonTitle = lessonDetails?.title || 'Private Lesson';
 
               const emailJobs: Promise<unknown>[] = [
                 emailService.sendNotificationEmail(
@@ -684,8 +754,8 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
                     studentName: studentDisplayName,
                     teacherName,
                     lessonTitle,
-                    lessonDate: formattedDate,
-                    lessonTime: formattedTime,
+                    lessonDate: studentTime.date,
+                    lessonTime: studentTime.time,
                     duration: lessonDetails?.duration || 60,
                     price: pricePaid,
                     videoRoomUrl,
@@ -727,8 +797,8 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
                       teacherName,
                       studentName: studentDisplayName,
                       lessonTitle,
-                      lessonDate: formattedDate,
-                      lessonTime: formattedTime,
+                      lessonDate: teacherTime.date,
+                      lessonTime: teacherTime.time,
                       duration: lessonDetails?.duration || 60,
                       videoRoomUrl,
                       bookingId: newBooking.id,
