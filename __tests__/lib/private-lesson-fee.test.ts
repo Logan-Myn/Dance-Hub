@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { privateLessonFeePercentage } from '@/lib/private-lesson-fee';
+import { platformFeePercent, privateLessonFeePercentage } from '@/lib/private-lesson-fee';
 
 const NOW = new Date('2026-10-02T12:00:00Z');
 const daysAgo = (d: number) => new Date(NOW.getTime() - d * 24 * 3600 * 1000).toISOString();
@@ -31,5 +31,14 @@ describe('privateLessonFeePercentage (advertised on the landing page)', () => {
     expect(
       privateLessonFeePercentage({ created_at: new Date(daysAgo(400)), active_member_count: '120' }, NOW),
     ).toBe(4);
+  });
+});
+
+describe('platformFeePercent (pure, reusable by membership billing)', () => {
+  it('takes the community age and size explicitly', () => {
+    expect(platformFeePercent({ communityCreatedAt: daysAgo(10), activeMemberCount: 500, now: NOW })).toBe(0);
+    expect(platformFeePercent({ communityCreatedAt: daysAgo(31), activeMemberCount: 49, now: NOW })).toBe(8);
+    expect(platformFeePercent({ communityCreatedAt: daysAgo(31), activeMemberCount: 50, now: NOW })).toBe(6);
+    expect(platformFeePercent({ communityCreatedAt: daysAgo(31), activeMemberCount: 101, now: NOW })).toBe(4);
   });
 });
