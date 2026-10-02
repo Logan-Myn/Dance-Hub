@@ -2,9 +2,13 @@
  * The onboarding wizard keeps only its step position in localStorage, never
  * the bank, identity or address details typed into it. A blob saved by the
  * old wizard is cleaned on load, and the saved step is never one behind.
+ *
+ * Finishing calls /verify, checks the response, and only completes when the
+ * account is verified or submitted and under review.
  */
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
+import { toast } from "react-hot-toast";
 import userEvent from "@testing-library/user-event";
 import { OnboardingWizard } from "@/components/stripe-onboarding/OnboardingWizard";
 
@@ -80,9 +84,21 @@ jest.mock("@/components/stripe-onboarding/steps/DocumentUploadStep", () => ({
     </div>
   ),
 }));
-jest.mock("@/components/stripe-onboarding/steps/VerificationStep", () => ({
-  VerificationStep: () => <p>verification step</p>,
-}));
+jest.mock("@/components/stripe-onboarding/steps/VerificationStep", () => {
+  const React = require("react");
+  return {
+    VerificationStep: ({ onFinish }: { onFinish: () => Promise<boolean> }) => {
+      const [result, setResult] = React.useState("");
+      return (
+        <div>
+          <p>verification step</p>
+          <button onClick={async () => setResult(String(await onFinish()))}>finish</button>
+          <p>finished: {result}</p>
+        </div>
+      );
+    },
+  };
+});
 
 const KEY = "stripe-onboarding-c1";
 const SENSITIVE = ["Secret street", "+3725550000", "9876", "1987", "EE382200221020145685", "000123456789", "110000000"];
@@ -154,4 +170,77 @@ it("drops a blob it cannot read", async () => {
 
   expect(await screen.findByText("business step")).toBeInTheDocument();
   await waitFor(() => expect(JSON.parse(stored())).toEqual({ currentStep: 1, completedSteps: [] }));
+});
+
+describe("finishing", () => {
+  function setup(verifyResponse: { ok: boolean; body: object }) {
+    window.localStorage.setItem(KEY, JSON.stringify({ currentStep: 5, completedSteps: [1, 2, 3, 4] }));
+    const fetchMock = jest.fn((url: string) => {
+      if (url === "/api/community/salsa") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ stripe_account_id: "acct_1" }) });
+      }
+      if (url === "/api/stripe/custom-account/acct_1/status") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ country: "EE" }) });
+      }
+      if (url === "/api/stripe/custom-account/acct_1/verify") {
+        return Promise.resolve({ ok: verifyResponse.ok, json: () => Promise.resolve(verifyResponse.body) });
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const onComplete = jest.fn();
+    render(<OnboardingWizard communityId="c1" communitySlug="salsa" onComplete={onComplete} />);
+    return { fetchMock, onComplete };
+  }
+
+  async function finish() {
+    await screen.findByText("verification step");
+    // Wait for the linked account to load.
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Loaded your payout account"));
+    await userEvent.click(screen.getByText("finish"));
+  }
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it("completes when the account is verified", async () => {
+    const { fetchMock, onComplete } = setup({ ok: true, body: { success: true, verified: true } });
+    await finish();
+
+    expect(await screen.findByText("finished: true")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/api/stripe/custom-account/acct_1/verify", { method: "POST" });
+    expect(onComplete).toHaveBeenCalledWith("acct_1");
+    expect(window.localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it("completes when everything is submitted and under review", async () => {
+    const { onComplete } = setup({
+      ok: true,
+      body: { success: true, verified: false, status: "pending_review" },
+    });
+    await finish();
+
+    expect(await screen.findByText("finished: true")).toBeInTheDocument();
+    expect(onComplete).toHaveBeenCalled();
+  });
+
+  it("stays on the step when information is still missing", async () => {
+    const { onComplete } = setup({
+      ok: true,
+      body: { success: false, verified: false, requirements: { currentlyDue: ["external_account"] } },
+    });
+    await finish();
+
+    expect(await screen.findByText("finished: false")).toBeInTheDocument();
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalled();
+  });
+
+  it("stays on the step when the check fails", async () => {
+    const { onComplete } = setup({ ok: false, body: { error: "Failed to verify account" } });
+    await finish();
+
+    expect(await screen.findByText("finished: false")).toBeInTheDocument();
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(KEY)).not.toBeNull();
+  });
 });

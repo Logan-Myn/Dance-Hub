@@ -124,6 +124,8 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
   // Don't save until the saved position has been read, or the first render's
   // step 1 would overwrite it.
   const [progressRestored, setProgressRestored] = useState(false);
+  // Whether the community's linked account has been looked up yet.
+  const [accountLookupDone, setAccountLookupDone] = useState(false);
   const [onboardingData, setOnboardingData] = useState<OnboardingData>({
     businessInfo: {
       businessType: "individual",
@@ -189,6 +191,8 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
         }
       } catch (error) {
         console.error("Error checking existing Stripe account:", error);
+      } finally {
+        if (!cancelled) setAccountLookupDone(true);
       }
     };
 
@@ -317,37 +321,42 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
     }
   };
 
-  const handleFinish = async () => {
+  // Resolves true when onboarding is done, false to keep the owner on the
+  // verification step (the step then re-checks its status).
+  const handleFinish = async (): Promise<boolean> => {
+    const accountId = onboardingData.accountId;
+    if (!accountId) {
+      toast.error("We couldn't find your payout account. Go back to the first step to set it up.");
+      return false;
+    }
+
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      
-      if (!onboardingData.accountId) {
-        throw new Error("No account ID available");
+      const verifyResponse = await fetch(`/api/stripe/custom-account/${accountId}/verify`, {
+        method: "POST",
+      });
+      const result = await verifyResponse.json().catch(() => ({}));
+
+      if (!verifyResponse.ok) {
+        throw new Error(result.error || "We couldn't check your verification status. Please try again.");
       }
 
-      // Verify the account is ready
-      const statusResponse = await fetch(`/api/stripe/custom-account/${onboardingData.accountId}/status`);
-      const statusData = await statusResponse.json();
-
-      if (statusData.requiresVerification) {
-        // Final verification step
-        const verifyResponse = await fetch(`/api/stripe/custom-account/${onboardingData.accountId}/verify`, {
-          method: "POST",
-        });
-
-        if (!verifyResponse.ok) {
-          throw new Error("Verification failed");
-        }
+      if (result.verified) {
+        toast.success("Payments are set up");
+      } else if (result.status === "pending_review") {
+        toast.success("Your details are submitted. Payments will be enabled once verification is complete.");
+      } else {
+        toast.error("Some information is still needed. Check the list on this page.");
+        return false;
       }
 
-      // Clear the saved progress
       clearSavedProgress(communityId);
-      
-      toast.success("Stripe onboarding completed successfully!");
-      onComplete(onboardingData.accountId);
+      onComplete(accountId);
+      return true;
     } catch (error) {
       console.error("Error completing onboarding:", error);
-      toast.error("Failed to complete onboarding");
+      toast.error(error instanceof Error ? error.message : "Failed to complete onboarding");
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -375,7 +384,14 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
       case 4:
         return <DocumentUploadStep {...stepProps} />;
       case 5:
-        return <VerificationStep {...stepProps} onFinish={handleFinish} />;
+        return (
+          <VerificationStep
+            {...stepProps}
+            onFinish={handleFinish}
+            onGoToStep={(step: number) => setCurrentStep(step)}
+            accountLoading={Boolean(session) && !accountLookupDone}
+          />
+        );
       default:
         return null;
     }

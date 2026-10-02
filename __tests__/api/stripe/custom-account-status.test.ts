@@ -61,3 +61,34 @@ it('returns progress and masked bank info but none of the stored personal detail
     { id: 'ba_1', last4: '5685', bank_name: 'LHV', currency: 'eur', default_for_currency: true },
   ]);
 });
+
+it('reports what Stripe is still reviewing and why the account is disabled', async () => {
+  mockRetrieve.mockResolvedValue({
+    id: 'acct_1',
+    country: 'EE',
+    charges_enabled: false,
+    payouts_enabled: false,
+    details_submitted: true,
+    requirements: {
+      currently_due: [],
+      past_due: [],
+      eventually_due: [],
+      pending_verification: ['individual.verification.document'],
+      disabled_reason: 'requirements.pending_verification',
+      errors: [
+        { code: 'verification_document_not_readable', reason: 'The document could not be read.', requirement: 'individual.verification.document' },
+      ],
+    },
+  });
+
+  const body = await (await GET(get(), params)).json();
+
+  expect(body.requirements.pendingVerification).toEqual([
+    { code: 'individual.verification.document', message: 'Government-issued photo ID required', category: 'personal' },
+  ]);
+  expect(body.requirements.disabledReason).toBe('requirements.pending_verification');
+  expect(body.requirements.errors).toEqual([
+    { code: 'individual.verification.document', reason: 'The document could not be read.' },
+  ]);
+  expect(body.isFullyVerified).toBe(false);
+});

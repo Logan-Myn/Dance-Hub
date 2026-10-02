@@ -32,13 +32,37 @@ export const STRIPE_REQUIREMENT_MESSAGES: Record<string, string> = {
   'company.executives_provided': 'Company executives information required',
   'company.owners_provided': 'Company owners information required',
   'external_account': 'Bank account information required',
+  'business_profile.url': 'Business website required',
+  'business_profile.mcc': 'Business category required',
+  'business_type': 'Business type required',
+  'tos_acceptance': 'Terms of service acceptance required',
 };
+
+// Requirements about a person (the individual, a company's representative,
+// or another person on the account) share the individual messages.
+function requirementLookupCode(code: string): string {
+  return code.replace(/^(person_[A-Za-z0-9]+|representative)\./, 'individual.');
+}
+
+// Stripe codes are often more specific than the table (individual.dob.day,
+// company.address.city), so use the longest listed prefix. Anything unknown
+// becomes readable text rather than a raw code.
+function requirementMessage(code: string): string {
+  const parts = requirementLookupCode(code).split('.');
+  for (let n = parts.length; n > 0; n--) {
+    const message = STRIPE_REQUIREMENT_MESSAGES[parts.slice(0, n).join('.')];
+    if (message) return message;
+  }
+  const last = parts[parts.length - 1].replace(/_/g, ' ');
+  return `${last.charAt(0).toUpperCase()}${last.slice(1)} required`;
+}
 
 export type StripeRequirementCategory = 'personal' | 'business' | 'banking' | 'other';
 
 export function categorizeStripeRequirement(code: string): StripeRequirementCategory {
+  code = requirementLookupCode(code);
   if (code.startsWith('individual.')) return 'personal';
-  if (code.startsWith('company.')) return 'business';
+  if (/^(company\.|business_profile|business_type|tos_acceptance)/.test(code)) return 'business';
   if (code.includes('external_account')) return 'banking';
   return 'other';
 }
@@ -52,7 +76,7 @@ export interface StripeRequirementDetail {
 export function mapStripeRequirement(code: string): StripeRequirementDetail {
   return {
     code,
-    message: STRIPE_REQUIREMENT_MESSAGES[code] ?? code,
+    message: requirementMessage(code),
     category: categorizeStripeRequirement(code),
   };
 }

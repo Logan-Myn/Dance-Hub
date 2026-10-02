@@ -37,8 +37,12 @@ export async function GET(request: Request, props: { params: Promise<{ accountId
       currentlyDue: (account.requirements?.currently_due ?? []).map(mapStripeRequirement),
       pastDue: (account.requirements?.past_due ?? []).map(mapStripeRequirement),
       eventuallyDue: (account.requirements?.eventually_due ?? []).map(mapStripeRequirement),
+      // Submitted and being checked by Stripe; nothing for the owner to do yet.
+      pendingVerification: (account.requirements?.pending_verification ?? []).map(mapStripeRequirement),
       currentDeadline: account.requirements?.current_deadline,
       disabledReason: account.requirements?.disabled_reason,
+      // Why a submitted detail was rejected (e.g. an unreadable document).
+      errors: (account.requirements?.errors ?? []).map((e) => ({ code: e.requirement, reason: e.reason })),
     };
 
     const isFullyVerified = isStripeAccountFullyVerified(account);
