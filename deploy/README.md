@@ -33,6 +33,11 @@ A deploy:
 A failed build removes its half-built directory and leaves the running
 release untouched. Only one deploy per app can run at a time.
 
+The restart step (in deploys, `rebuild` and `rollback`) normally takes 1-2 s.
+It can take up to 30 s: pm2 gives the old server that long to exit
+(`--kill-timeout 30000`) so a broadcast still being sent in the background
+can finish instead of being cut off.
+
 The running server keeps its files while a new release builds next to it, so
 deploys no longer cause chunk 404s, and there is always a previous build to go
 back to.
@@ -43,8 +48,8 @@ Prod (`./deploy.sh`):
 
 | command | what it does |
 | --- | --- |
-| `code` | `git pull --ff-only origin main` in the main repo (refused unless it is on `main` with no uncommitted changes to tracked files), then build and switch. If the pull changed the deploy scripts, the new version continues the deploy. |
-| `rebuild` | rebuild the live commit with the current `.env.local` (after an env change) |
+| `code` | `git pull --ff-only origin main` in the main repo (refused unless it is on `main` with no uncommitted changes to tracked files), then build and switch. If the pull changed the deploy scripts, the new version continues the deploy. Refuses until the live vhost has the Cloudflare real-IP setup (`deploy/nginx/README.md`; `SKIP_NGINX_CHECK=1` overrides). |
+| `rebuild` | rebuild the live commit with the current `.env.local` (after an env change); same nginx check as `code` |
 | `rollback [release]` | switch back to the previous good release, or to the one named |
 | `releases` | list releases, `*` marks the live one |
 | `full` | first-time setup: build `HEAD`, install the Cloudflare snippet and the nginx vhost, switch |
@@ -87,6 +92,9 @@ git pull --ff-only origin main
 ./deploy.sh code
 ```
 
+Apply the nginx change in `deploy/nginx/README.md` before this:
+`./deploy.sh code` refuses to run until the live vhost has it.
+
 This builds the first release in `/home/debian/apps/releases/dance-hub/`, then
 moves pm2's `dance-hub` from `cwd /home/debian/apps/dance-hub` to
 `/home/debian/apps/releases/dance-hub/current` (pm2 delete + start, a few
@@ -101,15 +109,39 @@ readlink -f /proc/$(pm2 pid dance-hub)/cwd                 # .../releases/dance-
 `pm2 save` stores the `current` path, so after a reboot `pm2 resurrect`
 starts whatever release is current.
 
+**Instant fallback** if the first release misbehaves: the main repo's last
+in-place build (`/home/debian/apps/dance-hub/.next`, from the last old-style
+deploy) is still intact, so this serves it again with no rebuild, using the
+main repo's `.env.local`:
+
+```bash
+pm2 delete dance-hub
+pm2 start /home/debian/apps/dance-hub/node_modules/next/dist/bin/next --name dance-hub --cwd /home/debian/apps/dance-hub --interpreter node -- start -p 3007
+pm2 save
+readlink -f /proc/$(pm2 pid dance-hub)/cwd    # /home/debian/apps/dance-hub
+```
+
+That is the code from before the pull. Running `./deploy.sh code` again
+switches back to a release.
+
 Preprod moves the same way on its first `./deploy-preprod.sh restart <branch>`:
 pm2's `dance-hub-preprod` goes from `/home/debian/apps/dance-hub-preprod` to
 `/home/debian/apps/releases/dance-hub-preprod/current`. The old
 `/home/debian/apps/dance-hub-preprod` worktree is then unused. Move its
-`.env.preprod.test` / `.env.preprod.live` into the main repo first, then remove it:
+`.env.preprod.test` / `.env.preprod.live` into the main repo, then remove it.
+Each step runs only if the one before succeeded: preprod must already run from
+a release, the main repo must not have these files yet, and both must have
+arrived, non-empty, before the old worktree goes. `--force` is needed because
+that worktree still holds untracked files (its `.env.local`, `node_modules`,
+`.next`):
 
 ```bash
-mv /home/debian/apps/dance-hub-preprod/.env.preprod.{test,live} /home/debian/apps/dance-hub/
-git -C /home/debian/apps/dance-hub worktree remove --force /home/debian/apps/dance-hub-preprod
+cd /home/debian/apps/dance-hub \
+  && readlink -f /proc/$(pm2 pid dance-hub-preprod)/cwd | grep -q '^/home/debian/apps/releases/dance-hub-preprod/' \
+  && test ! -e .env.preprod.test && test ! -e .env.preprod.live \
+  && mv /home/debian/apps/dance-hub-preprod/.env.preprod.test /home/debian/apps/dance-hub-preprod/.env.preprod.live . \
+  && test -s .env.preprod.test && test -s .env.preprod.live \
+  && git worktree remove --force /home/debian/apps/dance-hub-preprod
 ```
 
 ## Stripe mode on preprod
@@ -120,7 +152,10 @@ git -C /home/debian/apps/dance-hub worktree remove --force /home/debian/apps/dan
 preprod worktree). Every other line stays as it is: the mode files still
 carry an old Neon `DATABASE_URL`, and copying them whole would point preprod
 back at Neon. It then runs `./deploy-preprod.sh rebuild`, because the
-publishable key is compiled into the browser bundle. `./stripe-mode.sh` with
+publishable key is compiled into the browser bundle. It holds the preprod
+deploy lock from before it touches `.env.preprod` until the rebuild is done,
+so it changes nothing while a preprod deploy is running, and it keeps the
+previous file as `.env.preprod.bak.stripe-mode` (mode 600). `./stripe-mode.sh` with
 no argument shows the mode of `.env.preprod`, of the running server's env and
 of its browser bundle. It only ever prints the key prefix (`sk_test`,
 `sk_live`, ...).
@@ -135,6 +170,12 @@ of its browser bundle. It only ever prints the key prefix (`sk_test`,
 
 `rollback` repoints `current` and restarts pm2; nothing is rebuilt. To return
 to the newer release, roll "back" to it by name.
+
+A release keeps the env it was built with. If that differs from the env file
+now (prod: the main repo's `.env.local`, preprod: `.env.preprod`), `rollback`
+warns with the key names (`env differs: KEY1, KEY2`, never values) and goes
+ahead. To run the rolled-back code with the current env, follow it with
+`rebuild`.
 
 ## Going back to in-place deploys
 

@@ -36,7 +36,12 @@ init_releases() {
 }
 
 # One deploy at a time per app. The lock is released when the script exits.
+# A caller that already holds it (stripe-mode.sh) passes it down on fd 9 with
+# DEPLOY_LOCK_HELD set to this app's releases dir.
 lock_releases() {
+  if [[ "${DEPLOY_LOCK_HELD:-}" == "$RELEASES_DIR" ]] && { true >&9; } 2> /dev/null; then
+    return 0
+  fi
   mkdir -p "$RELEASES_DIR"
   exec 9>"$RELEASES_DIR/.deploy.lock"
   flock -n 9 || die "Another deploy of $APP_NAME is running."
@@ -256,6 +261,15 @@ rollback_release() {
   fi
   release_ok "$target" || die "$(basename "$target") never finished building."
   [[ "$target" != "$cur" ]] || die "$(basename "$target") is already current."
+  # A release keeps the env it was built with; say so if that is not the
+  # env file as it is now (key names only, never values).
+  local changed
+  changed=$(env_diff_keys "$target/.env.local" "$ENV_SOURCE")
+  if [[ -n "$changed" ]]; then
+    echo "!! $(basename "$target") was built with a different env than $ENV_SOURCE."
+    echo "!! env differs: $changed"
+    echo "!! Rolling back anyway. To keep this code with the current env, run: $(basename "$0") rebuild"
+  fi
   say "Switching $APP_NAME to $(basename "$target") ($(release_info "$target" ref))..."
   activate_release "$target"
   start_current
@@ -298,6 +312,27 @@ stripe_key_mode() {
   }
   prefix=$(sed -nE "s/^[[:space:]]*(export[[:space:]]+)?STRIPE_SECRET_KEY[[:space:]]*=[[:space:]]*[\"']?((sk|rk)_(test|live))_.*/\2/p" "$1" | tail -n 1)
   echo "${prefix:-unknown}"
+}
+
+# Names of the keys whose values differ between env files $1 and $2 (or that
+# only one of them sets), comma-separated. Values are never printed.
+env_diff_keys() {
+  # `which=2` between the file names switches maps before the second file
+  # is read (works for empty files and with mawk).
+  awk -v which=1 '
+    /^[[:space:]]*(#|$)/ || !/=/ { next }
+    {
+      line = $0
+      sub(/^[[:space:]]*(export[[:space:]]+)?/, "", line)
+      k = line; sub(/[[:space:]]*=.*/, "", k)
+      v = line; sub(/^[^=]*=/, "", v)
+      if (which == 1) a[k] = v; else b[k] = v
+    }
+    END {
+      for (k in a) if (!(k in b) || a[k] != b[k]) print k
+      for (k in b) if (!(k in a)) print k
+    }
+  ' "$1" which=2 "$2" 2> /dev/null | LC_ALL=C sort | paste -sd, - | sed 's/,/, /g'
 }
 
 # Copy every STRIPE_* / NEXT_PUBLIC_STRIPE_* line of env file $1 into env
