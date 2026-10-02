@@ -6,14 +6,14 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "react-hot-toast";
 import { BankAccountStep } from "@/components/stripe-onboarding/steps/BankAccountStep";
 
 jest.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ session: { id: "s1" } }) }));
-jest.mock("react-hot-toast", () => ({
-  __esModule: true,
-  toast: { success: jest.fn(), error: jest.fn() },
-  default: { success: jest.fn(), error: jest.fn() },
-}));
+jest.mock("react-hot-toast", () => {
+  const t = Object.assign(jest.fn(), { success: jest.fn(), error: jest.fn() });
+  return { __esModule: true, toast: t, default: t };
+});
 
 const fetchMock = jest.fn();
 beforeEach(() => {
@@ -22,13 +22,14 @@ beforeEach(() => {
   global.fetch = fetchMock as unknown as typeof fetch;
 });
 
-function renderStep(accountCountry: string | undefined, homeCountry = "US") {
+function renderStep(accountCountry: string | undefined, homeCountry = "US", accountCurrency?: string) {
   const onNext = jest.fn();
   render(
     <BankAccountStep
       data={{
         accountId: "acct_1",
         accountCountry,
+        accountCurrency,
         personalInfo: { firstName: "Ana", lastName: "Lopez", address: { country: homeCountry } },
         businessInfo: { businessType: "individual", businessAddress: { country: accountCountry ?? "EE" } },
       }}
@@ -106,4 +107,44 @@ it("shows the error for an invalid IBAN without sending it", async () => {
 
   expect(screen.getByText(/not valid/)).toBeInTheDocument();
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("accepts a euro IBAN from another country for a euro account", async () => {
+  renderStep("EE", "EE", "eur");
+
+  expect(screen.getByText(/another euro country/)).toBeInTheDocument();
+  await userEvent.type(screen.getByLabelText(/IBAN/), "LT12 1000 0111 0100 1000");
+  await userEvent.click(screen.getByRole("button", { name: /Continue/ }));
+
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body).bankAccount.fields).toEqual({ iban: "LT121000011101001000" });
+});
+
+it("asks for a domestic bank for a non-euro account", async () => {
+  renderStep("SE", "SE", "sek");
+
+  await userEvent.type(screen.getByLabelText(/IBAN/), "DE89 3704 0044 0532 0130 00");
+  await userEvent.click(screen.getByRole("button", { name: /Continue/ }));
+
+  expect(screen.getByText("Use a bank account in Sweden. This IBAN is from Germany.")).toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("shows the account's own currency", () => {
+  renderStep("SE", "SE", "eur");
+  expect(screen.getByText(/Payouts are paid in EUR/)).toBeInTheDocument();
+});
+
+it("tells the owner when the previous bank account could not be removed", async () => {
+  fetchMock.mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ success: true, warning: "The previous bank account couldn't be removed." }),
+  });
+  const { onNext } = renderStep("EE", "EE", "eur");
+
+  await userEvent.type(screen.getByLabelText(/IBAN/), "EE382200221020145685");
+  await userEvent.click(screen.getByRole("button", { name: /Continue/ }));
+
+  expect(toast).toHaveBeenCalledWith("The previous bank account couldn't be removed.", expect.anything());
+  expect(onNext).toHaveBeenCalled();
 });

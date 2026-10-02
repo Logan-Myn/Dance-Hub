@@ -4,10 +4,11 @@ import { queryOne } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
 import {
   buildPayoutBankAccount,
+  countryName,
   getPayoutBankFormat,
   PAYOUT_SUPPORT_EMAIL,
 } from '@/lib/payout-bank-formats';
-import { replaceBankAccount } from '@/lib/stripe-external-accounts';
+import { OLD_BANK_NOT_REMOVED, replaceBankAccount } from '@/lib/stripe-external-accounts';
 
 interface CommunityOwnership {
   id: string;
@@ -59,8 +60,9 @@ export async function POST(request: Request, props: { params: Promise<{ accountI
       );
     }
 
-    // The currency follows the account's country (SEK in Sweden, CHF in
-    // Switzerland, EUR in the euro area), not whatever the old account used.
+    // The currency is the account's default currency (or its country's:
+    // SEK in Sweden, CHF in Switzerland, EUR in the euro area), not whatever
+    // the old account used.
     const format = getPayoutBankFormat(account.country);
     const acceptsIban =
       format.kind === 'iban' || (format.kind === 'local' && format.ibanAlternative);
@@ -73,7 +75,9 @@ export async function POST(request: Request, props: { params: Promise<{ accountI
       );
     }
 
-    const built = buildPayoutBankAccount(account.country, { iban }, true);
+    const built = buildPayoutBankAccount(account.country, { iban }, true, {
+      currency: account.default_currency,
+    });
     if (!built.ok) {
       return NextResponse.json(
         { error: built.errors.iban ?? built.errors.form ?? 'Invalid IBAN' },
@@ -83,14 +87,30 @@ export async function POST(request: Request, props: { params: Promise<{ accountI
 
     // Stripe takes an IBAN as the account_number; there is no `iban` field.
     // The new account becomes the default and the old ones are removed.
-    const { bankAccount: newBankAccount } = await replaceBankAccount(accountId, {
-      object: 'bank_account',
-      country: built.country,
-      currency: built.currency,
-      account_holder_name: accountHolderName,
-      account_holder_type: account.business_type === 'company' ? 'company' : 'individual',
-      account_number: built.accountNumber,
-    });
+    let replaced;
+    try {
+      replaced = await replaceBankAccount(accountId, {
+        object: 'bank_account',
+        country: built.country,
+        currency: built.currency,
+        account_holder_name: accountHolderName,
+        account_holder_type: account.business_type === 'company' ? 'company' : 'individual',
+        account_number: built.accountNumber,
+      });
+    } catch (stripeError: any) {
+      // Most euro accounts may use a euro bank in another country, but not
+      // all; say what to do instead of passing the raw error on.
+      if (built.country !== account.country && stripeError?.type === 'StripeInvalidRequestError') {
+        return NextResponse.json(
+          {
+            error: `Payouts to a bank account in ${countryName(built.country)} aren't available for this account. Use a bank account in ${countryName(account.country)}.`,
+          },
+          { status: 400 }
+        );
+      }
+      throw stripeError;
+    }
+    const { bankAccount: newBankAccount, removedOld } = replaced;
 
     // Cast the response to BankAccount type for proper property access
     const bankAccountData = newBankAccount as any;
@@ -105,7 +125,7 @@ export async function POST(request: Request, props: { params: Promise<{ accountI
         account_holder_name: bankAccountData.account_holder_name,
         default_for_currency: bankAccountData.default_for_currency,
       },
-      message: 'Bank account updated successfully'
+      message: removedOld ? 'Bank account updated successfully' : OLD_BANK_NOT_REMOVED
     });
 
   } catch (error: any) {

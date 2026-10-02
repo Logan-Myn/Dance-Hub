@@ -3,8 +3,8 @@ import { stripe } from '@/lib/stripe';
 import { sql } from '@/lib/db';
 import { requireStripeAccountManager } from '@/lib/community-auth';
 import { getClientIp } from '@/lib/client-ip';
-import { buildPayoutBankAccount } from '@/lib/payout-bank-formats';
-import { replaceBankAccount } from '@/lib/stripe-external-accounts';
+import { buildPayoutBankAccount, countryName } from '@/lib/payout-bank-formats';
+import { OLD_BANK_NOT_REMOVED, replaceBankAccount } from '@/lib/stripe-external-accounts';
 import { upsertRepresentative } from '@/lib/stripe-representative';
 
 interface BusinessInfo {
@@ -97,6 +97,7 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
 
     let updateParams: any = {};
     let progressBankAccount: Record<string, unknown> | undefined;
+    let bankWarning: string | undefined;
 
     // Handle different steps of the onboarding process
     switch (step) {
@@ -184,7 +185,8 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
           const built = buildPayoutBankAccount(
             account.country,
             bankAccount.fields ?? {},
-            bankAccount.use_iban === true
+            bankAccount.use_iban === true,
+            { currency: account.default_currency }
           );
           if (!built.ok) {
             return NextResponse.json(
@@ -201,7 +203,7 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
           }
 
           try {
-            const { bankAccount: created } = await replaceBankAccount(accountId, {
+            const { bankAccount: created, removedOld } = await replaceBankAccount(accountId, {
               object: 'bank_account',
               country: built.country,
               currency: built.currency,
@@ -217,12 +219,16 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
               currency: built.currency,
               last4: created.last4 ?? built.accountNumber.slice(-4),
             };
+            if (!removedOld) bankWarning = OLD_BANK_NOT_REMOVED;
           } catch (stripeError: any) {
             console.error('Error creating external account:', stripeError);
-            return NextResponse.json(
-              { error: `Failed to add bank account: ${stripeError.message}` },
-              { status: 400 }
-            );
+            // Most euro accounts may use a euro bank in another country, but
+            // not all; say what to do instead of passing the raw error on.
+            const error =
+              built.country !== account.country && stripeError?.type === 'StripeInvalidRequestError'
+                ? `Payouts to a bank account in ${countryName(built.country)} aren't available for this account. Use a bank account in ${countryName(account.country)}.`
+                : `Failed to add bank account: ${stripeError.message}`;
+            return NextResponse.json({ error }, { status: 400 });
           }
         }
         break;
@@ -312,7 +318,8 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
       charges_enabled: updatedAccount.charges_enabled,
       payouts_enabled: updatedAccount.payouts_enabled,
       details_submitted: updatedAccount.details_submitted,
-      message: `${step} updated successfully`
+      message: `${step} updated successfully`,
+      ...(bankWarning && { warning: bankWarning }),
     });
 
   } catch (error: any) {

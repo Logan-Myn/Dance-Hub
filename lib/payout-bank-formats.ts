@@ -137,7 +137,8 @@ const LOCAL_FORMATS: Record<string, LocalFormatDef> = {
       digitsField('institutionNumber', 'Institution number', '000', 3, 3),
       digitsField('accountNumber', 'Account number', '000123456789', 4, 17),
     ],
-    build: (v) => ({ routingNumber: `${v.transitNumber}${v.institutionNumber}`, accountNumber: v.accountNumber }),
+    // Transit-institution, the form Stripe's Canadian test numbers use (11000-000).
+    build: (v) => ({ routingNumber: `${v.transitNumber}-${v.institutionNumber}`, accountNumber: v.accountNumber }),
   },
   AU: {
     currency: 'aud',
@@ -233,6 +234,18 @@ function ibanField(country: string): FieldRule {
 
 const upper = (country: string | null | undefined) => (country ?? '').trim().toUpperCase();
 
+/** English country name for messages ("EE" -> "Estonia"); the code if unknown. */
+export function countryName(code: string | null | undefined): string {
+  const c = upper(code);
+  if (!/^[A-Z]{2}$/.test(c)) return c;
+  try {
+    const name = new Intl.DisplayNames(['en'], { type: 'region' }).of(c);
+    return name && name !== c ? name : c;
+  } catch {
+    return c;
+  }
+}
+
 export function getPayoutBankFormat(country: string | null | undefined): PayoutBankFormat {
   const c = upper(country);
   if (EURO_IBAN_COUNTRIES.includes(c)) return { kind: 'iban', country: c, currency: 'eur' };
@@ -273,17 +286,25 @@ export function unsupportedCountryMessage(countryName?: string): string {
 
 /**
  * Validates the entered values for the account's country and returns the
- * account_number / routing_number / currency to send to Stripe.
+ * account_number / routing_number / currency / bank country to send to Stripe.
+ *
+ * `currency` is the connected account's default_currency when known; the
+ * country table is the fallback. Accounts paid out in EUR may use a euro
+ * bank in another country (an Estonian owner with a Lithuanian or Belgian
+ * IBAN), so the bank country is taken from the IBAN. Any other currency
+ * needs a bank in the account's own country.
  */
 export function buildPayoutBankAccount(
   country: string | null | undefined,
   values: Partial<Record<string, string | null | undefined>>,
-  useIban = false
+  useIban = false,
+  options: { currency?: string | null } = {}
 ): PayoutBankBuildResult {
   const format = getPayoutBankFormat(country);
   if (format.kind === 'unsupported') {
     return { ok: false, errors: { form: unsupportedCountryMessage() } };
   }
+  const currency = (options.currency || format.currency).toLowerCase();
 
   const rules = fieldRules(format, useIban);
   const normalized: Record<string, string> = {};
@@ -297,10 +318,20 @@ export function buildPayoutBankAccount(
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   if (rules.length === 1 && rules[0].key === 'iban') {
-    return { ok: true, accountNumber: normalized.iban, currency: format.currency, country: format.country };
+    const iban = normalized.iban;
+    const bankCountry = iban.slice(0, 2);
+    if (currency !== 'eur' && bankCountry !== format.country) {
+      return {
+        ok: false,
+        errors: {
+          iban: `Use a bank account in ${countryName(format.country)}. This IBAN is from ${countryName(bankCountry)}.`,
+        },
+      };
+    }
+    return { ok: true, accountNumber: iban, currency, country: bankCountry };
   }
   const built = LOCAL_FORMATS[format.country].build(normalized);
-  return { ok: true, ...built, currency: format.currency, country: format.country };
+  return { ok: true, ...built, currency, country: format.country };
 }
 
 // Kept for display: the space-grouped form people see on bank statements.

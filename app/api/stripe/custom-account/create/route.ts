@@ -157,6 +157,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       accountId: account.id,
       country: account.country,
+      defaultCurrency: account.default_currency,
       businessType: account.business_type,
       currentStep: 1,
       message: 'Stripe account created successfully. Ready for custom onboarding.'

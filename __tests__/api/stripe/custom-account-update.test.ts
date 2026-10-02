@@ -77,8 +77,8 @@ beforeEach(() => {
   mockCreateExternal.mockResolvedValue({ id: 'ba_new', object: 'bank_account', last4: '0003', currency: 'sek' });
   mockListExternal.mockResolvedValue({
     data: [
-      { id: 'ba_old', object: 'bank_account' },
-      { id: 'ba_new', object: 'bank_account' },
+      { id: 'ba_old', object: 'bank_account', currency: 'sek' },
+      { id: 'ba_new', object: 'bank_account', currency: 'sek' },
     ],
   });
   mockDeleteExternal.mockResolvedValue({ deleted: true });
@@ -197,7 +197,7 @@ describe('bank_account', () => {
     expect(mockDeleteExternal).toHaveBeenCalledWith('acct_1', 'ba_old');
   });
 
-  it('still succeeds when the old account cannot be removed', async () => {
+  it('still succeeds when the old account cannot be removed, and says so', async () => {
     mockDeleteExternal.mockRejectedValue(new Error('cannot delete'));
 
     const res = await PUT(
@@ -209,6 +209,86 @@ describe('bank_account', () => {
     );
 
     expect(res.status).toBe(200);
+    expect((await res.json()).warning).toMatch(/previous bank account couldn't be removed/);
+  });
+
+  it('only removes old bank accounts in the same currency', async () => {
+    mockListExternal.mockResolvedValue({
+      data: [
+        { id: 'ba_old', object: 'bank_account', currency: 'sek' },
+        { id: 'ba_usd', object: 'bank_account', currency: 'usd' },
+        { id: 'ba_new', object: 'bank_account', currency: 'sek' },
+      ],
+    });
+
+    const res = await PUT(
+      put({
+        step: 'bank_account',
+        bankAccount: { account_holder_name: 'Ana', fields: { iban: 'SE3550000000054910000003' } },
+      }),
+      params
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).warning).toBeUndefined();
+    expect(mockDeleteExternal).toHaveBeenCalledTimes(1);
+    expect(mockDeleteExternal).toHaveBeenCalledWith('acct_1', 'ba_old');
+  });
+
+  it('lets a euro account use a euro bank in another country', async () => {
+    mockRetrieve.mockResolvedValue(account({ country: 'EE', default_currency: 'eur' }));
+    mockCreateExternal.mockResolvedValue({ id: 'ba_new', object: 'bank_account', last4: '1000', currency: 'eur' });
+
+    const res = await PUT(
+      put({
+        step: 'bank_account',
+        bankAccount: { account_holder_name: 'Ana', fields: { iban: 'LT12 1000 0111 0100 1000' } },
+      }),
+      params
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockCreateExternal.mock.calls[0][1].external_account).toMatchObject({
+      country: 'LT',
+      currency: 'eur',
+      account_number: 'LT121000011101001000',
+    });
+  });
+
+  it("uses the account's default currency", async () => {
+    mockRetrieve.mockResolvedValue(account({ country: 'SE', default_currency: 'eur' }));
+
+    await PUT(
+      put({
+        step: 'bank_account',
+        bankAccount: { account_holder_name: 'Ana', fields: { iban: 'DE89370400440532013000' } },
+      }),
+      params
+    );
+
+    expect(mockCreateExternal.mock.calls[0][1].external_account).toMatchObject({ country: 'DE', currency: 'eur' });
+  });
+
+  it('explains when a bank in another country is refused', async () => {
+    mockRetrieve.mockResolvedValue(account({ country: 'EE', default_currency: 'eur' }));
+    mockCreateExternal.mockRejectedValue(
+      Object.assign(new Error('external_account[country] is not supported for this account'), {
+        type: 'StripeInvalidRequestError',
+      })
+    );
+
+    const res = await PUT(
+      put({
+        step: 'bank_account',
+        bankAccount: { account_holder_name: 'Ana', fields: { iban: 'BE62510007547061' } },
+      }),
+      params
+    );
+
+    expect(res.status).toBe(400);
+    const { error } = await res.json();
+    expect(error).toContain('Use a bank account in Estonia');
+    expect(error).not.toContain('external_account');
   });
 
   it('leaves the old account alone when the new one is rejected', async () => {

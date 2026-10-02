@@ -3,12 +3,17 @@ import { stripe } from '@/lib/stripe';
 
 /**
  * Adds a bank account as the default for its currency and removes the
- * connected account's other bank accounts, so payouts only go to the new one.
+ * connected account's other bank accounts in that currency, so payouts in
+ * it only go to the new one. Accounts in other currencies are left alone.
  *
  * Only the create step can fail the call, and if it does nothing has changed.
- * A failed removal is logged and reported back, but by then the new account
- * is already the default, so payouts don't go to the old one.
+ * A failed removal is logged and reported back (removedOld: false), but by
+ * then the new account is already the default, so payouts don't go to the
+ * old one.
  */
+export const OLD_BANK_NOT_REMOVED =
+  "Your new bank account will receive payouts, but the previous bank account couldn't be removed. Email hello@dance-hub.io and we'll remove it.";
+
 export async function replaceBankAccount(
   accountId: string,
   bankAccount: Stripe.AccountCreateExternalAccountParams.BankAccount
@@ -24,8 +29,10 @@ export async function replaceBankAccount(
       object: 'bank_account',
       limit: 100,
     });
+    const currency = (created.currency ?? bankAccount.currency ?? '').toLowerCase();
     for (const old of existing.data) {
       if (old.id === created.id) continue;
+      if ((old.currency ?? '').toLowerCase() !== currency) continue;
       try {
         await stripe.accounts.deleteExternalAccount(accountId, old.id);
       } catch (error) {

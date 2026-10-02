@@ -70,6 +70,30 @@ it('sends the IBAN as the account number, makes it the default and removes the o
   expect(mockDeleteExternal).not.toHaveBeenCalledWith('acct_1', 'ba_new');
 });
 
+it('reports when the old account could not be removed', async () => {
+  mockDeleteExternal.mockRejectedValue(new Error('cannot delete'));
+
+  const res = await POST(post({ iban: 'EE382200221020145685', accountHolderName: 'Ana' }), params);
+
+  expect(res.status).toBe(200);
+  expect((await res.json()).message).toMatch(/previous bank account couldn't be removed/);
+});
+
+it('lets a euro account switch to a euro bank in another country', async () => {
+  mockRetrieve.mockResolvedValue({
+    id: 'acct_1',
+    type: 'custom',
+    country: 'EE',
+    default_currency: 'eur',
+    business_type: 'individual',
+  });
+
+  const res = await POST(post({ iban: 'LT121000011101001000', accountHolderName: 'Ana' }), params);
+
+  expect(res.status).toBe(200);
+  expect(mockCreateExternal.mock.calls[0][1].external_account).toMatchObject({ country: 'LT', currency: 'eur' });
+});
+
 it('uses the local currency for non-euro IBAN countries', async () => {
   mockRetrieve.mockResolvedValue({ id: 'acct_1', type: 'custom', country: 'CH', business_type: 'individual' });
 

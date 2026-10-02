@@ -17,6 +17,8 @@ interface OnboardingData {
   accountId?: string;
   /** Country the payout account was created in; drives the bank fields. */
   accountCountry?: string;
+  /** The payout account's default currency. */
+  accountCurrency?: string;
   businessInfo: {
     businessType: "individual" | "company";
     legalBusinessName: string;
@@ -184,6 +186,7 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
             ...prev,
             accountId: data.stripe_account_id,
             accountCountry: statusData.country ?? prev.accountCountry,
+            accountCurrency: statusData.default_currency ?? prev.accountCurrency,
           }));
           toast.success("Loaded your payout account");
         } else {
@@ -295,6 +298,7 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
                   ...prev,
                   accountId: communityData.stripe_account_id,
                   accountCountry: statusData.country ?? prev.accountCountry,
+            accountCurrency: statusData.default_currency ?? prev.accountCurrency,
                 }));
                 toast.success("Using your existing payout account");
                 return communityData.stripe_account_id;
@@ -309,7 +313,12 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
       }
 
       const result = await response.json();
-      setOnboardingData(prev => ({ ...prev, accountId: result.accountId, accountCountry: result.country }));
+      setOnboardingData(prev => ({
+        ...prev,
+        accountId: result.accountId,
+        accountCountry: result.country,
+        accountCurrency: result.defaultCurrency,
+      }));
       toast.success("Payout account created");
       return result.accountId;
     } catch (error) {

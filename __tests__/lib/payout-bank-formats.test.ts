@@ -8,6 +8,7 @@
  */
 import {
   buildPayoutBankAccount,
+  countryName,
   getBankFields,
   getPayoutBankFormat,
   isValidIban,
@@ -156,7 +157,8 @@ describe('buildPayoutBankAccount', () => {
   });
 
   it.each([
-    ['CA', { transitNumber: '11000', institutionNumber: '000', accountNumber: '000123456789' }, '11000000', '000123456789'],
+    // Transit-institution, as in Stripe's Canadian test numbers (11000-000).
+    ['CA', { transitNumber: '11000', institutionNumber: '000', accountNumber: '000123456789' }, '11000-000', '000123456789'],
     ['AU', { bsb: '110000', accountNumber: '000123456' }, '110000', '000123456'],
     ['SG', { bankCode: '1100', branchCode: '000', accountNumber: '000123456' }, '1100-000', '000123456'],
     ['HK', { clearingCode: '110', branchCode: '000', accountNumber: '000123-456' }, '110-000', '000123-456'],
@@ -181,5 +183,49 @@ describe('buildPayoutBankAccount', () => {
     const result = buildPayoutBankAccount('JP', { accountNumber: '1234567' });
     expect(result.ok).toBe(false);
     expect(!result.ok && result.errors.form).toContain('hello@dance-hub.io');
+  });
+});
+
+describe('IBAN bank country and currency', () => {
+  it.each([
+    ['LT121000011101001000', 'LT'],
+    ['BE62510007547061', 'BE'],
+    ['EE382200221020145685', 'EE'],
+  ])('a euro account can use a euro IBAN from another country (%s)', (iban, bankCountry) => {
+    expect(buildPayoutBankAccount('EE', { iban }, false, { currency: 'eur' })).toEqual({
+      ok: true,
+      accountNumber: iban,
+      currency: 'eur',
+      country: bankCountry,
+    });
+  });
+
+  it("asks for a domestic bank when the payout currency is the country's own", () => {
+    const result = buildPayoutBankAccount('SE', { iban: 'DE89370400440532013000' }, false, { currency: 'sek' });
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.errors.iban).toContain('Use a bank account in Sweden');
+  });
+
+  it('uses the account default currency over the country table', () => {
+    expect(buildPayoutBankAccount('SE', { iban: 'DE89370400440532013000' }, false, { currency: 'EUR' })).toEqual({
+      ok: true,
+      accountNumber: 'DE89370400440532013000',
+      currency: 'eur',
+      country: 'DE',
+    });
+    expect(buildPayoutBankAccount('US', { routingNumber: '110000000', accountNumber: '000123456789' }, false, {
+      currency: null,
+    })).toMatchObject({ ok: true, currency: 'usd', country: 'US' });
+  });
+
+  it('keeps a GBP IBAN in the UK', () => {
+    const result = buildPayoutBankAccount('GB', { iban: 'LT121000011101001000' }, true, { currency: 'gbp' });
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.errors.iban).toContain('United Kingdom');
+  });
+
+  it('names countries for messages', () => {
+    expect(countryName('EE')).toBe('Estonia');
+    expect(countryName('XX')).toBe('XX');
   });
 });

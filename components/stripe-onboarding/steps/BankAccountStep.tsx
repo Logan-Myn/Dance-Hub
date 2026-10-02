@@ -23,8 +23,10 @@ interface BankAccountStepProps {
     personalInfo: any;
     businessInfo: any;
     accountId?: string;
-    /** Country of the payout account. Bank fields and currency follow it. */
+    /** Country of the payout account. Bank fields follow it. */
     accountCountry?: string;
+    /** The payout account's default currency, when known. */
+    accountCurrency?: string;
   };
   onNext: () => void;
   onPrevious: () => void;
@@ -43,6 +45,7 @@ export function BankAccountStep({
   const format = getPayoutBankFormat(accountCountry);
   const countryName =
     STRIPE_COUNTRIES.find((c) => c.value === format.country)?.label ?? format.country;
+  const currency = (data.accountCurrency || (format.kind === "unsupported" ? "" : format.currency)).toLowerCase();
 
   const defaultHolderName =
     data.businessInfo?.businessType === "company"
@@ -65,7 +68,7 @@ export function BankAccountStep({
     if (!accountHolderName.trim()) {
       newErrors.accountHolderName = "Account holder name is required";
     }
-    const built = buildPayoutBankAccount(format.country, values, useIban);
+    const built = buildPayoutBankAccount(format.country, values, useIban, { currency });
     if (!built.ok) Object.assign(newErrors, built.errors);
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -115,7 +118,9 @@ export function BankAccountStep({
         throw new Error(errorData.error || "Failed to update bank account information");
       }
 
+      const result = await response.json().catch(() => ({}));
       toast.success("Bank account saved");
+      if (result.warning) toast(result.warning, { duration: 8000 });
       onNext();
     } catch (error) {
       console.error("Error updating bank account:", error);
@@ -187,8 +192,12 @@ export function BankAccountStep({
           <div className="text-sm text-blue-800">
             <p className="font-medium mb-1">Important Information</p>
             <ul className="list-disc list-inside space-y-1 text-blue-700">
-              <li>Use a bank account in {countryName} in your name</li>
-              <li>Payouts are paid in {format.currency.toUpperCase()}</li>
+              {currency === "eur" ? (
+                <li>Use a euro bank account in your name. It can be at a bank in another euro country</li>
+              ) : (
+                <li>Use a bank account in {countryName} in your name</li>
+              )}
+              <li>Payouts are paid in {currency.toUpperCase()}</li>
               <li>Payments typically arrive in 2-7 business days</li>
               <li>You can update this information later if needed</li>
             </ul>
