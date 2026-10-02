@@ -196,17 +196,12 @@ export default function LessonBookingModal({
     }
   };
 
+  // The payment form has already told the student what happens next.
   const handlePaymentSuccess = (outcome: LessonPaymentOutcome) => {
     setPaymentData(null);
-    if (outcome === "processing") {
-      // The booking is created once the payment settles; don't report it yet.
-      onClose();
-      toast.success("Your payment is processing. We'll email you as soon as your booking is confirmed.");
-      return;
-    }
-    onSuccess();
+    // A processing payment isn't booked until it settles.
+    if (outcome === "succeeded") onSuccess();
     onClose();
-    toast.success("Payment successful! The teacher will contact you soon.");
   };
 
   const handlePaymentClose = () => {

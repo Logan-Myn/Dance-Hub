@@ -46,6 +46,7 @@ test('a processing payment is pending, not failed', async () => {
 
   await waitFor(() => expect(onSuccess).toHaveBeenCalledWith('processing'));
   expect(toast.error).not.toHaveBeenCalled();
+  expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/processing/i));
 });
 
 test('a succeeded payment completes the booking', async () => {
@@ -55,6 +56,9 @@ test('a succeeded payment completes the booking', async () => {
   await userEvent.click(screen.getByRole('button', { name: /pay/i }));
 
   await waitFor(() => expect(onSuccess).toHaveBeenCalledWith('succeeded'));
+  // A lost race for the slot can still be refunded, so don't claim success.
+  expect(toast.success).toHaveBeenCalledWith('Payment received. Your confirmation will be emailed.');
+  expect(toast.success).not.toHaveBeenCalledWith(expect.stringMatching(/successful/i));
 });
 
 test('a redirect returns to the private lessons page, not the home page', async () => {

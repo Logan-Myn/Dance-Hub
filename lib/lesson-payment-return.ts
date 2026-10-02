@@ -17,7 +17,7 @@ export function lessonPaymentReturnNotice(search: string): LessonPaymentReturnNo
     case 'succeeded':
       return {
         kind: 'success',
-        message: 'Payment received. Your booking confirmation email is on its way.',
+        message: 'Payment received. Your confirmation will be emailed.',
       };
     case 'processing':
       return {

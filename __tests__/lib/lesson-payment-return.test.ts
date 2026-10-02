@@ -8,7 +8,7 @@ describe('lessonPaymentReturnNotice', () => {
 
   it('confirms a succeeded payment', () => {
     expect(lessonPaymentReturnNotice('?lesson_payment=return&payment_intent=pi_1&redirect_status=succeeded'))
-      .toEqual({ kind: 'success', message: expect.stringMatching(/confirmation email/i) });
+      .toEqual({ kind: 'success', message: 'Payment received. Your confirmation will be emailed.' });
   });
 
   it('reports a processing payment as pending', () => {

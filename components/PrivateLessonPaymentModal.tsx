@@ -55,10 +55,13 @@ function PrivateLessonPaymentForm({
       if (error) {
         toast.error(error.message || 'Payment failed');
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
-        toast.success("Payment successful!");
+        // Not "booked" yet: the booking is recorded from the payment, and a
+        // payment that lost a race for the slot is refunded.
+        toast.success("Payment received. Your confirmation will be emailed.");
         onSuccess('succeeded');
       } else if (paymentIntent && paymentIntent.status === 'processing') {
         // Not a failure: paying again would charge twice once it settles.
+        toast.success("Your payment is processing. We'll email you as soon as your booking is confirmed.");
         onSuccess('processing');
       } else {
         toast.error('Payment was not completed');

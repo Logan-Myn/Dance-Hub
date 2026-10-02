@@ -98,8 +98,8 @@ export default function PrivateLessonsPage({
   };
 
   const handleBookingSuccess = () => {
-    toast.success('Booking successful! The teacher will contact you soon.');
-    // Optionally refresh lessons or update UI
+    // The payment form already said the confirmation will be emailed; the
+    // booking itself is recorded from the payment.
   };
 
   const handleCreateSuccess = () => {
