@@ -8,10 +8,7 @@ import { TeacherBookingNotificationEmail } from '@/lib/resend/templates/booking/
 import { PaymentReceiptEmail } from '@/lib/resend/templates/booking/payment-receipt';
 import { MemberWelcomeEmail } from '@/lib/resend/templates/community/member-welcome';
 import { CommunityOpeningEmail } from '@/lib/resend/templates/community/community-opening';
-import {
-  upsertBroadcastSubscription,
-  markBroadcastSubscriptionStatus,
-} from '@/lib/broadcasts/billing';
+import { recordBroadcastSubscription } from '@/lib/broadcasts/billing';
 import { claimWebhookEvent, finishWebhookEvent } from '@/lib/stripe-webhook-events';
 import { LIVE_SUBSCRIPTION_STATUSES, memberSubscriptionStatus } from '@/lib/membership-ended';
 import React from 'react';
@@ -74,15 +71,7 @@ async function handleBroadcastCheckoutCompleted(session: Stripe.Checkout.Session
   }
   const subscriptionId = session.subscription as string;
   const sub = await stripe.subscriptions.retrieve(subscriptionId);
-  await upsertBroadcastSubscription({
-    communityId,
-    stripeCustomerId: sub.customer as string,
-    stripeSubscriptionId: sub.id,
-    status: sub.status as 'active' | 'past_due' | 'canceled' | 'incomplete',
-    currentPeriodEnd: (sub as any).current_period_end
-      ? new Date((sub as any).current_period_end * 1000)
-      : null,
-  });
+  await recordBroadcastSubscription(communityId, sub);
 }
 
 async function handleBroadcastSubscriptionLifecycle(sub: Stripe.Subscription): Promise<boolean> {
@@ -100,22 +89,18 @@ async function handleBroadcastSubscriptionLifecycle(sub: Stripe.Subscription): P
       console.log('⏭️ Broadcast subscription event for a deleted community, skipping:', sub.id);
       return true;
     }
-    // Upsert so we handle both initial activation and subsequent updates
-    await upsertBroadcastSubscription({
-      communityId,
-      stripeCustomerId: sub.customer as string,
-      stripeSubscriptionId: sub.id,
-      status: sub.status as 'active' | 'past_due' | 'canceled' | 'incomplete',
-      currentPeriodEnd: (sub as any).current_period_end ? new Date((sub as any).current_period_end * 1000) : null,
-    });
-  } else {
-    await markBroadcastSubscriptionStatus(
-      sub.id,
-      sub.status as 'active' | 'past_due' | 'canceled' | 'incomplete',
-      (sub as any).current_period_end ? new Date((sub as any).current_period_end * 1000) : null
-    );
+  }
+  // Status mapped onto the table's set; events for a subscription other than
+  // the community's current one are ignored unless it becomes active.
+  if ((await recordBroadcastSubscription(communityId, sub)) === 'ignored') {
+    console.log('⏭️ Event for a broadcast subscription the community no longer uses, skipping:', sub.id);
   }
   return true;
+}
+
+/** Broadcast tier subscriptions live on the platform account and carry no member metadata. */
+function isBroadcastSubscription(sub: Stripe.Subscription): boolean {
+  return sub.metadata?.purpose === 'broadcast_subscription';
 }
 
 /**
@@ -843,6 +828,12 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
             subscriptionId as string
           );
 
+          // The subscription.updated event that follows records the
+          // broadcast tier; a 400 here made Stripe retry for days.
+          if (isBroadcastSubscription(subscription)) {
+            return NextResponse.json({ received: true });
+          }
+
           if (!subscription.metadata?.user_id || !subscription.metadata?.community_id) {
             console.error('Missing metadata in subscription:', subscription.id);
             return NextResponse.json({ error: 'Missing metadata' }, { status: 400 });
@@ -939,6 +930,10 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
           const failedSubscription = await connectedStripe.subscriptions.retrieve(
             failedSubscriptionId as string
           );
+
+          if (isBroadcastSubscription(failedSubscription)) {
+            break;
+          }
 
           if (!failedSubscription.metadata?.user_id || !failedSubscription.metadata?.community_id) {
             console.error('Missing metadata in subscription:', failedSubscription.id);

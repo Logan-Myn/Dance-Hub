@@ -1,6 +1,6 @@
 import { POST } from '@/app/api/webhooks/stripe/route';
 import { claimWebhookEvent, finishWebhookEvent } from '@/lib/stripe-webhook-events';
-import { upsertBroadcastSubscription } from '@/lib/broadcasts/billing';
+import { recordBroadcastSubscription } from '@/lib/broadcasts/billing';
 
 // The event under test is whatever constructEvent returns; signatures aren't checked here.
 const mockConstructEvent = jest.fn();
@@ -48,8 +48,7 @@ jest.mock('@/lib/resend/templates/booking/booking-confirmation', () => ({ Bookin
 jest.mock('@/lib/resend/templates/booking/teacher-booking-notification', () => ({ TeacherBookingNotificationEmail: () => null }));
 jest.mock('@/lib/resend/templates/booking/payment-receipt', () => ({ PaymentReceiptEmail: () => null }));
 jest.mock('@/lib/broadcasts/billing', () => ({
-  upsertBroadcastSubscription: jest.fn(),
-  markBroadcastSubscriptionStatus: jest.fn(),
+  recordBroadcastSubscription: jest.fn().mockResolvedValue('recorded'),
 }));
 
 type SqlCall = { text: string; strings: string[]; values: unknown[] };
@@ -396,7 +395,7 @@ describe('broadcast subscription lifecycle', () => {
     const res = await post();
 
     expect(res.status).toBe(200);
-    expect(upsertBroadcastSubscription).not.toHaveBeenCalled();
+    expect(recordBroadcastSubscription).not.toHaveBeenCalled();
     expect(mockFinish).toHaveBeenCalledWith('evt_2', true);
   });
 
@@ -406,8 +405,25 @@ describe('broadcast subscription lifecycle', () => {
     const res = await post();
 
     expect(res.status).toBe(200);
-    expect(upsertBroadcastSubscription).toHaveBeenCalledWith(
-      expect.objectContaining({ communityId: 'c1', stripeSubscriptionId: 'sub_bc', status: 'canceled' }),
-    );
+    expect(recordBroadcastSubscription).toHaveBeenCalledWith('c1', broadcastSub);
+    expect(memberUpdates()).toHaveLength(0);
   });
+
+  it.each(['invoice.payment_succeeded', 'invoice.payment_failed'])(
+    'answers 200 to %s for a broadcast subscription without touching members',
+    async (type) => {
+      mockConstructEvent.mockReturnValue({
+        ...invoiceEvent({ parent: { subscription_details: { subscription: 'sub_bc' } } }),
+        type,
+        account: undefined,
+      });
+      mockSubRetrieve.mockResolvedValue(broadcastSub);
+
+      const res = await post();
+
+      expect(res.status).toBe(200);
+      expect(memberUpdates()).toHaveLength(0);
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    }
+  );
 });

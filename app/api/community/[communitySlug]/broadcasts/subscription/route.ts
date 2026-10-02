@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { stripe } from '@/lib/stripe';
 import { authorizeBroadcastAccess } from '@/lib/broadcasts/auth';
-import { createBroadcastSubscriptionIntent } from '@/lib/broadcasts/billing';
+import { createBroadcastSubscriptionIntent, BroadcastSubscriptionError } from '@/lib/broadcasts/billing';
 
 export async function POST(_req: Request, props: { params: Promise<{ communitySlug: string }> }) {
   const params = await props.params;
@@ -11,12 +11,15 @@ export async function POST(_req: Request, props: { params: Promise<{ communitySl
   const { session, community } = authz;
 
   try {
-    const { clientSecret, subscriptionId } = await createBroadcastSubscriptionIntent({
+    const { clientSecret } = await createBroadcastSubscriptionIntent({
       communityId: community.id,
       ownerEmail: session.user.email,
     });
     return NextResponse.json({ clientSecret });
   } catch (err) {
+    if (err instanceof BroadcastSubscriptionError) {
+      return NextResponse.json({ error: err.message }, { status: err.httpStatus });
+    }
     const msg = err instanceof Error ? err.message : 'Internal error';
     console.error('[broadcasts:subscription:POST] failed', err);
     return NextResponse.json({ error: msg }, { status: 500 });
