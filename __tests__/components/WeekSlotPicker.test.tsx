@@ -126,3 +126,42 @@ test('Next is disabled at the 30-day horizon', async () => {
   }
   expect(screen.getByRole('button', { name: /next week/i })).toBeDisabled();
 });
+
+describe('students in another timezone than the teacher', () => {
+  const tzSlot = (date: string, start: string, tz: string): TeacherAvailabilitySlot => ({
+    ...mkSlot(date, start),
+    teacher_timezone: tz,
+  });
+
+  test('a Paris student sees a New York Monday 20:00 slot on Tuesday at 2:00 AM', () => {
+    jest.setSystemTime(new Date('2026-11-09T10:00:00Z'));
+    render(
+      <WeekSlotPicker
+        slots={[tzSlot('2026-11-09', '20:00', 'America/New_York')]}
+        selectedSlotId={null}
+        onSelect={() => {}}
+        studentTimezone="Europe/Paris"
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /MON 9/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /TUE 10/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '2:00 AM' })).toBeInTheDocument();
+  });
+
+  test('a Los Angeles student sees a same-evening slot today, even after 16:00 local', () => {
+    // 18:00 on Sunday 8 Nov in Los Angeles; the slot is 19:00 LA time.
+    jest.setSystemTime(new Date('2026-11-09T02:00:00Z'));
+    render(
+      <WeekSlotPicker
+        slots={[tzSlot('2026-11-09', '03:00', 'UTC')]}
+        selectedSlotId={null}
+        onSelect={() => {}}
+        studentTimezone="America/Los_Angeles"
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /SUN 8/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '7:00 PM' })).toBeInTheDocument();
+  });
+});

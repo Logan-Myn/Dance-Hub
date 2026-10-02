@@ -14,9 +14,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAuthModal } from "@/contexts/AuthModalContext";
 import { formatPrice } from "@/lib/utils";
 import { getLocationText } from "@/lib/private-lessons-display";
-import PrivateLessonPaymentModal from "./PrivateLessonPaymentModal";
+import PrivateLessonPaymentModal, { type LessonPaymentOutcome } from "./PrivateLessonPaymentModal";
 import { WeekSlotPicker } from './WeekSlotPicker';
-import { naiveToUtc } from '@/lib/timezone';
+import { availabilityFetchRange, slotStartUtc } from '@/lib/slot-grouping';
 import { useUserTimezone } from '@/hooks/useUserTimezone';
 
 function describeCancellationPolicy(hours: number, latePolicy: 'refund' | 'no_refund'): string {
@@ -86,24 +86,19 @@ export default function LessonBookingModal({
         return;
       }
 
-      // Get next 30 days of availability
-      const today = new Date();
-      const thirtyDaysFromNow = new Date();
-      thirtyDaysFromNow.setDate(today.getDate() + 30);
+      // Every slot that starts within the student's next 30 days. Slots are
+      // stored by the teacher's date, so the range is padded by a day.
+      const { startDate, endDate } = availabilityFetchRange(studentTimezone, 30);
 
-      const response = await fetch(`/api/community/${communitySlug}/teacher-availability?teacher_id=${lesson.teacher_id}&startDate=${today.toISOString().split('T')[0]}&endDate=${thirtyDaysFromNow.toISOString().split('T')[0]}`);
+      const response = await fetch(`/api/community/${communitySlug}/teacher-availability?teacher_id=${lesson.teacher_id}&startDate=${startDate}&endDate=${endDate}`);
 
       if (response.ok) {
         const slots = await response.json();
         // Filter out past time slots
         const now = new Date();
-        const futureSlots = slots.filter((slot: TeacherAvailabilitySlot) => {
-          const slotUtc = naiveToUtc(
-            `${slot.availability_date}T${slot.start_time}`,
-            slot.teacher_timezone ?? 'UTC'
-          );
-          return slotUtc > now;
-        });
+        const futureSlots = slots.filter(
+          (slot: TeacherAvailabilitySlot) => slotStartUtc(slot) > now
+        );
         setAvailableSlots(futureSlots);
       }
     } catch (error) {
@@ -157,13 +152,10 @@ export default function LessonBookingModal({
         return;
       }
 
-      // Create booking and get payment intent
+      // Create booking and get payment intent. The server takes the lesson
+      // time from the slot itself.
       const bookingData = {
         ...formData,
-        scheduled_at: naiveToUtc(
-          `${selectedSlot.availability_date}T${selectedSlot.start_time}`,
-          selectedSlot.teacher_timezone ?? 'UTC'
-        ).toISOString(),
         availability_slot_id: selectedSlot.id,
       };
 
@@ -177,6 +169,11 @@ export default function LessonBookingModal({
 
       if (!response.ok) {
         const error = await response.json();
+        if (response.status === 409 || response.status === 404) {
+          // The slot was just taken or removed: show what is still open.
+          setSelectedSlot(null);
+          fetchAvailableSlots();
+        }
         throw new Error(error.error || 'Failed to create booking');
       }
 
@@ -199,11 +196,12 @@ export default function LessonBookingModal({
     }
   };
 
-  const handlePaymentSuccess = () => {
+  // The payment form has already told the student what happens next.
+  const handlePaymentSuccess = (outcome: LessonPaymentOutcome) => {
     setPaymentData(null);
-    onSuccess();
+    // A processing payment isn't booked until it settles.
+    if (outcome === "succeeded") onSuccess();
     onClose();
-    toast.success("Payment successful! The teacher will contact you soon.");
   };
 
   const handlePaymentClose = () => {
@@ -361,6 +359,7 @@ export default function LessonBookingModal({
           stripeAccountId={paymentData.stripeAccountId}
           price={paymentData.price}
           lessonTitle={lesson.title}
+          communitySlug={communitySlug}
           onSuccess={handlePaymentSuccess}
         />
       )}

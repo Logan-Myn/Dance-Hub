@@ -12,6 +12,7 @@ import { Plus, BookOpen, Settings, Users, Sparkles } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "react-hot-toast";
 import { cn } from "@/lib/utils";
+import { lessonPaymentReturnNotice } from "@/lib/lesson-payment-return";
 
 interface PrivateLessonsPageProps {
   communitySlug: string;
@@ -47,6 +48,16 @@ export default function PrivateLessonsPage({
     }
     fetchLessons();
   }, [communitySlug]);
+
+  // Back from a lesson payment that needed a redirect: say how it went, then
+  // drop the payment parameters from the URL.
+  useEffect(() => {
+    const notice = lessonPaymentReturnNotice(window.location.search);
+    if (!notice) return;
+    if (notice.kind === 'error') toast.error(notice.message);
+    else toast.success(notice.message);
+    router.replace(window.location.pathname, { scroll: false });
+  }, [router]);
 
   const fetchLessons = async () => {
     try {
@@ -87,8 +98,8 @@ export default function PrivateLessonsPage({
   };
 
   const handleBookingSuccess = () => {
-    toast.success('Booking successful! The teacher will contact you soon.');
-    // Optionally refresh lessons or update UI
+    // The payment form already said the confirmation will be emailed; the
+    // booking itself is recorded from the payment.
   };
 
   const handleCreateSuccess = () => {

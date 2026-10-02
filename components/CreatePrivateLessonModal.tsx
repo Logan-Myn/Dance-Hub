@@ -96,13 +96,23 @@ export default function CreatePrivateLessonModal({
         toast.error("Please enter a lesson description");
         return;
       }
-      if (!formData.regular_price || parseFloat(formData.regular_price) <= 0) {
-        toast.error("Please enter a valid regular price");
+      // Same rules as the server: card payments start at €0.50, and a
+      // member price of 0 means no discount.
+      const regularPrice = parseFloat(formData.regular_price);
+      if (!formData.regular_price || !(regularPrice >= 0.5)) {
+        toast.error("Regular price must be at least €0.50");
         return;
       }
-      if (formData.member_price && parseFloat(formData.member_price) >= parseFloat(formData.regular_price)) {
-        toast.error("Member price must be less than regular price");
-        return;
+      if (formData.member_price) {
+        const memberPrice = parseFloat(formData.member_price);
+        if (memberPrice !== 0 && !(memberPrice >= 0.5)) {
+          toast.error("Member price must be 0 (no discount) or at least €0.50");
+          return;
+        }
+        if (memberPrice > regularPrice) {
+          toast.error("Member price cannot be more than the regular price");
+          return;
+        }
       }
 
       const payload = {
@@ -253,7 +263,7 @@ export default function CreatePrivateLessonModal({
             <h3 className="text-lg font-medium">Pricing</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="regular_price">Regular Price ($) *</Label>
+                <Label htmlFor="regular_price">Regular Price (€) *</Label>
                 <Input
                   id="regular_price"
                   type="number"
@@ -267,7 +277,7 @@ export default function CreatePrivateLessonModal({
               </div>
 
               <div>
-                <Label htmlFor="member_price">Member Price ($)</Label>
+                <Label htmlFor="member_price">Member Price (€)</Label>
                 <Input
                   id="member_price"
                   type="number"

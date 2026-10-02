@@ -91,7 +91,7 @@ export function LessonsTab({
         { method: 'DELETE' },
       );
       if (!res.ok) throw new Error();
-      toast.success('Lesson deleted');
+      toast.success('Lesson removed from booking');
       setToDelete(null);
       await fetchLessons();
       onLessonsChanged?.();
@@ -159,7 +159,8 @@ export function LessonsTab({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this lesson?</AlertDialogTitle>
             <AlertDialogDescription>
-              {toDelete?.title} will be permanently removed. Past bookings stay intact.
+              Students will no longer see or book {toDelete?.title}. Past bookings stay
+              intact, and the lesson stays in your list as inactive.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

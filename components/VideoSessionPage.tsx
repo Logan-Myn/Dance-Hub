@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { formatInTz } from "@/lib/timezone";
 import { useUserTimezone } from "@/hooks/useUserTimezone";
 import { ClockIcon, UsersIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
@@ -12,6 +13,7 @@ import { toast } from "react-hot-toast";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { LessonBookingWithDetails } from "@/types/private-lessons";
+import { loginPath } from "@/lib/safe-redirect";
 
 const LiveKitClassRoom = dynamic(() => import("./LiveKitClassRoom"), { ssr: false });
 
@@ -43,7 +45,7 @@ function formatTimeUntil(totalMinutes: number): string {
 export default function VideoSessionPage() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const userTimezone = useUserTimezone();
   const bookingId = params?.bookingId as string;
 
@@ -159,7 +161,29 @@ export default function VideoSessionPage() {
     router.push("/dashboard");
   };
 
-  if (isLoading) {
+  // Signed out (e.g. opened from the booking email): the booking is only
+  // fetched for a user, so offer sign-in instead of waiting forever.
+  if (!authLoading && !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-center">Sign in to join your lesson</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-gray-600 mb-4">
+              Your lesson is linked to your account. Sign in and we&apos;ll bring you back here.
+            </p>
+            <Button asChild className="w-full">
+              <Link href={loginPath(`/video-session/${encodeURIComponent(bookingId)}`)}>Sign in</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-gray-100" />

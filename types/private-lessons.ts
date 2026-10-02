@@ -78,9 +78,9 @@ export interface CreatePrivateLessonData {
   description?: string;
   duration_minutes: number;
   regular_price: number;
-  member_price?: number;
-  max_bookings_per_month?: number;
-  requirements?: string;
+  member_price?: number | null;
+  max_bookings_per_month?: number | null;
+  requirements?: string | null;
   location_type: 'online' | 'in_person' | 'both';
   cancellation_cutoff_hours?: number;
   late_refund_policy?: 'refund' | 'no_refund';

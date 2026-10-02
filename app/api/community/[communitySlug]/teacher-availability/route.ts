@@ -77,7 +77,8 @@ export async function GET(
         FROM teacher_availability_slots tas
         LEFT JOIN lesson_bookings lb
           ON lb.availability_slot_id = tas.id
-          AND lb.lesson_status != 'canceled'
+          AND lb.community_id = tas.community_id
+          AND lb.lesson_status <> 'canceled'
         LEFT JOIN profiles p ON p.auth_user_id = tas.teacher_id
         WHERE tas.teacher_id = ${targetTeacherId}
           AND tas.community_id = ${community.id}
@@ -96,7 +97,8 @@ export async function GET(
         FROM teacher_availability_slots tas
         LEFT JOIN lesson_bookings lb
           ON lb.availability_slot_id = tas.id
-          AND lb.lesson_status != 'canceled'
+          AND lb.community_id = tas.community_id
+          AND lb.lesson_status <> 'canceled'
         LEFT JOIN profiles p ON p.auth_user_id = tas.teacher_id
         WHERE tas.teacher_id = ${targetTeacherId}
           AND tas.community_id = ${community.id}
@@ -114,7 +116,8 @@ export async function GET(
         FROM teacher_availability_slots tas
         LEFT JOIN lesson_bookings lb
           ON lb.availability_slot_id = tas.id
-          AND lb.lesson_status != 'canceled'
+          AND lb.community_id = tas.community_id
+          AND lb.lesson_status <> 'canceled'
         LEFT JOIN profiles p ON p.auth_user_id = tas.teacher_id
         WHERE tas.teacher_id = ${targetTeacherId}
           AND tas.community_id = ${community.id}
@@ -132,7 +135,8 @@ export async function GET(
         FROM teacher_availability_slots tas
         LEFT JOIN lesson_bookings lb
           ON lb.availability_slot_id = tas.id
-          AND lb.lesson_status != 'canceled'
+          AND lb.community_id = tas.community_id
+          AND lb.lesson_status <> 'canceled'
         LEFT JOIN profiles p ON p.auth_user_id = tas.teacher_id
         WHERE tas.teacher_id = ${targetTeacherId}
           AND tas.community_id = ${community.id}
@@ -141,16 +145,9 @@ export async function GET(
       `;
     }
 
-    // Filter out slots that have confirmed bookings (payment_status = 'succeeded')
-    const availableSlots = (slots || []).filter(slot => {
-      // If there's no booking for this slot, it's available
-      if (!slot.booking_id) {
-        return true;
-      }
-
-      // Slot is available only if it doesn't have a confirmed booking
-      return slot.payment_status !== 'succeeded';
-    }).map(slot => {
+    // A slot with any booking that isn't canceled is taken: the book route
+    // and the lesson_bookings_active_slot_key index refuse it too.
+    const availableSlots = (slots || []).filter(slot => !slot.booking_id).map(slot => {
       // Remove the booking data from the response to keep it clean
       const { booking_id, payment_status, ...cleanSlot } = slot;
 

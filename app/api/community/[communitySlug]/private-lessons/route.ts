@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { query, queryOne } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { CreatePrivateLessonData } from "@/types/private-lessons";
+import {
+  lessonPriceError,
+  locationTypeError,
+  maxBookingsError,
+  normalizeRequirements,
+} from "@/lib/private-lesson-validation";
 
 interface Community {
   id: string;
@@ -124,18 +130,15 @@ export async function POST(request: Request, props: { params: Promise<{ communit
       );
     }
 
-    if (lessonData.regular_price <= 0) {
-      return NextResponse.json(
-        { error: "Regular price must be greater than 0" },
-        { status: 400 }
-      );
-    }
-
-    if (lessonData.member_price && lessonData.member_price > lessonData.regular_price) {
-      return NextResponse.json(
-        { error: "Member price cannot be greater than regular price" },
-        { status: 400 }
-      );
+    const memberPrice = lessonData.member_price ?? null;
+    const maxBookings = lessonData.max_bookings_per_month ?? null;
+    const locationType = lessonData.location_type ?? 'online';
+    const validationError =
+      lessonPriceError(lessonData.regular_price, memberPrice) ??
+      maxBookingsError(maxBookings) ??
+      locationTypeError(locationType);
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
     // Create the private lesson — honor the is_active flag from the form
@@ -152,6 +155,9 @@ export async function POST(request: Request, props: { params: Promise<{ communit
         duration_minutes,
         regular_price,
         member_price,
+        location_type,
+        max_bookings_per_month,
+        requirements,
         is_active,
         cancellation_cutoff_hours,
         late_refund_policy
@@ -162,7 +168,10 @@ export async function POST(request: Request, props: { params: Promise<{ communit
         ${lessonData.description || null},
         ${lessonData.duration_minutes},
         ${lessonData.regular_price},
-        ${lessonData.member_price || null},
+        ${memberPrice},
+        ${locationType},
+        ${maxBookings},
+        ${normalizeRequirements(lessonData.requirements)},
         ${isActive},
         ${cancellationCutoffHours},
         ${lateRefundPolicy}

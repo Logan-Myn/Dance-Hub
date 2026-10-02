@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { queryOne } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { getSession } from "@/lib/auth-session";
+import { findBookableSlot, monthlyLimitReached, slotStartsAt } from "@/lib/private-lesson-booking";
+import { privateLessonFeePercentage } from "@/lib/private-lesson-fee";
 import { CreateLessonBookingData } from "@/types/private-lessons";
 
 interface Community {
@@ -9,19 +11,25 @@ interface Community {
   name: string;
   stripe_account_id: string | null;
   created_by: string;
+  created_at: string;
+  active_member_count: number | null;
 }
 
 interface Lesson {
   id: string;
   title: string;
-  regular_price: number;
-  member_price: number | null;
+  teacher_id: string | null;
+  regular_price: number | string;
+  member_price: number | string | null;
   is_active: boolean;
+  max_bookings_per_month: number | null;
 }
 
 interface Membership {
   id: string;
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(
   request: Request,
@@ -45,7 +53,7 @@ export async function POST(
 
     // Get community with Stripe account info
     const community = await queryOne<Community>`
-      SELECT id, name, stripe_account_id, created_by
+      SELECT id, name, stripe_account_id, created_by, created_at, active_member_count
       FROM communities
       WHERE slug = ${communitySlug}
     `;
@@ -66,7 +74,7 @@ export async function POST(
 
     // Get the private lesson
     const lesson = await queryOne<Lesson>`
-      SELECT id, title, regular_price, member_price, is_active
+      SELECT id, title, teacher_id, regular_price, member_price, is_active, max_bookings_per_month
       FROM private_lessons
       WHERE id = ${lessonId}
         AND community_id = ${community.id}
@@ -90,7 +98,10 @@ export async function POST(
     `;
 
     const isMember = !!membership;
-    const price = isMember && lesson.member_price ? lesson.member_price : lesson.regular_price;
+    // Numeric columns arrive as strings. A member price of 0 means no member
+    // discount, as the lesson cards and the booking modal show it.
+    const memberPrice = Number(lesson.member_price);
+    const price = isMember && memberPrice > 0 ? memberPrice : Number(lesson.regular_price);
 
     // Validate booking data
     if (!bookingData.student_email) {
@@ -100,21 +111,74 @@ export async function POST(
       );
     }
 
-    if (!bookingData.scheduled_at) {
+    const slotId = bookingData.availability_slot_id;
+    if (typeof slotId !== "string" || !UUID_RE.test(slotId)) {
       return NextResponse.json(
-        { error: "Scheduled time is required" },
+        { error: "Please select a time slot" },
         { status: 400 }
       );
     }
 
-    // Store booking data in PaymentIntent metadata for webhook processing
-    const privateLessonFeePercentage = 5.0; // 5% platform fee for private lessons
+    // The slot must be one of this lesson's teacher's open slots in this
+    // community; slot ids are visible to anyone who can see availability.
+    const slot = await findBookableSlot(slotId, community.id, lesson.teacher_id);
 
+    if (!slot) {
+      return NextResponse.json(
+        { error: "This time slot is not available. Please pick another time." },
+        { status: 404 }
+      );
+    }
+
+    const scheduledAt = slotStartsAt(slot);
+    if (scheduledAt.getTime() <= Date.now()) {
+      return NextResponse.json(
+        { error: "This time slot has already passed. Please pick another time." },
+        { status: 400 }
+      );
+    }
+
+    // A canceled booking frees its slot (lesson_bookings_active_slot_key is
+    // the database-side guarantee; this check gives a clear error early).
+    const taken = await queryOne<{ id: string }>`
+      SELECT id
+      FROM lesson_bookings
+      WHERE availability_slot_id = ${slot.id}
+        AND lesson_status <> 'canceled'
+      LIMIT 1
+    `;
+    if (taken) {
+      return NextResponse.json(
+        { error: "This time slot was just booked. Please pick another time." },
+        { status: 409 }
+      );
+    }
+
+    // The teacher's monthly cap counts bookings in the slot's calendar month,
+    // in the teacher's timezone.
+    const monthly = await monthlyLimitReached(lesson, slot);
+    if (monthly.reached) {
+      return NextResponse.json(
+        { error: `This lesson is fully booked for ${monthly.monthLabel}. Please pick a time in another month.` },
+        { status: 409 }
+      );
+    }
+
+    // Same advertised fee rules as memberships: 0% in the community's first
+    // 30 days, then a tier by member count.
+    const feePercentage = privateLessonFeePercentage(community);
+    const amountCents = Math.round(Number(price) * 100);
+    const feeCents = Math.round((amountCents * feePercentage) / 100);
+
+    // Store booking data in PaymentIntent metadata for webhook processing
     const paymentIntent = await stripe.paymentIntents.create(
       {
-        amount: Math.round(price * 100), // Convert to cents
+        amount: amountCents,
         currency: "eur",
-        application_fee_amount: Math.round((price * privateLessonFeePercentage / 100) * 100), // 5% platform fee in cents
+        // Cards only, like memberships: delayed methods would leave the
+        // payment processing while the slot stays free for someone else.
+        payment_method_types: ["card"],
+        ...(feeCents > 0 ? { application_fee_amount: feeCents } : {}),
         metadata: {
           type: "private_lesson",
           lesson_id: lessonId,
@@ -124,12 +188,12 @@ export async function POST(
           student_name: bookingData.student_name || "",
           student_message: bookingData.student_message || "",
           contact_info: JSON.stringify(bookingData.contact_info || {}),
-          scheduled_at: bookingData.scheduled_at,
-          availability_slot_id: bookingData.availability_slot_id || "",
+          scheduled_at: scheduledAt.toISOString(),
+          availability_slot_id: slot.id,
           is_member: isMember.toString(),
           price_paid: price.toString(),
-          platform_fee_percentage: privateLessonFeePercentage.toString(),
-          platform_fee_amount: (price * privateLessonFeePercentage / 100).toString(),
+          platform_fee_percentage: feePercentage.toString(),
+          platform_fee_amount: (feeCents / 100).toString(),
         },
         description: `Private Lesson: ${lesson.title} - ${community.name}`,
         receipt_email: bookingData.student_email,
