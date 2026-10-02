@@ -26,6 +26,7 @@ const currentLesson = {
   max_bookings_per_month: 10,
   requirements: 'Bring shoes',
 };
+let savedLesson: Record<string, unknown> = currentLesson;
 
 type Call = { text: string; strings: string[]; values: unknown[] };
 const calls = (): Call[] =>
@@ -44,12 +45,13 @@ function valueAfter(call: Call, re: RegExp): unknown {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  savedLesson = currentLesson;
   jest.spyOn(console, 'error').mockImplementation(() => {});
   mockGetSession.mockResolvedValue({ user: { id: 'teacher-1' } });
   mockQueryOne.mockImplementation((strings: string[]) => {
     const text = strings.join('?');
     if (/FROM communities/.test(text)) return Promise.resolve(community);
-    if (/^\s*SELECT[\s\S]*FROM private_lessons/.test(text)) return Promise.resolve(currentLesson);
+    if (/^\s*SELECT[\s\S]*FROM private_lessons/.test(text)) return Promise.resolve(savedLesson);
     if (/UPDATE private_lessons|INSERT INTO private_lessons/.test(text)) {
       return Promise.resolve({ id: 'lesson-1' });
     }
@@ -110,6 +112,8 @@ describe('PUT /private-lessons/[lessonId]', () => {
     ['a member price above the new regular price', { regular_price: 30, member_price: 35 }],
     ['a regular price below the saved member price', { regular_price: 30 }],
     ['a regular price of 0', { regular_price: 0 }],
+    ['a regular price under the 0.50 minimum', { regular_price: 0.4 }],
+    ['a member price between 0 and 0.50', { member_price: 0.3 }],
     ['a monthly limit that is not a positive whole number', { max_bookings_per_month: 0 }],
     ['an unknown location', { location_type: 'moon' }],
   ])('refuses %s', async (_label, body) => {
@@ -122,6 +126,25 @@ describe('PUT /private-lessons/[lessonId]', () => {
   it('accepts a member price equal to the regular price or 0', async () => {
     expect((await put({ member_price: 50 })).status).toBe(200);
     expect((await put({ member_price: 0 })).status).toBe(200);
+  });
+
+  describe('a legacy lesson saved with prices the editor no longer accepts', () => {
+    beforeEach(() => {
+      savedLesson = { ...currentLesson, regular_price: '0.00', member_price: null };
+    });
+
+    it('can still have its title edited', async () => {
+      expect((await put({ title: 'Renamed' })).status).toBe(200);
+    });
+
+    it('can be saved from the editor with its prices unchanged', async () => {
+      expect((await put({ title: 'Renamed', regular_price: 0, member_price: null })).status).toBe(200);
+    });
+
+    it('validates the resulting pair when a price changes', async () => {
+      expect((await put({ member_price: 10 })).status).toBe(400);
+      expect((await put({ regular_price: 40 })).status).toBe(200);
+    });
   });
 });
 
@@ -151,6 +174,8 @@ describe('POST /private-lessons', () => {
   it.each([
     ['a negative member price', { member_price: -1 }],
     ['a member price above the regular price', { member_price: 51 }],
+    ['a regular price under the 0.50 minimum', { regular_price: 0.3 }],
+    ['a member price between 0 and 0.50', { member_price: 0.2 }],
     ['an unknown location', { location_type: 'moon' }],
   ])('refuses %s', async (_label, body) => {
     const res = await create({ ...lesson, ...body });

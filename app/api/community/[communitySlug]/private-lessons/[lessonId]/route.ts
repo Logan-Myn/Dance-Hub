@@ -158,12 +158,18 @@ export async function PUT(
 
     // A field missing from the body keeps its saved value; an explicit null
     // clears it (e.g. removing the member discount).
+    const savedRegularPrice = Number(saved.regular_price);
+    const savedMemberPrice = saved.member_price === null ? null : Number(saved.member_price);
     const regularPrice = sets(updateData, "regular_price")
       ? updateData.regular_price
-      : Number(saved.regular_price);
+      : savedRegularPrice;
     const memberPrice = sets(updateData, "member_price")
       ? updateData.member_price
-      : saved.member_price === null ? null : Number(saved.member_price);
+      : savedMemberPrice;
+    // Prices are checked only when the edit changes one, so an older lesson
+    // saved before the current rules can still have its title edited.
+    const pricesChanged =
+      regularPrice !== savedRegularPrice || memberPrice !== savedMemberPrice;
     const maxBookings = sets(updateData, "max_bookings_per_month")
       ? updateData.max_bookings_per_month
       : saved.max_bookings_per_month;
@@ -172,7 +178,7 @@ export async function PUT(
       : saved.requirements;
 
     const validationError =
-      lessonPriceError(regularPrice, memberPrice) ??
+      (pricesChanged ? lessonPriceError(regularPrice, memberPrice) : null) ??
       (sets(updateData, "max_bookings_per_month") ? maxBookingsError(maxBookings) : null) ??
       (sets(updateData, "location_type") ? locationTypeError(updateData.location_type) : null);
     if (validationError) {

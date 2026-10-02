@@ -68,3 +68,37 @@ test('clearing the member price sends member_price: null so the discount is remo
   expect(init.method).toBe('PUT');
   expect(JSON.parse(init.body)).toEqual(expect.objectContaining({ member_price: null }));
 });
+
+describe('price checks before saving', () => {
+  async function submitWith(regular: string, member: string) {
+    const user = userEvent.setup();
+    renderEditor();
+    const regularInput = screen.getByLabelText(/Regular Price/);
+    const memberInput = screen.getByLabelText(/Member Price/);
+    await user.clear(regularInput);
+    await user.type(regularInput, regular);
+    await user.clear(memberInput);
+    if (member) await user.type(memberInput, member);
+    await user.click(screen.getByRole('button', { name: /Update Private Lesson/ }));
+  }
+
+  test('allows a member price equal to the regular price, as the server does', async () => {
+    await submitWith('50', '50');
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+  });
+
+  test('allows a member price of 0 (no discount)', async () => {
+    await submitWith('50', '0');
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+  });
+
+  test('refuses a regular price under 0.50', async () => {
+    await submitWith('0.3', '');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test('refuses a member price between 0 and 0.50', async () => {
+    await submitWith('50', '0.3');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+});

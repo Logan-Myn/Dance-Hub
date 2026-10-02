@@ -5,14 +5,23 @@
 export const LOCATION_TYPES = ['online', 'in_person', 'both'] as const;
 export type LocationType = (typeof LOCATION_TYPES)[number];
 
-/** Regular price > 0; member price, when set, between 0 and the regular price. */
+// The smallest card payment accepted in EUR.
+export const MIN_LESSON_PRICE = 0.5;
+
+/**
+ * Regular price at least 0.50. Member price: none (null), 0 for no
+ * discount, or between 0.50 and the regular price.
+ */
 export function lessonPriceError(regular: unknown, member: unknown): string | null {
-  if (typeof regular !== 'number' || !Number.isFinite(regular) || regular <= 0) {
-    return 'Regular price must be greater than 0';
+  if (typeof regular !== 'number' || !Number.isFinite(regular) || regular < MIN_LESSON_PRICE) {
+    return 'Regular price must be at least €0.50';
   }
-  if (member === null) return null;
+  if (member === null || member === 0) return null;
   if (typeof member !== 'number' || !Number.isFinite(member) || member < 0) {
     return 'Member price cannot be negative';
+  }
+  if (member < MIN_LESSON_PRICE) {
+    return 'Member price must be 0 (no discount) or at least €0.50';
   }
   if (member > regular) {
     return 'Member price cannot be greater than regular price';
