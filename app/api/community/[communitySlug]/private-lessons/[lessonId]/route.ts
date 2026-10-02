@@ -322,11 +322,13 @@ export async function DELETE(
       );
     }
 
-    // Hard delete — the lesson_bookings FK cascades, so any completed /
-    // cancelled booking history will go with it. Pending/scheduled bookings
-    // are blocked above so this is safe.
+    // Soft delete: lesson_bookings cascades on a hard delete, which would
+    // wipe the lesson's completed, canceled and refunded bookings along with
+    // their payment records. An inactive lesson is hidden from students and
+    // can't be booked; the owner still sees it in the manager.
     const lesson = await queryOne<PrivateLesson>`
-      DELETE FROM private_lessons
+      UPDATE private_lessons
+      SET is_active = false, updated_at = NOW()
       WHERE id = ${lessonId}
         AND community_id = ${community.id}
       RETURNING *
@@ -339,7 +341,7 @@ export async function DELETE(
       );
     }
 
-    return NextResponse.json({ message: "Private lesson deleted successfully" });
+    return NextResponse.json({ message: "Private lesson removed. Its bookings are kept.", lesson });
   } catch (error) {
     console.error("Error in DELETE /api/community/[communitySlug]/private-lessons/[lessonId]:", error);
     return NextResponse.json(
