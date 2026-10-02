@@ -77,11 +77,31 @@ export function zonedTimeToUtc(dayKey: string, hour: number, minute: number, tz:
   return fromZonedTime(`${dayKey}T${pad2(hour)}:${pad2(minute)}:00`, tz);
 }
 
+/**
+ * The first instant of a calendar date in `tz`. Usually local midnight, but
+ * where the clocks jump forward at midnight (e.g. America/Santiago,
+ * Asia/Beirut) midnight doesn't exist and the day starts at 01:00.
+ */
+function startOfDayUtc(dayKey: string, tz: string): Date {
+  const midnight = zonedTimeToUtc(dayKey, 0, 0, tz);
+  if (dateKeyInTz(midnight, tz) === dayKey) return midnight;
+  // Midnight resolved to the evening before: search forward (to the
+  // minute, within 3 hours) for the moment the date turns.
+  let lo = 0;
+  let hi = 3 * 60;
+  while (hi - lo > 1) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (dateKeyInTz(new Date(midnight.getTime() + mid * 60_000), tz) === dayKey) hi = mid;
+    else lo = mid;
+  }
+  return new Date(midnight.getTime() + hi * 60_000);
+}
+
 /** The week starting on `startKey` (a Sunday) in `tz`, as UTC instants. */
 export function weekRangeUtc(startKey: string, tz: string): UtcRange {
   return {
-    start: zonedTimeToUtc(startKey, 0, 0, tz),
-    end: zonedTimeToUtc(addDaysToKey(startKey, 7), 0, 0, tz),
+    start: startOfDayUtc(startKey, tz),
+    end: startOfDayUtc(addDaysToKey(startKey, 7), tz),
   };
 }
 

@@ -57,6 +57,18 @@ describe('weekRangeUtc', () => {
     expect(range.end.toISOString()).toBe('2026-11-08T05:00:00.000Z');
   });
 
+  it.each([
+    // Clocks jump from 00:00 to 01:00, so Sunday starts at 01:00 local.
+    ['America/Santiago', '2026-09-06', '2026-09-06T04:00:00.000Z'],
+    ['Asia/Beirut', '2026-03-29', '2026-03-28T22:00:00.000Z'],
+  ])('starts on Sunday when %s skips midnight', (tz, sunday, firstInstant) => {
+    const range = weekRangeUtc(sunday, tz);
+    expect(range.start.toISOString()).toBe(firstInstant);
+    expect(dateKeyInTz(range.start, tz)).toBe(sunday);
+    // The week before ends exactly there, so nothing falls between them.
+    expect(weekRangeUtc(addDaysToKey(sunday, -7), tz).end.toISOString()).toBe(firstInstant);
+  });
+
   it('keeps a Saturday 20:00 New York class in its own week, on Saturday', () => {
     const week = weekRangeUtc('2026-09-27', NY);
     const nextWeek = weekRangeUtc('2026-10-04', NY);
