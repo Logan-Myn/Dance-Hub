@@ -100,10 +100,6 @@ const participant = (identity: string, canPublish = false) => ({
   trackPublications: new Map(),
 });
 
-// Let the name lookup resolve before clicking: the control bar re-creates its
-// buttons on every render, so a re-render mid-click would swallow the click.
-const settle = () => act(async () => {});
-
 async function renderRoom(isTeacher: boolean) {
   mockLocal = {
     ...participant(isTeacher ? "u-teacher" : "u-student", isTeacher),
@@ -123,7 +119,6 @@ async function renderRoom(isTeacher: boolean) {
       moderation={{ teacherIdentity: "u-teacher", setCanPublish }}
     />
   );
-  await settle();
   return view;
 }
 

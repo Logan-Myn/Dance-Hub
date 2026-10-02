@@ -34,6 +34,17 @@ interface LiveKitControlBarProps {
   sendAppMessage?: (data: RoomMessage, destinationIdentities?: string[]) => void;
 }
 
+// Defined at module scope: a component created inside render is a new type
+// on every render, so its buttons remount and clicks in flight get lost.
+function ControlBtn({ label, labelClass, children }: { label?: string; labelClass?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {children}
+      {label && <span className={`hidden sm:block text-xs text-center ${labelClass ?? "text-gray-400"}`}>{label}</span>}
+    </div>
+  );
+}
+
 export default function LiveKitControlBar({
   onLeave,
   onEndClass,
@@ -99,13 +110,6 @@ export default function LiveKitControlBar({
   const isMuted = !isMicrophoneEnabled;
   const isCamOff = !isCameraEnabled;
   const isSharingScreen = isScreenShareEnabled;
-
-  const ControlBtn = ({ label, labelClass, children }: { label?: string; labelClass?: string; children: React.ReactNode }) => (
-    <div className="flex flex-col items-center gap-1">
-      {children}
-      {label && <span className={`hidden sm:block text-xs text-center ${labelClass ?? "text-gray-400"}`}>{label}</span>}
-    </div>
-  );
 
   return (
     <div className="bg-gray-800 border-t border-gray-700 px-2 py-2 sm:px-6 sm:py-4 pb-safe">
