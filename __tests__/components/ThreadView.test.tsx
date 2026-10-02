@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import ThreadView from '@/components/ThreadView';
 
 jest.mock('next/navigation', () => ({
@@ -110,5 +110,119 @@ describe('ThreadView', () => {
       />,
     );
     expect(screen.queryByText('Should not appear')).not.toBeInTheDocument();
+  });
+});
+
+describe('ThreadView comment loading', () => {
+  const emptyThread = { ...baseThread, comments: [], comments_count: 0 };
+  let commentFetches: number;
+
+  beforeEach(() => {
+    commentFetches = 0;
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/comments')) {
+        commentFetches += 1;
+        return { ok: true, json: async () => [] } as Response;
+      }
+      return { ok: true, json: async () => null } as Response;
+    }) as unknown as typeof fetch;
+  });
+
+  const settle = () =>
+    act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+  it('fetches comments exactly once for a thread with zero comments when the parent stores updates', async () => {
+    // Mirrors FeedClient: the parent merges every update into a new thread object.
+    function Parent() {
+      const [thread, setThread] = React.useState(emptyThread);
+      return (
+        <ThreadView
+          thread={thread as never}
+          onClose={() => {}}
+          onLikeUpdate={() => {}}
+          onThreadUpdate={(_id, updates) =>
+            setThread((prev) => ({ ...prev, ...updates }) as typeof prev)
+          }
+        />
+      );
+    }
+
+    render(<Parent />);
+    await waitFor(() => expect(commentFetches).toBe(1));
+    await settle();
+    expect(commentFetches).toBe(1);
+  });
+
+  it('fetches once when the parent rebuilds the thread object on every render', async () => {
+    // Mirrors the thread page: a fresh object (and comments array) per render,
+    // with every update causing another render (router.refresh in production).
+    const onThreadUpdate = jest.fn();
+    function Parent() {
+      const [, setTick] = React.useState(0);
+      return (
+        <ThreadView
+          thread={{ ...emptyThread, comments: [] } as never}
+          onClose={() => {}}
+          onLikeUpdate={() => {}}
+          onThreadUpdate={(...args) => {
+            onThreadUpdate(...args);
+            setTick((t) => t + 1);
+          }}
+        />
+      );
+    }
+
+    const { rerender } = render(<Parent />);
+    await waitFor(() => expect(commentFetches).toBe(1));
+    rerender(<Parent />);
+    await settle();
+    expect(commentFetches).toBe(1);
+    // Nothing changed (still no comments), so the parent is not told to update.
+    expect(onThreadUpdate).not.toHaveBeenCalled();
+  });
+
+  it('still loads comments under Strict Mode double mounting', async () => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/comments')) {
+        commentFetches += 1;
+        return {
+          ok: true,
+          json: async () => [{ ...baseThread.comments[0], content: 'Loaded later' }],
+        } as Response;
+      }
+      return { ok: true, json: async () => null } as Response;
+    }) as unknown as typeof fetch;
+    const onThreadUpdate = jest.fn();
+
+    render(
+      <React.StrictMode>
+        <ThreadView
+          thread={emptyThread as never}
+          onClose={() => {}}
+          onLikeUpdate={() => {}}
+          onThreadUpdate={onThreadUpdate}
+        />
+      </React.StrictMode>,
+    );
+    expect(await screen.findByText('Loaded later')).toBeInTheDocument();
+    expect(onThreadUpdate).toHaveBeenCalledWith('t1', {
+      comments: [expect.objectContaining({ content: 'Loaded later' })],
+    });
+  });
+
+  it('does not fetch when the thread already carries its comments', async () => {
+    render(
+      <ThreadView
+        thread={baseThread as never}
+        onClose={() => {}}
+        onLikeUpdate={() => {}}
+      />,
+    );
+    await settle();
+    expect(commentFetches).toBe(0);
   });
 });

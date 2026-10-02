@@ -683,13 +683,15 @@ export default function FeedClient({
     );
   }
 
-  // Show coming soon page for pre-registered members
-  if (isPreRegistered && community.opening_date) {
+  // Show coming soon page for pre-registered members, also when the community
+  // opened without a date (their first charge is still to come); otherwise
+  // they fall through to the members-only check below and see a blank page.
+  if (isPreRegistered && !isMember) {
     return (
       <PreRegistrationComingSoon
         communityName={community.name}
         communitySlug={communitySlug}
-        openingDate={community.opening_date}
+        openingDate={community.opening_date ?? null}
         membershipPrice={community.membership_price || 0}
         onCancel={handleCancelPreRegistration}
       />

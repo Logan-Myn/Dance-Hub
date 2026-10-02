@@ -114,3 +114,21 @@ it('uses the session user and email, ignoring userId/email in the body', async (
   expect(insertValues).toContain('u1');
   expect(insertValues).not.toContain('victim');
 });
+
+// Landing page: 8% under 50 members, 6% from 50 to 100, 4% above.
+it.each([
+  [49, 8],
+  [50, 6],
+  [100, 6],
+  [101, 4],
+])('charges the advertised platform fee for a community with %i members', async (members, fee) => {
+  mockQueryOne.mockResolvedValueOnce({ ...community, active_member_count: members }).mockResolvedValueOnce(null);
+  stubSubscriptionOk();
+
+  await POST(req({}), { params });
+
+  expect(mockSubscriptionsCreate).toHaveBeenCalledWith(
+    expect.objectContaining({ application_fee_percent: fee }),
+    { stripeAccount: 'acct_1' },
+  );
+});

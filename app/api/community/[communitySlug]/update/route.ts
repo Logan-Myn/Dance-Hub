@@ -2,9 +2,19 @@ import { NextResponse } from 'next/server';
 import { queryOne, sql } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
 import { userCanManageCommunity } from '@/lib/community-auth';
+import { checkCommunitySlug } from '@/lib/community-slug';
+import {
+  resolveStatusChange,
+  PRE_REGISTERED_STATUSES,
+  PRE_REGISTRATIONS_LOCK_MESSAGE,
+} from '@/lib/community-status';
 
 interface Community {
   id: string;
+  slug: string;
+  status: string | null;
+  opening_date: Date | string | null;
+  can_change_opening_date: boolean | null;
 }
 
 interface UpdatedCommunity {
@@ -24,7 +34,7 @@ export async function PUT(request: Request, props: { params: Promise<{ community
 
     // Get the community by slug
     const community = await queryOne<Community>`
-      SELECT id
+      SELECT id, slug, status, opening_date, can_change_opening_date
       FROM communities
       WHERE slug = ${communitySlug}
     `;
@@ -48,20 +58,28 @@ export async function PUT(request: Request, props: { params: Promise<{ community
     // slugifies to nothing) would wipe the community's name and move it to the
     // site root, where every link to it lands on the home page instead.
     const name = typeof updates.name === 'string' ? updates.name.trim() : '';
-    const slug = typeof updates.slug === 'string' ? updates.slug.trim() : '';
-    if (!name || !slug) {
+    if (!name) {
       return NextResponse.json(
         { error: 'Community name is required' },
         { status: 400 }
       );
     }
 
-    // If slug is being updated, check if it's already taken
-    if (slug !== communitySlug) {
-      const existingCommunity = await queryOne<Community>`
+    // Same slug rule as create, so the stored slug is always one safe path
+    // segment that doesn't shadow an app route.
+    const slugCheck = checkCommunitySlug(updates.slug);
+    if (!slugCheck.ok) {
+      return NextResponse.json({ error: slugCheck.error }, { status: 400 });
+    }
+    const slug = slugCheck.slug;
+
+    // If slug is being updated, check if it's already taken (ignoring case,
+    // so "salsa-paris" can't sit next to an older "Salsa-Paris").
+    if (slug !== community.slug) {
+      const existingCommunity = await queryOne<{ id: string }>`
         SELECT id
         FROM communities
-        WHERE slug = ${slug}
+        WHERE LOWER(slug) = ${slug}
           AND id != ${community.id}
       `;
 
@@ -70,6 +88,33 @@ export async function PUT(request: Request, props: { params: Promise<{ community
           { error: 'A community with this URL already exists' },
           { status: 400 }
         );
+      }
+    }
+
+    // Status and opening date: allow-listed values, the platform's date lock,
+    // and a future date for pre-registration.
+    const statusChange = resolveStatusChange(community, {
+      status: updates.status,
+      openingDate: updates.opening_date,
+    });
+    if (!statusChange.ok) {
+      return NextResponse.json({ error: statusChange.error }, { status: statusChange.httpStatus });
+    }
+
+    // Pre-registration subscriptions charge first on the opening date they
+    // were created with. Changing the date or the status would leave those
+    // charges where they are, so once anyone has pre-registered we do it.
+    // Only before the opening: afterwards a member whose first charge failed
+    // can stay pre_registered for weeks, and must not lock an open community.
+    if (statusChange.changed && community.status === 'pre_registration') {
+      const preRegistered = await queryOne<{ count: number }>`
+        SELECT COUNT(*)::int AS count
+        FROM community_members
+        WHERE community_id = ${community.id}
+          AND status = ANY(${PRE_REGISTERED_STATUSES as string[]})
+      `;
+      if ((preRegistered?.count ?? 0) > 0) {
+        return NextResponse.json({ error: PRE_REGISTRATIONS_LOCK_MESSAGE }, { status: 409 });
       }
     }
 
@@ -82,8 +127,8 @@ export async function PUT(request: Request, props: { params: Promise<{ community
         image_url = ${updates.imageUrl},
         custom_links = ${sql.json(Array.isArray(updates.customLinks) ? updates.customLinks : [])},
         slug = ${slug},
-        status = ${updates.status},
-        opening_date = ${updates.opening_date},
+        status = ${statusChange.status},
+        opening_date = ${statusChange.openingDate},
         updated_at = NOW()
       WHERE id = ${community.id}
       RETURNING *

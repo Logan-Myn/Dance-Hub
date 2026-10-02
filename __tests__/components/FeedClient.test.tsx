@@ -43,7 +43,9 @@ jest.mock("@/components/PreRegistrationPaymentModal", () => ({
   PreRegistrationPaymentModal: () => null,
 }));
 jest.mock("@/components/PreRegistrationComingSoon", () => ({
-  PreRegistrationComingSoon: () => null,
+  PreRegistrationComingSoon: ({ openingDate }: { openingDate: string | null }) => (
+    <div data-testid="coming-soon">{String(openingDate)}</div>
+  ),
 }));
 jest.mock("@/components/community/ManageSubscriptionModal", () => ({
   ManageSubscriptionModal: () => null,
@@ -268,4 +270,25 @@ it("disables Join while the join request is in flight, so a double click starts 
 
   release({ ok: true, status: 200, json: () => Promise.resolve({ clientSecret: "pi_secret", stripeAccountId: "acct_1" }) } as Response);
   await waitFor(() => expect(join).not.toBeDisabled());
+});
+
+it("shows a pre-registered member the coming-soon page after the community opens without a date", async () => {
+  render(
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      <FeedClient
+        communitySlug="salsa"
+        initialCommunity={{ ...community, status: "active", opening_date: null } as never}
+        initialThreads={[]}
+        isCreator={false}
+        isAdmin={false}
+        isMember={false}
+        isPreRegistered
+        memberStatus="pre_registered"
+        subscriptionStatus={null}
+        accessEndDate={null}
+      />
+    </SWRConfig>
+  );
+
+  expect(screen.getByTestId("coming-soon")).toHaveTextContent("null");
 });

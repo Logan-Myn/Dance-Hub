@@ -15,6 +15,13 @@ jest.mock('@/lib/resend/templates/marketing/broadcast', () => ({
   BroadcastEmail: () => null,
 }));
 
+// Real batch spacing and backoff, scaled down so retries don't slow the suite.
+jest.mock('@/lib/broadcasts/constants', () => ({
+  ...jest.requireActual('@/lib/broadcasts/constants'),
+  BATCH_DELAY_MS: 1,
+  RETRY_BASE_DELAY_MS: 1,
+}));
+
 import { runBroadcast } from '@/lib/broadcasts/sender';
 
 const recipient = (i: number) => ({
@@ -108,4 +115,107 @@ describe('runBroadcast', () => {
     expect(result.failedCount).toBe(1);
     expect(result.successfulCount).toBe(0);
   }, 15000);
+});
+
+describe('runBroadcast with Resend 6 results ({ data, error } instead of throwing)', () => {
+  const run = (recipients = [recipient(1), recipient(2)], fromName = 'My Community') =>
+    runBroadcast({
+      broadcastId: 'b1',
+      communityId: 'c1',
+      subject: 'Hello',
+      htmlContent: '<p>hi</p>',
+      recipients,
+      fromName,
+      replyTo: 'hello@dance-hub.io',
+    });
+  const ok = { data: { data: [{ id: 'email-1' }] }, error: null, headers: null };
+  const fail = (statusCode: number | null, name: string, message: string) => ({
+    data: null,
+    error: { statusCode, name, message },
+    headers: null,
+  });
+
+  beforeEach(() => {
+    mockBatchSend.mockReset();
+  });
+
+  it('treats a returned error as a failure, records who missed out, and does not report success', async () => {
+    mockBatchSend.mockResolvedValue(fail(422, 'validation_error', 'Invalid `from` field'));
+
+    const result = await run();
+
+    expect(result.status).toBe('failed');
+    expect(result.successfulCount).toBe(0);
+    expect(result.failedCount).toBe(2);
+    expect(result.errorMessage).toContain('Invalid `from` field');
+    expect(result.failedRecipients).toEqual([
+      { userId: 'u1', email: 'user1@example.com', error: 'Invalid `from` field' },
+      { userId: 'u2', email: 'user2@example.com', error: 'Invalid `from` field' },
+    ]);
+    // A validation error won't fix itself: no retries.
+    expect(mockBatchSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a rate-limited batch and succeeds', async () => {
+    mockBatchSend
+      .mockResolvedValueOnce(fail(429, 'rate_limit_exceeded', 'Too many requests'))
+      .mockResolvedValueOnce(ok);
+
+    const result = await run();
+
+    expect(mockBatchSend).toHaveBeenCalledTimes(2);
+    expect(result.status).toBe('sent');
+    expect(result.failedRecipients).toEqual([]);
+  }, 15000);
+
+  it('retries server errors, then gives up and records the batch as failed', async () => {
+    mockBatchSend.mockResolvedValue(fail(500, 'internal_server_error', 'Oops'));
+
+    const result = await run();
+
+    expect(mockBatchSend).toHaveBeenCalledTimes(3);
+    expect(result.status).toBe('failed');
+    expect(result.failedRecipients).toHaveLength(2);
+  }, 15000);
+
+  it('retries while an earlier attempt with the same key is still being processed', async () => {
+    mockBatchSend
+      .mockResolvedValueOnce(fail(409, 'concurrent_idempotent_requests', 'Same key in flight'))
+      .mockResolvedValueOnce(ok);
+
+    const result = await run();
+
+    expect(mockBatchSend).toHaveBeenCalledTimes(2);
+    expect(result.status).toBe('sent');
+  });
+
+  it('does not retry a reused key with a different payload', async () => {
+    mockBatchSend.mockResolvedValue(fail(409, 'invalid_idempotent_request', 'Key reused'));
+
+    const result = await run();
+
+    expect(mockBatchSend).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe('failed');
+  });
+
+  it('sends each batch with its own idempotency key, so a retry cannot send twice', async () => {
+    mockBatchSend
+      .mockResolvedValueOnce(fail(503, 'application_error', 'Unavailable'))
+      .mockResolvedValue(ok);
+    const recipients = Array.from({ length: 150 }, (_, i) => recipient(i));
+
+    await run(recipients);
+
+    const keys = mockBatchSend.mock.calls.map((c) => (c[1] as { idempotencyKey?: string })?.idempotencyKey);
+    expect(keys).toEqual(['broadcast-b1-0', 'broadcast-b1-0', 'broadcast-b1-1']);
+  }, 15000);
+
+  it('quotes the community name in the From header', async () => {
+    mockBatchSend.mockResolvedValue(ok);
+
+    await run([recipient(1)], 'Salsa, "La Rumba"\r\nBcc: x@evil.test');
+
+    const [emails] = mockBatchSend.mock.calls[0];
+    expect(emails[0].from).toBe(`"Salsa, 'La Rumba' Bcc: x@evil.test" <community@dance-hub.io>`);
+  });
 });

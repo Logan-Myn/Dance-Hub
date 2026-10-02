@@ -6,6 +6,7 @@ import {
   BATCH_SIZE,
   BATCH_DELAY_MS,
   MAX_BATCH_RETRIES,
+  RETRY_BASE_DELAY_MS,
   BROADCAST_FROM_ADDRESS,
 } from './constants';
 import { BroadcastEmail } from '@/lib/resend/templates/marketing/broadcast';
@@ -28,12 +29,20 @@ export interface RunBroadcastInput {
   replyTo: string;
 }
 
+export interface FailedRecipient {
+  userId: string;
+  email: string;
+  error: string;
+}
+
 export interface RunBroadcastResult {
   status: 'sent' | 'partial_failure' | 'failed';
   resendBatchIds: string[];
   errorMessage?: string;
   successfulCount: number;
   failedCount: number;
+  /** Who didn't get it, so a resend can target only them. */
+  failedRecipients: FailedRecipient[];
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -43,6 +52,40 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * `"Name" <address>` with the owner-controlled community name made safe for
+ * a header: no line breaks or control characters, and no double quotes or
+ * backslashes to break out of the quoted string (a comma or a quote in an
+ * unquoted name could make every batch fail).
+ */
+export function formatFromHeader(name: string, address: string): string {
+  const safe = name
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/"/g, "'")
+    .replace(/\\/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 100);
+  return safe ? `"${safe}" <${address}>` : address;
+}
+
+/** A failed attempt, and whether trying the same batch again can help. */
+class BatchSendError extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+    readonly retryAfterMs: number | null = null
+  ) {
+    super(message);
+  }
+}
+
+function retryAfterMs(headers: Record<string, string> | null | undefined): number | null {
+  const value = headers?.['retry-after'];
+  const seconds = value ? Number(value) : NaN;
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.min(seconds * 1000, 10_000) : null;
+}
 
 function buildUnsubscribeUrl(token: string | null, communityId: string): string {
   const base = process.env.NEXT_PUBLIC_SITE_URL || 'https://dance-hub.io';
@@ -96,28 +139,43 @@ async function sendBatchWithRetry(
   templatedHtml: string,
   fromName: string,
   replyTo: string,
-  communityId: string
+  communityId: string,
+  idempotencyKey: string
 ): Promise<{ batchId: string | null; error?: Error }> {
-  let lastError: Error | undefined;
+  const emails = batch.map((r) => ({
+    from: formatFromHeader(fromName, BROADCAST_FROM_ADDRESS),
+    to: r.email,
+    replyTo,
+    subject,
+    html: personalize(templatedHtml, r, communityId),
+    tags: [{ name: 'category', value: 'teacher_broadcast' }],
+  }));
+
+  let lastError: BatchSendError | undefined;
   for (let attempt = 0; attempt < MAX_BATCH_RETRIES; attempt++) {
     try {
-      const emails = batch.map((r) => ({
-        from: `${fromName} <${BROADCAST_FROM_ADDRESS}>`,
-        to: r.email,
-        replyTo,
-        subject,
-        html: personalize(templatedHtml, r, communityId),
-        tags: [{ name: 'category', value: 'teacher_broadcast' }],
-      }));
-      const result = await resend.batch.send(emails);
-      const firstId =
-        (result as { data?: { data?: Array<{ id: string }> } })?.data?.data?.[0]?.id ?? null;
-      return { batchId: firstId };
-    } catch (err) {
-      lastError = err as Error;
-      if (attempt < MAX_BATCH_RETRIES - 1) {
-        await sleep(BATCH_DELAY_MS * Math.pow(2, attempt));
+      // Same key on every attempt: if an attempt reached Resend but its
+      // answer was lost, the retry doesn't send the batch a second time.
+      const result = await resend.batch.send(emails, { idempotencyKey });
+      // Resend 6 reports failures in the result instead of throwing.
+      if (result.error) {
+        const { statusCode, message, name } = result.error;
+        // concurrent_idempotent_requests (409): an earlier attempt with this
+        // key is still being processed; asking again later gets its result.
+        const retryable =
+          statusCode === null ||
+          statusCode === 429 ||
+          statusCode >= 500 ||
+          name === 'concurrent_idempotent_requests';
+        throw new BatchSendError(message, retryable, retryAfterMs(result.headers));
       }
+      return { batchId: result.data?.data?.[0]?.id ?? null };
+    } catch (err) {
+      // A thrown error is a network failure or similar: worth retrying.
+      lastError =
+        err instanceof BatchSendError ? err : new BatchSendError((err as Error)?.message ?? String(err), true);
+      if (!lastError.retryable || attempt === MAX_BATCH_RETRIES - 1) break;
+      await sleep(lastError.retryAfterMs ?? RETRY_BASE_DELAY_MS * Math.pow(2, attempt));
     }
   }
   return { batchId: null, error: lastError };
@@ -131,6 +189,7 @@ export async function runBroadcast(input: RunBroadcastInput): Promise<RunBroadca
 
   const batchIds: string[] = [];
   const errors: Error[] = [];
+  const failedRecipients: FailedRecipient[] = [];
   let successfulCount = 0;
   let failedCount = 0;
 
@@ -142,14 +201,18 @@ export async function runBroadcast(input: RunBroadcastInput): Promise<RunBroadca
       templatedHtml,
       fromName,
       replyTo,
-      communityId
+      communityId,
+      `broadcast-${input.broadcastId}-${i}`
     );
-    if (batchId) {
-      batchIds.push(batchId);
+    if (!error) {
+      if (batchId) batchIds.push(batchId);
       successfulCount += batch.length;
     } else {
-      if (error) errors.push(error);
+      errors.push(error);
       failedCount += batch.length;
+      for (const r of batch) {
+        failedRecipients.push({ userId: r.userId, email: r.email, error: error.message });
+      }
     }
     if (i < chunks.length - 1) await sleep(BATCH_DELAY_MS);
   }
@@ -162,8 +225,10 @@ export async function runBroadcast(input: RunBroadcastInput): Promise<RunBroadca
   return {
     status,
     resendBatchIds: batchIds,
-    errorMessage: errors.length > 0 ? errors.map((e) => e.message).join('; ') : undefined,
+    errorMessage:
+      errors.length > 0 ? [...new Set(errors.map((e) => e.message))].join('; ') : undefined,
     successfulCount,
     failedCount,
+    failedRecipients,
   };
 }

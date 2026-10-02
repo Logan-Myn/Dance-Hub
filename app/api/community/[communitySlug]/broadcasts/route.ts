@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { queryOne, query, sql } from '@/lib/db';
 import { authorizeBroadcastAccess } from '@/lib/broadcasts/auth';
 import { checkCanSend } from '@/lib/broadcasts/quota';
 import { getActiveRecipientsForCommunity } from '@/lib/broadcasts/recipients';
-import { runBroadcast } from '@/lib/broadcasts/sender';
+import { runBroadcast, type RunBroadcastInput } from '@/lib/broadcasts/sender';
 import { sanitizeEmailHtml } from '@/lib/sanitize-html';
 
 interface BroadcastListRow {
@@ -87,7 +87,11 @@ export async function POST(req: Request, props: { params: Promise<{ communitySlu
       WHERE id = ${broadcastId}
     `;
 
-    const result = await runBroadcast({
+    // Send after the response. With rate-limit retries a large broadcast can
+    // take longer than the proxy lets a request live; the owner then saw an
+    // error while the send went on, and publishing again sent it twice. The
+    // composer polls the status route until the row leaves 'sending'.
+    const sendInput: RunBroadcastInput = {
       broadcastId,
       communityId: community.id,
       subject,
@@ -96,27 +100,13 @@ export async function POST(req: Request, props: { params: Promise<{ communitySlu
       recipients,
       fromName: community.name,
       replyTo: 'hello@dance-hub.io',
-    });
-
-    await sql`
-      UPDATE email_broadcasts
-      SET status = ${result.status},
-          resend_batch_ids = ${result.resendBatchIds},
-          error_message = ${result.errorMessage ?? null},
-          sent_at = ${
-            result.status === 'sent' || result.status === 'partial_failure'
-              ? new Date()
-              : null
-          }
-      WHERE id = ${broadcastId}
-    `;
+    };
+    after(() => sendAndRecord(sendInput));
 
     return NextResponse.json({
       broadcastId,
       recipientCount: recipients.length,
-      status: result.status,
-      successfulCount: result.successfulCount,
-      failedCount: result.failedCount,
+      status: 'sending',
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Internal error';
@@ -137,6 +127,63 @@ export async function POST(req: Request, props: { params: Promise<{ communitySlu
     }
 
     return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
+
+/** Runs the send and writes its outcome on the broadcast row. Never throws. */
+async function sendAndRecord(input: RunBroadcastInput): Promise<void> {
+  const { broadcastId } = input;
+  let result: Awaited<ReturnType<typeof runBroadcast>>;
+  try {
+    result = await runBroadcast(input);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Internal error';
+    console.error('[broadcasts:send] failed', err);
+    // Don't leave the row 'sending': it would count against the monthly
+    // quota and keep the composer waiting.
+    try {
+      await sql`
+        UPDATE email_broadcasts
+        SET status = 'failed', error_message = ${msg}
+        WHERE id = ${broadcastId} AND status = 'sending'
+      `;
+    } catch (cleanupErr) {
+      console.error('[broadcasts:send] cleanup failed', cleanupErr);
+    }
+    return;
+  }
+
+  try {
+    await sql`
+      UPDATE email_broadcasts
+      SET status = ${result.status},
+          resend_batch_ids = ${result.resendBatchIds},
+          error_message = ${result.errorMessage ?? null},
+          sent_at = ${
+            result.status === 'sent' || result.status === 'partial_failure'
+              ? new Date()
+              : null
+          }
+      WHERE id = ${broadcastId}
+    `;
+  } catch (recordErr) {
+    console.error('[broadcasts:send] could not record the outcome', broadcastId, recordErr);
+    return;
+  }
+
+  // Who didn't get it, so a resend can target only them. Separate and best
+  // effort: the column comes with the 2026-10-02 migration, and the
+  // status above must be saved even before that runs.
+  if (result.failedRecipients.length > 0) {
+    try {
+      await sql`
+        UPDATE email_broadcasts
+        SET failed_recipients = ${sql.json(result.failedRecipients as any)}
+        WHERE id = ${broadcastId}
+      `;
+    } catch (recordErr) {
+      console.error('[broadcasts:send] could not record failed recipients', recordErr);
+    }
   }
 }
 

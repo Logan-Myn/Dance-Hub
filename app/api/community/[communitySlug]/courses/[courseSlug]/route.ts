@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { query, queryOne, sql } from "@/lib/db";
-import { slugify } from "@/lib/utils";
+import { uniqueCourseSlug } from "@/lib/course-slug";
 import {
   requireCommunityManager,
   requireCommunityViewer,
@@ -219,22 +219,7 @@ export async function PUT(
     // another course in this community.
     let newSlug = currentCourse.slug;
     if (title && title !== currentCourse.title) {
-      const base = slugify(title);
-      let candidate = base;
-      let n = 1;
-      while (true) {
-        const collision = await queryOne<{ id: string }>`
-          SELECT id FROM courses
-          WHERE community_id = ${community.id}
-            AND slug = ${candidate}
-            AND id != ${currentCourse.id}
-          LIMIT 1
-        `;
-        if (!collision) break;
-        n += 1;
-        candidate = `${base}-${n}`;
-      }
-      newSlug = candidate;
+      newSlug = await uniqueCourseSlug(community.id, title, currentCourse.id);
     }
 
     await sql`

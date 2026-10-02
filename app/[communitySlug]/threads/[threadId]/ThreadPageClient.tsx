@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
@@ -65,7 +66,8 @@ export default function ThreadPageClient({
   const categoryType = matchedCategory?.iconType;
 
   // ThreadView expects fields under the names the modal already uses.
-  const viewThread: ThreadViewProps['thread'] = {
+  // Memoised so a re-render without new server data keeps the same object.
+  const viewThread = useMemo<ThreadViewProps['thread']>(() => ({
     id: thread.id,
     user_id: thread.userId,
     title: thread.title,
@@ -82,7 +84,7 @@ export default function ThreadPageClient({
       parent_id: c.parent_id ?? undefined,
     })),
     pinned: thread.pinned,
-  };
+  }), [thread, categoryType]);
 
   const handleClose = () => {
     router.push(communityPath(communitySlug));

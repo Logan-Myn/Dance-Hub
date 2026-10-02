@@ -12,10 +12,7 @@ import {
 } from '@/lib/resend/templates/booking/booking-not-completed';
 import { MemberWelcomeEmail } from '@/lib/resend/templates/community/member-welcome';
 import { CommunityOpeningEmail } from '@/lib/resend/templates/community/community-opening';
-import {
-  upsertBroadcastSubscription,
-  markBroadcastSubscriptionStatus,
-} from '@/lib/broadcasts/billing';
+import { recordBroadcastSubscription } from '@/lib/broadcasts/billing';
 import { claimWebhookEvent, finishWebhookEvent } from '@/lib/stripe-webhook-events';
 import { LIVE_SUBSCRIPTION_STATUSES, memberSubscriptionStatus } from '@/lib/membership-ended';
 import {
@@ -24,6 +21,7 @@ import {
   monthlyLimitReached,
   slotStartsAt,
 } from '@/lib/private-lesson-booking';
+import { isInLaunchPromo, membershipFeePercentage } from '@/lib/platform-fees';
 import React from 'react';
 import Stripe from 'stripe';
 
@@ -87,20 +85,12 @@ async function handleBroadcastCheckoutCompleted(session: Stripe.Checkout.Session
   }
   const subscriptionId = session.subscription as string;
   const sub = await stripe.subscriptions.retrieve(subscriptionId);
-  await upsertBroadcastSubscription({
-    communityId,
-    stripeCustomerId: sub.customer as string,
-    stripeSubscriptionId: sub.id,
-    status: sub.status as 'active' | 'past_due' | 'canceled' | 'incomplete',
-    currentPeriodEnd: (sub as any).current_period_end
-      ? new Date((sub as any).current_period_end * 1000)
-      : null,
-  });
+  await recordBroadcastSubscription(communityId, sub);
 }
 
-async function handleBroadcastSubscriptionLifecycle(sub: Stripe.Subscription): Promise<boolean> {
-  if (sub.metadata?.purpose !== 'broadcast_subscription') return false;
-  const communityId = sub.metadata?.communityId;
+async function handleBroadcastSubscriptionLifecycle(eventSub: Stripe.Subscription): Promise<boolean> {
+  if (eventSub.metadata?.purpose !== 'broadcast_subscription') return false;
+  const communityId = eventSub.metadata?.communityId;
   if (communityId) {
     // Deleting a community cancels its broadcast subscription, and the
     // resulting event arrives after the community row (and this row, by
@@ -110,25 +100,25 @@ async function handleBroadcastSubscriptionLifecycle(sub: Stripe.Subscription): P
       SELECT id FROM communities WHERE id = ${communityId}
     `;
     if (!community) {
-      console.log('⏭️ Broadcast subscription event for a deleted community, skipping:', sub.id);
+      console.log('⏭️ Broadcast subscription event for a deleted community, skipping:', eventSub.id);
       return true;
     }
-    // Upsert so we handle both initial activation and subsequent updates
-    await upsertBroadcastSubscription({
-      communityId,
-      stripeCustomerId: sub.customer as string,
-      stripeSubscriptionId: sub.id,
-      status: sub.status as 'active' | 'past_due' | 'canceled' | 'incomplete',
-      currentPeriodEnd: (sub as any).current_period_end ? new Date((sub as any).current_period_end * 1000) : null,
-    });
-  } else {
-    await markBroadcastSubscriptionStatus(
-      sub.id,
-      sub.status as 'active' | 'past_due' | 'canceled' | 'incomplete',
-      (sub as any).current_period_end ? new Date((sub as any).current_period_end * 1000) : null
-    );
+  }
+  // Stripe doesn't deliver events in order, and retries a failed one later:
+  // a late past_due event must not overwrite an active subscription. Record
+  // the subscription as it is now (platform account), like the checkout path.
+  const sub = await stripe.subscriptions.retrieve(eventSub.id);
+  // Status mapped onto the table's set; events for a subscription other than
+  // the community's current one are ignored unless it becomes active.
+  if ((await recordBroadcastSubscription(communityId, sub)) === 'ignored') {
+    console.log('⏭️ Event for a broadcast subscription the community no longer uses, skipping:', sub.id);
   }
   return true;
+}
+
+/** Broadcast tier subscriptions live on the platform account and carry no member metadata. */
+function isBroadcastSubscription(sub: Stripe.Subscription): boolean {
+  return sub.metadata?.purpose === 'broadcast_subscription';
 }
 
 /**
@@ -161,21 +151,9 @@ async function applyPaidMembership(
   `;
   if (!community) return 'applied';
 
-  const communityAge = Date.now() - new Date(community.created_at).getTime();
-  const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
-  const isStillPromotional = communityAge < thirtyDaysInMs;
-
-  let newFeePercentage = 0;
+  const isStillPromotional = isInLaunchPromo(community.created_at);
+  const newFeePercentage = membershipFeePercentage(community);
   if (!isStillPromotional) {
-    // Calculate standard tiered pricing
-    if (community.active_member_count <= 50) {
-      newFeePercentage = 8.0;
-    } else if (community.active_member_count <= 100) {
-      newFeePercentage = 6.0;
-    } else {
-      newFeePercentage = 4.0;
-    }
-
     // Update the subscription's application fee if it has changed
     if (subscription.application_fee_percent !== newFeePercentage) {
       console.log(`🔄 Updating subscription ${subscription.id} fee from ${subscription.application_fee_percent}% to ${newFeePercentage}%`);
@@ -909,20 +887,7 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
           }
 
           // Compute correct fee % based on community grace period + tier
-          const draftCommunityAge = Date.now() - new Date(draftCommunity.created_at).getTime();
-          const thirtyDaysInMsDraft = 30 * 24 * 60 * 60 * 1000;
-          const draftIsStillPromotional = draftCommunityAge < thirtyDaysInMsDraft;
-
-          let draftFeePercentage = 0;
-          if (!draftIsStillPromotional) {
-            if (draftCommunity.active_member_count <= 50) {
-              draftFeePercentage = 8.0;
-            } else if (draftCommunity.active_member_count <= 100) {
-              draftFeePercentage = 6.0;
-            } else {
-              draftFeePercentage = 4.0;
-            }
-          }
+          const draftFeePercentage = membershipFeePercentage(draftCommunity);
 
           // Update the invoice's application_fee_amount directly (only possible while draft)
           // This ensures the CURRENT cycle gets the correct fee, not just future ones.
@@ -984,6 +949,12 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
           const subscription = await connectedStripe.subscriptions.retrieve(
             subscriptionId as string
           );
+
+          // The subscription.updated event that follows records the
+          // broadcast tier; a 400 here made Stripe retry for days.
+          if (isBroadcastSubscription(subscription)) {
+            return NextResponse.json({ received: true });
+          }
 
           if (!subscription.metadata?.user_id || !subscription.metadata?.community_id) {
             console.error('Missing metadata in subscription:', subscription.id);
@@ -1081,6 +1052,10 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
           const failedSubscription = await connectedStripe.subscriptions.retrieve(
             failedSubscriptionId as string
           );
+
+          if (isBroadcastSubscription(failedSubscription)) {
+            break;
+          }
 
           if (!failedSubscription.metadata?.user_id || !failedSubscription.metadata?.community_id) {
             console.error('Missing metadata in subscription:', failedSubscription.id);

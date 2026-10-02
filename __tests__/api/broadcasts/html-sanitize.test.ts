@@ -12,6 +12,15 @@ import { checkCanSend } from '@/lib/broadcasts/quota';
 import { getActiveRecipientsForCommunity } from '@/lib/broadcasts/recipients';
 import { runBroadcast } from '@/lib/broadcasts/sender';
 
+// The send runs in next/server after(); collect it so the test can run it.
+const mockAfter: Array<() => unknown> = [];
+jest.mock('next/server', () => ({
+  ...jest.requireActual('next/server'),
+  after: (fn: () => unknown) => {
+    mockAfter.push(fn);
+  },
+}));
+
 jest.mock('@/lib/broadcasts/auth', () => ({ authorizeBroadcastAccess: jest.fn() }));
 jest.mock('@/lib/db', () => {
   const sql = jest.fn() as jest.Mock & { json: (v: unknown) => unknown };
@@ -48,7 +57,7 @@ beforeEach(() => {
     { userId: 'm1', email: 'm1@x.com', displayName: 'M', unsubscribeToken: 't' },
   ]);
   mockedSql.mockResolvedValue([]);
-  mockedRun.mockResolvedValue({ status: 'sent', resendBatchIds: [], successfulCount: 1, failedCount: 0 });
+  mockedRun.mockResolvedValue({ status: 'sent', resendBatchIds: [], successfulCount: 1, failedCount: 0, failedRecipients: [] });
 });
 
 describe('POST broadcasts', () => {
@@ -68,6 +77,7 @@ describe('POST broadcasts', () => {
     )!;
     expect(insert).toContain(CLEAN);
     expect(insert.some((v: unknown) => typeof v === 'string' && v.includes('onerror'))).toBe(false);
+    while (mockAfter.length) await mockAfter.shift()!();
     expect(mockedRun).toHaveBeenCalledWith(expect.objectContaining({ htmlContent: CLEAN }));
   });
 

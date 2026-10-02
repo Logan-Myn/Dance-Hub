@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import { authorizeBroadcastAccess } from '@/lib/broadcasts/auth';
 import { runBroadcast } from '@/lib/broadcasts/sender';
@@ -41,7 +42,9 @@ export async function POST(req: Request, props: { params: Promise<{ communitySlu
     const unsubscribeToken = await ensureUnsubscribeToken(session.user.email);
 
     const result = await runBroadcast({
-      broadcastId: 'test',
+      // Unique per send: the id keys the provider's idempotency, and a fixed
+      // one would make every later test send within a day a no-op.
+      broadcastId: `test-${randomUUID()}`,
       communityId: community.id,
       subject: `[TEST] ${subject}`,
       htmlContent,
@@ -58,6 +61,13 @@ export async function POST(req: Request, props: { params: Promise<{ communitySlu
       replyTo: 'hello@dance-hub.io',
     });
 
+    if (result.status !== 'sent') {
+      console.error('[broadcasts:test] send failed', result.errorMessage);
+      return NextResponse.json(
+        { error: "The test email couldn't be sent. Please try again in a few minutes." },
+        { status: 502 }
+      );
+    }
     return NextResponse.json({ status: result.status, failedCount: result.failedCount });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Internal error';

@@ -96,7 +96,12 @@ export function UsersTable({ users }: { users: AdminUserRow[] }) {
         id: 'actions',
         header: '',
         enableSorting: false,
-        cell: ({ row }) => <DeleteUserButton userId={row.original.id} />,
+        // The admin user routes and /api/profile take the auth user id, not
+        // the profile id (with the profile id, Delete matched nothing).
+        cell: ({ row }) =>
+          row.original.authUserId ? (
+            <DeleteUserButton userId={row.original.authUserId} />
+          ) : null,
       },
     ],
     []

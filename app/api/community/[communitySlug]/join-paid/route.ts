@@ -5,6 +5,7 @@ import { stripe } from "@/lib/stripe";
 import { requireSession } from "@/lib/community-auth";
 import { LIVE_SUBSCRIPTION_STATUSES, memberSubscriptionStatus } from "@/lib/membership-ended";
 import { isMissingStripeResource } from "@/lib/subscription-cancel";
+import { membershipFeePercentage } from "@/lib/platform-fees";
 
 interface Community {
   id: string;
@@ -76,24 +77,8 @@ export async function POST(request: Request, props: { params: Promise<{ communit
       );
     }
 
-    // Check if this member should get promotional pricing (community < 30 days old)
-    const communityAge = Date.now() - new Date(community.created_at).getTime();
-    const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
-    const isPromotional = communityAge < thirtyDaysInMs;
-
-    // Calculate platform fee percentage
-    let feePercentage = 0; // Default promotional rate
-
-    if (!isPromotional) {
-      // Use standard tiered pricing if not in promotional period
-      if ((community.active_member_count || 0) <= 50) {
-        feePercentage = 8.0;
-      } else if ((community.active_member_count || 0) <= 100) {
-        feePercentage = 6.0;
-      } else {
-        feePercentage = 4.0;
-      }
-    }
+    // Platform fee: 0% in the community's first 30 days, then by member tier.
+    const feePercentage = membershipFeePercentage(community);
 
     // Check if user is already a member
     const existingMember = await queryOne<ExistingMember>`

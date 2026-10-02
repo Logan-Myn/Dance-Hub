@@ -1,6 +1,7 @@
 import { requireCommunityManagerPage } from '@/lib/community-auth';
 import { queryOne } from '@/lib/db';
 import { GeneralSettingsForm } from '@/components/admin/GeneralSettingsForm';
+import { PRE_REGISTERED_STATUSES } from '@/lib/community-status';
 
 // Match the Emails/Dashboard admin pages: opt out of the data cache so the RSC
 // re-renders with fresh data after each mutation + router.refresh().
@@ -46,6 +47,20 @@ export default async function GeneralSettingsPage(
   // when null so first-time editors aren't blocked.
   const canChangeOpeningDate = community.can_change_opening_date ?? true;
 
+  // Once someone has pre-registered (and until the community opens), the
+  // update route refuses status and opening-date changes; the form disables
+  // those fields and says why.
+  const preRegistered =
+    community.status === 'pre_registration'
+      ? await queryOne<{ count: number }>`
+          SELECT COUNT(*)::int AS count
+          FROM community_members
+          WHERE community_id = ${community.id}
+            AND status = ANY(${PRE_REGISTERED_STATUSES as string[]})
+        `
+      : null;
+  const hasPreRegistrations = (preRegistered?.count ?? 0) > 0;
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-1 duration-500">
       <header className="mb-10">
@@ -67,6 +82,7 @@ export default async function GeneralSettingsPage(
         initialStatus={community.status ?? 'active'}
         initialOpeningDate={community.opening_date}
         canChangeOpeningDate={canChangeOpeningDate}
+        hasPreRegistrations={hasPreRegistrations}
       />
     </div>
   );

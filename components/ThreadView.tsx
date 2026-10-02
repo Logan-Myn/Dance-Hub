@@ -16,7 +16,7 @@ import { formatDisplayName } from "@/lib/utils";
 import { CATEGORY_ICONS } from "@/lib/constants";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Comment from "./Comment";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
@@ -169,29 +169,48 @@ export default function ThreadView({
   // Use comments from props if available, otherwise fetch on demand.
   // The feed list now ships threads without comment bodies (count only),
   // so the modal/page lazy-loads them when first opened.
+  // Runs once per thread id: parents store the fetched comments (a new array
+  // each time) or refresh the route, so depending on thread.comments here
+  // re-fetched forever for threads with no comments.
+  const loadedCommentsFor = useRef<string | null>(null);
   useEffect(() => {
+    if (!thread.id || loadedCommentsFor.current === thread.id) return;
+    loadedCommentsFor.current = thread.id;
+
     if (thread.comments !== undefined && thread.comments.length > 0) {
       setLocalComments(thread.comments);
       return;
     }
 
+    let cancelled = false;
+    let done = false;
     async function fetchComments() {
       try {
         const response = await fetch(`/api/threads/${thread.id}/comments`);
-        if (response.ok) {
-          const comments = await response.json();
-          setLocalComments(comments);
+        if (!response.ok || cancelled) return;
+        const comments = await response.json();
+        if (cancelled || !Array.isArray(comments)) return;
+        setLocalComments(comments);
+        // Only tell the parent when there is something new to store.
+        if (comments.length > 0) {
           onThreadUpdate?.(thread.id, { comments });
         }
       } catch (error) {
         console.error("Error fetching comments:", error);
+      } finally {
+        done = true;
       }
     }
 
-    if (thread.id) {
-      fetchComments();
-    }
-  }, [thread.id, thread.comments]);
+    fetchComments();
+    return () => {
+      cancelled = true;
+      // Unmounted mid-fetch (e.g. Strict Mode's double mount): let the next
+      // mount fetch again instead of never loading.
+      if (!done) loadedCommentsFor.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.id]);
 
   // No sync from props for likes - we use optimistic updates only
   // The initial state is set from props when the component mounts

@@ -2,7 +2,8 @@ import { sql } from '@/lib/db';
 import { stripe } from '@/lib/stripe';
 import { cancelSubscriptionNow } from '@/lib/subscription-cancel';
 
-export const PRE_REGISTERED_STATUSES: readonly string[] = ['pre_registered', 'pending_pre_registration'];
+// Defined with the other community-status rules (a module without Stripe).
+export { PRE_REGISTERED_STATUSES } from '@/lib/community-status';
 
 export interface PreRegistrationRow {
   stripe_subscription_id: string | null;

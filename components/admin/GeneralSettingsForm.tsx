@@ -17,6 +17,11 @@ import {
 import { uploadFileToStorage, STORAGE_FOLDERS } from "@/lib/storage-client";
 import { BannerRepositionModal } from "@/components/admin/BannerRepositionModal";
 import { communityPath } from "@/lib/safe-redirect";
+import { checkCommunitySlug } from "@/lib/community-slug";
+import {
+  OPENING_DATE_LOCKED_MESSAGE,
+  PRE_REGISTRATIONS_LOCK_MESSAGE,
+} from "@/lib/community-status";
 
 interface CustomLink {
   title: string;
@@ -40,6 +45,8 @@ interface GeneralSettingsFormProps {
   initialStatus: string;
   initialOpeningDate: string | null;
   canChangeOpeningDate: boolean;
+  /** Someone has pre-registered: status and opening date are frozen. */
+  hasPreRegistrations?: boolean;
 }
 
 // Port of formatUrl from CommunitySettingsModal.tsx line 165.
@@ -49,13 +56,6 @@ function formatUrl(url: string): string {
     return url;
   }
   return `https://${url}`;
-}
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
 }
 
 function normalizeStatus(status: string): CommunityStatus {
@@ -76,6 +76,7 @@ export function GeneralSettingsForm({
   initialStatus,
   initialOpeningDate,
   canChangeOpeningDate,
+  hasPreRegistrations = false,
 }: GeneralSettingsFormProps) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
@@ -123,14 +124,22 @@ export function GeneralSettingsForm({
       toast.error("Please enter a community name");
       return;
     }
-    if (!slugify(trimmedName)) {
-      toast.error("The community name needs at least one letter or number");
+    // Same slug rule the server applies (letters/digits, not a reserved path).
+    const slugCheck = checkCommunitySlug(trimmedName);
+    if (!slugCheck.ok) {
+      toast.error(slugCheck.error);
       return;
     }
 
     // Validation for pre-registration (ported from CommunitySettingsModal
-    // handleSaveChanges lines 647-671). Runs BEFORE the fetch + loading toast.
-    if (communityStatus === "pre_registration") {
+    // handleSaveChanges lines 647-671). Runs BEFORE the fetch + loading toast,
+    // and only when the status or date changes (the server keeps an unchanged
+    // date as it is, even once it has passed).
+    const instant = (d: string | null) => (d ? new Date(d).getTime() : null);
+    const statusOrDateChanged =
+      communityStatus !== normalizeStatus(initialStatus) ||
+      instant(openingDate || null) !== instant(initialOpeningDate);
+    if (communityStatus === "pre_registration" && statusOrDateChanged) {
       if (!openingDate) {
         toast.error("Opening date is required for pre-registration mode");
         return;
@@ -163,7 +172,7 @@ export function GeneralSettingsForm({
 
     try {
       // Regenerate slug from the name, matching the modal behaviour.
-      const newSlug = slugify(trimmedName);
+      const newSlug = slugCheck.slug;
 
       const requestBody = {
         name: trimmedName,
@@ -196,6 +205,11 @@ export function GeneralSettingsForm({
         );
       }
 
+      const result: { data?: { slug?: string } } = await response
+        .json()
+        .catch(() => ({}));
+      const savedSlug = result.data?.slug || newSlug;
+
       toast.dismiss(loadingToast);
       toast.success("Your changes have been saved successfully!", {
         duration: 3000,
@@ -204,8 +218,8 @@ export function GeneralSettingsForm({
 
       // If the slug has changed, navigate to the new URL — the admin route
       // is nested under /[communitySlug], so we must redirect.
-      if (newSlug !== currentSlug) {
-        window.location.href = communityPath(newSlug, '/admin/general');
+      if (savedSlug !== currentSlug) {
+        window.location.href = communityPath(savedSlug, '/admin/general');
         return;
       }
 
@@ -213,10 +227,13 @@ export function GeneralSettingsForm({
     } catch (error) {
       console.error("Error saving changes:", error);
       toast.dismiss(loadingToast);
-      toast.error("Failed to save changes. Please try again.", {
-        duration: 3000,
-        icon: "❌",
-      });
+      // Show the server's reason (locked date, reserved name...) when it gave one.
+      toast.error(
+        error instanceof Error && error.message !== "Failed to update community"
+          ? error.message
+          : "Failed to save changes. Please try again.",
+        { duration: 6000, icon: "❌" }
+      );
     } finally {
       setIsSaving(false);
     }
@@ -312,6 +329,7 @@ export function GeneralSettingsForm({
           <Select
             value={communityStatus}
             onValueChange={(value: CommunityStatus) => setCommunityStatus(value)}
+            disabled={hasPreRegistrations}
           >
             <SelectTrigger className="w-full rounded-xl border-border/50">
               <SelectValue placeholder="Select status" />
@@ -328,6 +346,14 @@ export function GeneralSettingsForm({
               </SelectItem>
             </SelectContent>
           </Select>
+
+          {hasPreRegistrations && (
+            <div className="mt-3 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+              <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                {PRE_REGISTRATIONS_LOCK_MESSAGE}
+              </p>
+            </div>
+          )}
 
           {communityStatus === "pre_registration" && (
             <div className="mt-3 p-4 bg-primary/5 border border-primary/20 rounded-xl">
@@ -378,17 +404,16 @@ export function GeneralSettingsForm({
                 return `${year}-${month}-${day}T${hours}:${minutes}`;
               })()}
               className="rounded-xl border-border/50"
-              disabled={!canChangeOpeningDate}
+              disabled={!canChangeOpeningDate || hasPreRegistrations}
             />
             <p className="text-xs text-muted-foreground mt-1.5">
               Pre-registered members will be automatically charged on this date.
             </p>
 
-            {!canChangeOpeningDate && (
+            {!canChangeOpeningDate && !hasPreRegistrations && (
               <div className="mt-3 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
                 <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                  Opening date changes are currently restricted. Contact support
-                  if you need to modify the date.
+                  {OPENING_DATE_LOCKED_MESSAGE}
                 </p>
               </div>
             )}
