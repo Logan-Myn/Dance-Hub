@@ -75,9 +75,8 @@ function CallInterface({
   const connectionState = useConnectionState();
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  // Identities with a raised hand, and those the teacher allowed this session.
+  // Identities with a raised hand.
   const [raisedHands, setRaisedHands] = useState<string[]>([]);
-  const [approved, setApproved] = useState<string[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [deniedFeedback, setDeniedFeedback] = useState(false);
   const [revokedFeedback, setRevokedFeedback] = useState(false);
@@ -143,7 +142,6 @@ function CallInterface({
           case "hand-lowered":
             // Sent when a student steps down; they drop their own permission.
             setRaisedHands((prev) => prev.filter((id) => id !== event.from));
-            setApproved((prev) => prev.filter((id) => id !== event.from));
             break;
           case "denied":
             setDeniedFeedback(true);
@@ -171,16 +169,14 @@ function CallInterface({
     ]);
   };
 
-  // Teacher view: who may use mic/camera right now (server permission, an
-  // approval made this session, or tracks already being sent), and who is
-  // still waiting. People who left drop out of both lists.
+  // Teacher view: who may use mic/camera right now, straight from the
+  // permissions the server pushes (so a student who rejoins with a fresh
+  // subscribe-only token drops out), and who is still waiting. People who
+  // left drop out of both lists.
   const speakers =
     isTeacher && moderation
       ? participants
-          .filter((p) => p.identity !== localIdentity)
-          .filter(
-            (p) => p.permissions?.canPublish || approved.includes(p.identity) || p.trackPublications.size > 0
-          )
+          .filter((p) => p.identity !== localIdentity && p.permissions?.canPublish)
           .map((p) => p.identity)
       : [];
   const presentIds = participantIds.split(",");
@@ -194,7 +190,6 @@ function CallInterface({
       addSystemMessage(`Could not give ${nameFor(identity)} mic/camera access. Try again.`);
       return;
     }
-    setApproved((prev) => (prev.includes(identity) ? prev : [...prev, identity]));
     setRaisedHands((prev) => prev.filter((id) => id !== identity));
     addSystemMessage(`${nameFor(identity)} was granted mic/camera access`);
   };
@@ -214,7 +209,6 @@ function CallInterface({
       return;
     }
     sendAppMessage({ type: "hand-revoked" }, [identity]);
-    setApproved((prev) => prev.filter((id) => id !== identity));
     setRaisedHands((prev) => prev.filter((id) => id !== identity));
     addSystemMessage(`${nameFor(identity)}'s access was revoked`);
   };

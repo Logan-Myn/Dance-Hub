@@ -209,6 +209,33 @@ describe("as the teacher", () => {
     expect(opts).toEqual({ destinationIdentities: ["u-bob"] });
   });
 
+  it("shows a new raised hand from an approved student who reconnected", async () => {
+    mockParticipants = [participant("u-bob")];
+    const view = await renderRoom(true);
+    await userEvent.click(screen.getByTitle("Open chat"));
+    deliver("u-bob", { type: "hand-raise" });
+    await userEvent.click(await screen.findByTitle("Allow"));
+    expect(setCanPublish).toHaveBeenCalledWith("u-bob", true);
+
+    // Bob drops and rejoins with a fresh subscribe-only token.
+    mockParticipants = [mockLocal, participant("u-bob", false)];
+    view.rerender(
+      <LiveKitClassRoom
+        token="t"
+        serverUrl="wss://media"
+        onLeave={onLeave}
+        isTeacher
+        localName="Anna"
+        lookupNames={lookupNames}
+        moderation={{ teacherIdentity: "u-teacher", setCanPublish }}
+      />
+    );
+    expect(screen.queryByTitle("Revoke access")).not.toBeInTheDocument();
+
+    deliver("u-bob", { type: "hand-raise" });
+    expect(await screen.findByTitle("Allow")).toBeInTheDocument();
+  });
+
   it("can revoke a student who is already allowed after a reload, without a raised hand", async () => {
     mockParticipants = [participant("u-carl", true)];
     await renderRoom(true);
