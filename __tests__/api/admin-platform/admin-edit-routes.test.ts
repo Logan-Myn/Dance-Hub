@@ -25,11 +25,17 @@ const strict = (fn: jest.Mock) => (strings: string[], ...values: unknown[]) => {
   }
   return fn(strings, ...values);
 };
-jest.mock('@/lib/db', () => ({
-  sql: (...a: unknown[]) => strict(mockSql)(...(a as [string[], ...unknown[]])),
-  queryOne: (...a: unknown[]) => strict(mockQueryOne)(...(a as [string[], ...unknown[]])),
-  query: (...a: unknown[]) => strict(mockQuery)(...(a as [string[], ...unknown[]])),
-}));
+const mockBegin = jest.fn();
+jest.mock('@/lib/db', () => {
+  const sql = (...a: unknown[]) => strict(mockSql)(...(a as [string[], ...unknown[]]));
+  // A transaction runs its callback with the same (strict) tagged template.
+  sql.begin = (fn: (tx: typeof sql) => Promise<unknown>) => mockBegin(fn, sql);
+  return {
+    sql,
+    queryOne: (...a: unknown[]) => strict(mockQueryOne)(...(a as [string[], ...unknown[]])),
+    query: (...a: unknown[]) => strict(mockQuery)(...(a as [string[], ...unknown[]])),
+  };
+});
 
 const text = (call: unknown[]) => (call[0] as string[]).join('?');
 const sqlCalls = (re: RegExp) => mockSql.mock.calls.filter((c) => re.test(text(c)));
@@ -48,6 +54,7 @@ beforeEach(() => {
   community = { id: 'c1' };
   slugTakenBy = null;
   mockSql.mockResolvedValue([{ id: 'row' }]);
+  mockBegin.mockImplementation((fn: (tx: unknown) => Promise<unknown>, tx: unknown) => fn(tx));
   mockQuery.mockResolvedValue([]);
   mockQueryOne.mockImplementation(async (strings: string[]) => {
     const t = strings.join('?');
@@ -114,6 +121,27 @@ describe('PATCH /api/admin/users/[userId]', () => {
     expect(prefs[0].slice(1)).toContain('new@example.com');
     // "user" first: it holds the unique constraint and is what sign-in reads.
     expect(mockSql.mock.calls.indexOf(userUpdate)).toBeLessThan(mockSql.mock.calls.indexOf(prefs[0]));
+  });
+
+  it('changes the email and its copies in one transaction', async () => {
+    await patch({ email: 'new@example.com' });
+    expect(mockBegin).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a failure to copy the email instead of answering success', async () => {
+    mockSql.mockImplementation(async (strings: string[]) => {
+      if (/UPDATE email_preferences/.test(strings.join('?'))) throw new Error('connection reset');
+      return [];
+    });
+    const res = await patch({ email: 'new@example.com' });
+    expect(res.status).toBe(500);
+  });
+
+  it('treats an empty email as no change, so a name-only edit works', async () => {
+    const res = await patch({ full_name: 'Ana B', display_name: 'Ana', email: '' });
+    expect(res.status).toBe(200);
+    expect(sqlCalls(/UPDATE "user"/)).toHaveLength(0);
+    expect(sqlCalls(/UPDATE profiles/)).toHaveLength(1);
   });
 
   it('refuses an email that belongs to another user', async () => {

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { query, queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
 import { cancelMemberSubscriptions, type MemberSubscriptionRef } from "@/lib/subscription-cancel";
-import { syncProfileEmail } from "@/lib/auth-hooks";
 
 // Loose check (something@something.tld); the user confirms the address by
 // receiving mail there.
@@ -156,7 +155,9 @@ export async function PATCH(request: Request, props: { params: Promise<{ userId:
 
     const fullName = optionalString(updates.full_name);
     const displayName = optionalString(updates.display_name);
-    const email = optionalString(updates.email)?.toLowerCase();
+    // An empty email (the dialog sends '' when the profile has none) means
+    // "no change", so a name-only edit still works.
+    const email = optionalString(updates.email)?.toLowerCase() || undefined;
 
     const currentUser = await queryOne<{ id: string; email: string }>`
       SELECT id, email
@@ -188,25 +189,42 @@ export async function PATCH(request: Request, props: { params: Promise<{ userId:
       }
     }
 
-    // Optional fields: an omitted one keeps its value (postgres.js rejects
-    // undefined parameters, which used to turn a partial edit into a 500).
-    await sql`
-      UPDATE profiles
-      SET
-        full_name = COALESCE(${fullName ?? null}, full_name),
-        display_name = COALESCE(${displayName ?? null}, display_name),
-        updated_at = NOW()
-      WHERE auth_user_id = ${userId}
-    `;
-
-    if (emailChanged) {
-      await sql`
-        UPDATE "user"
-        SET email = ${email}, "updatedAt" = NOW()
-        WHERE id = ${userId}
+    // One transaction: the names, the auth email and its two copies change
+    // together or not at all (and a failure is reported, not swallowed).
+    await sql.begin(async (tx) => {
+      // Optional fields: an omitted one keeps its value (postgres.js rejects
+      // undefined parameters, which used to turn a partial edit into a 500).
+      await tx`
+        UPDATE profiles
+        SET
+          full_name = COALESCE(${fullName ?? null}, full_name),
+          display_name = COALESCE(${displayName ?? null}, display_name),
+          updated_at = NOW()
+        WHERE auth_user_id = ${userId}
       `;
-      await syncProfileEmail({ id: userId, email });
-    }
+
+      if (emailChanged) {
+        await tx`
+          UPDATE "user"
+          SET email = ${email!}, "updatedAt" = NOW()
+          WHERE id = ${userId}
+        `;
+        // Same copies as the change-email hook (syncProfileEmail), which
+        // only logs failures; here a failure rolls everything back.
+        await tx`
+          UPDATE profiles
+          SET email = ${email!}, updated_at = NOW()
+          WHERE auth_user_id = ${userId}
+        `;
+        await tx`
+          UPDATE email_preferences ep
+          SET email = ${email!}, updated_at = NOW()
+          FROM profiles p
+          WHERE ep.user_id = p.id
+            AND p.auth_user_id = ${userId}
+        `;
+      }
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
