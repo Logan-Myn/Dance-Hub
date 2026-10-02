@@ -23,6 +23,8 @@ interface LiveKitChatProps {
   raisedHands?: string[];
   /** Teacher only: identities currently allowed to use mic/camera. */
   speakers?: string[];
+  /** Identities with an allow/revoke request in flight. */
+  pending?: string[];
   nameFor: (identity: string) => string;
   onAllow?: (identity: string) => void;
   onDeny?: (identity: string) => void;
@@ -38,6 +40,7 @@ export default function LiveKitChat({
   isTeacher = false,
   raisedHands = [],
   speakers = [],
+  pending = [],
   nameFor,
   onAllow,
   onDeny,
@@ -116,14 +119,16 @@ export default function LiveKitChat({
                   <div className="flex gap-1.5 shrink-0">
                     <button
                       onClick={() => onAllow?.(identity)}
-                      className="flex h-6 w-6 items-center justify-center rounded-full bg-green-600 hover:bg-green-700 text-white transition-colors"
+                      disabled={pending.includes(identity)}
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-green-600 hover:bg-green-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Allow"
                     >
                       <CheckIcon className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => onDeny?.(identity)}
-                      className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors"
+                      disabled={pending.includes(identity)}
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Deny"
                     >
                       <XCircleIcon className="h-3.5 w-3.5" />
@@ -147,7 +152,8 @@ export default function LiveKitChat({
                   <span className="text-xs text-gray-200 truncate">{nameFor(identity)}</span>
                   <button
                     onClick={() => onRevoke?.(identity)}
-                    className="flex h-6 items-center gap-1 px-2 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors text-[10px] shrink-0"
+                    disabled={pending.includes(identity)}
+                    className="flex h-6 items-center gap-1 px-2 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors text-[10px] shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Revoke access"
                   >
                     <UserMinusIcon className="h-3 w-3" />

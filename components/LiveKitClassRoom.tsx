@@ -19,6 +19,7 @@ import LiveKitControlBar from "./LiveKitControlBar";
 import LiveKitChat from "./LiveKitChat";
 import type { ChatMessage } from "./LiveKitChat";
 import { Button } from "@/components/ui/button";
+import { toast } from "react-hot-toast";
 import { encodeRoomMessage, readRoomMessage, type RoomMessage } from "@/lib/live-class-messages";
 
 /** Live-class moderation. Omitted for 1:1 private lessons. */
@@ -75,8 +76,9 @@ function CallInterface({
   const connectionState = useConnectionState();
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  // Identities with a raised hand.
+  // Identities with a raised hand, and those with an allow/revoke in flight.
   const [raisedHands, setRaisedHands] = useState<string[]>([]);
+  const [pending, setPending] = useState<string[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [deniedFeedback, setDeniedFeedback] = useState(false);
   const [revokedFeedback, setRevokedFeedback] = useState(false);
@@ -182,14 +184,26 @@ function CallInterface({
   const presentIds = participantIds.split(",");
   const pendingHands = raisedHands.filter((id) => presentIds.includes(id) && !speakers.includes(id));
 
-  const allowHand = async (identity: string) => {
-    if (!moderation) return;
+  // Grant or revoke on the server, one request per student at a time.
+  // Returns false (after telling the teacher) when it didn't work.
+  const updatePublish = async (identity: string, canPublish: boolean, failure: string) => {
+    if (!moderation || pending.includes(identity)) return false;
+    setPending((prev) => [...prev, identity]);
     try {
-      await moderation.setCanPublish(identity, true);
+      await moderation.setCanPublish(identity, canPublish);
+      return true;
     } catch {
-      addSystemMessage(`Could not give ${nameFor(identity)} mic/camera access. Try again.`);
-      return;
+      toast.error(failure);
+      addSystemMessage(failure);
+      return false;
+    } finally {
+      setPending((prev) => prev.filter((id) => id !== identity));
     }
+  };
+
+  const allowHand = async (identity: string) => {
+    const ok = await updatePublish(identity, true, `Could not give ${nameFor(identity)} mic/camera access. Try again.`);
+    if (!ok) return;
     setRaisedHands((prev) => prev.filter((id) => id !== identity));
     addSystemMessage(`${nameFor(identity)} was granted mic/camera access`);
   };
@@ -201,13 +215,8 @@ function CallInterface({
   };
 
   const revokeSpeaker = async (identity: string) => {
-    if (!moderation) return;
-    try {
-      await moderation.setCanPublish(identity, false);
-    } catch {
-      addSystemMessage(`Could not revoke ${nameFor(identity)}'s access. Try again.`);
-      return;
-    }
+    const ok = await updatePublish(identity, false, `Could not revoke ${nameFor(identity)}'s access. Try again.`);
+    if (!ok) return;
     sendAppMessage({ type: "hand-revoked" }, [identity]);
     setRaisedHands((prev) => prev.filter((id) => id !== identity));
     addSystemMessage(`${nameFor(identity)}'s access was revoked`);
@@ -218,6 +227,7 @@ function CallInterface({
     if (!moderation || !localIdentity) return;
     moderation.setCanPublish(localIdentity, false).catch((err) => {
       console.error("Failed to step down:", err);
+      toast.error("Couldn't step down. Your mic and camera are off, but you still have access. Try again.");
     });
   };
 
@@ -402,6 +412,7 @@ function CallInterface({
               isTeacher={isTeacher}
               raisedHands={pendingHands}
               speakers={speakers}
+              pending={pending}
               nameFor={nameFor}
               onAllow={allowHand}
               onDeny={denyHand}

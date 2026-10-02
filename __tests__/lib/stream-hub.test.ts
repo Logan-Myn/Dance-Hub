@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { generateToken, setParticipantCanPublish } from '@/lib/stream-hub';
+import { generateToken, setParticipantCanPublish, startRecording } from '@/lib/stream-hub';
 
 const mockFetch = jest.fn();
 
@@ -33,4 +33,32 @@ it('sets all three permission flags so subscribe and data stay on', async () => 
 
   await setParticipantCanPublish('live-class-lc1', 'u1', false);
   expect(lastCall().body).toEqual({ canPublish: false, canSubscribe: true, canPublishData: true });
+});
+
+describe('timeouts', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('gives up on a hung request instead of waiting forever', async () => {
+    const timeout = jest.spyOn(AbortSignal, 'timeout').mockImplementation(() =>
+      AbortSignal.abort(new DOMException('timed out', 'TimeoutError'))
+    );
+    mockFetch.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          const signal = init.signal!;
+          if (signal.aborted) reject(signal.reason);
+          signal.addEventListener('abort', () => reject(signal.reason));
+        })
+    );
+
+    await expect(setParticipantCanPublish('live-class-lc1', 'u1', true)).rejects.toThrow('timed out');
+    expect(timeout).toHaveBeenCalledWith(5000);
+  });
+
+  it('gives recording calls longer, since the recorder takes a while to start', async () => {
+    const timeout = jest.spyOn(AbortSignal, 'timeout');
+    await startRecording('live-class-lc1', 'https://x/cb');
+    expect(timeout).toHaveBeenCalledWith(15000);
+    expect(lastCall().init.signal).toBeInstanceOf(AbortSignal);
+  });
 });

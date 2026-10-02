@@ -31,6 +31,12 @@ let mockPermissions: { canPublish: boolean } | undefined;
 let mockDataHandler: ((msg: Msg) => void) | undefined;
 const mockSend = jest.fn();
 
+const mockToastError = jest.fn();
+jest.mock("react-hot-toast", () => ({
+  __esModule: true,
+  toast: { error: (...a: unknown[]) => mockToastError(...a) },
+  default: { error: (...a: unknown[]) => mockToastError(...a) },
+}));
 jest.mock("@livekit/components-styles", () => ({}));
 jest.mock("@livekit/components-react", () => {
   const React = jest.requireActual("react");
@@ -127,6 +133,7 @@ beforeEach(() => {
   mockPermissions = { canPublish: false };
   mockRoomMounts = 0;
   mockSend.mockReset();
+  mockToastError.mockReset();
   setCanPublish.mockReset().mockResolvedValue(undefined);
   lookupNames.mockClear();
   onLeave.mockReset();
@@ -173,6 +180,16 @@ describe("as a student", () => {
 
     expect(setCanPublish).toHaveBeenCalledWith("u-student", false);
     expect(dec(mockSend.mock.calls[0][0])).toEqual({ type: "hand-lowered" });
+  });
+
+  it("is told when stepping down fails", async () => {
+    mockPermissions = { canPublish: true };
+    setCanPublish.mockRejectedValue(new Error("502"));
+    await renderRoom(false);
+
+    await userEvent.click(screen.getByTitle("Step down"));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(expect.stringMatching(/step down/i)));
   });
 });
 
@@ -256,7 +273,24 @@ describe("as the teacher", () => {
     await userEvent.click(await screen.findByTitle("Allow"));
 
     expect(await screen.findByText(/could not give bob/i)).toBeInTheDocument();
-    expect(screen.getByTitle("Allow")).toBeInTheDocument();
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringMatching(/could not give bob/i));
+    expect(screen.getByTitle("Allow")).toBeEnabled();
+  });
+
+  it("disables a student's buttons while the request is in flight", async () => {
+    setCanPublish.mockReturnValue(new Promise(() => {}));
+    mockParticipants = [participant("u-bob"), participant("u-carl", true)];
+    await renderRoom(true);
+    await userEvent.click(screen.getByTitle("Open chat"));
+    deliver("u-bob", { type: "hand-raise" });
+
+    await userEvent.click(await screen.findByTitle("Allow"));
+    expect(screen.getByTitle("Allow")).toBeDisabled();
+    expect(screen.getByTitle("Deny")).toBeDisabled();
+
+    await userEvent.click(screen.getByTitle("Revoke access"));
+    expect(screen.getByTitle("Revoke access")).toBeDisabled();
+    expect(setCanPublish).toHaveBeenCalledTimes(2);
   });
 
   it("ignores hand raises lowered by someone else", async () => {

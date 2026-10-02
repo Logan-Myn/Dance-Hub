@@ -17,9 +17,19 @@ interface StreamHubRecording {
   status: string;
 }
 
-async function streamHubFetch(path: string, options: RequestInit = {}): Promise<Response> {
+// Don't let a hung Stream-Hub hold up a request (and the class page) forever.
+const DEFAULT_TIMEOUT_MS = 5_000;
+// Starting or stopping the recorder can take a few seconds on its own.
+const RECORDING_TIMEOUT_MS = 15_000;
+
+async function streamHubFetch(
+  path: string,
+  options: RequestInit = {},
+  timeoutMs = DEFAULT_TIMEOUT_MS
+): Promise<Response> {
   const response = await fetch(`${STREAM_HUB_URL}${path}`, {
     ...options,
+    signal: options.signal ?? AbortSignal.timeout(timeoutMs),
     headers: {
       "x-api-key": STREAM_HUB_API_KEY,
       "Content-Type": "application/json",
@@ -92,17 +102,20 @@ export async function setParticipantCanPublish(
 }
 
 export async function startRecording(roomName: string, callbackUrl: string): Promise<StreamHubRecording> {
-  const res = await streamHubFetch(`/rooms/${roomName}/recordings/start`, {
-    method: "POST",
-    body: JSON.stringify({ callbackUrl }),
-  });
+  const res = await streamHubFetch(
+    `/rooms/${roomName}/recordings/start`,
+    { method: "POST", body: JSON.stringify({ callbackUrl }) },
+    RECORDING_TIMEOUT_MS
+  );
   return res.json();
 }
 
 export async function stopRecording(roomName: string): Promise<StreamHubRecording> {
-  const res = await streamHubFetch(`/rooms/${roomName}/recordings/stop`, {
-    method: "POST",
-  });
+  const res = await streamHubFetch(
+    `/rooms/${roomName}/recordings/stop`,
+    { method: "POST" },
+    RECORDING_TIMEOUT_MS
+  );
   return res.json();
 }
 
