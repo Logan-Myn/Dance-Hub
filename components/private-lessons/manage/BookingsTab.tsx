@@ -26,20 +26,11 @@ function canJoinVideoFor(booking: LessonBookingWithDetails): boolean {
   return Date.now() >= fifteenBefore && Date.now() <= end + GRACE_MS;
 }
 
-function expectedRefundCents(
-  booking: LessonBookingWithDetails,
-): number {
-  const pricePaid = Number(booking.price_paid);
-  if (booking.viewer_role === 'teacher') return Math.round(pricePaid * 100);
-  if (!booking.scheduled_at) return Math.round(pricePaid * 100);
-  const scheduledMs = new Date(booking.scheduled_at).getTime();
-  const cutoffMs =
-    scheduledMs - (booking.cancellation_cutoff_hours ?? 24) * 3600_000;
-  const beforeCutoff = Date.now() <= cutoffMs;
-  if (beforeCutoff || booking.late_refund_policy === 'refund') {
-    return Math.round(pricePaid * 100);
-  }
-  return 0;
+// This tab is the teacher's view, and the cancel route always refunds the
+// student in full when the teacher cancels, whatever the lesson's policy.
+// (The lesson-bookings rows carry no viewer_role.)
+function teacherRefundCents(booking: LessonBookingWithDetails): number {
+  return Math.round(Number(booking.price_paid) * 100);
 }
 
 interface SectionProps {
@@ -198,8 +189,8 @@ export function BookingsTab({ communitySlug }: BookingsTabProps) {
           lessonTitle={cancelTarget.lesson_title}
           scheduledAtIso={cancelTarget.scheduled_at ?? null}
           currency="EUR"
-          role={cancelTarget.viewer_role}
-          expectedRefundCents={expectedRefundCents(cancelTarget)}
+          role="teacher"
+          expectedRefundCents={teacherRefundCents(cancelTarget)}
         />
       )}
     </>
