@@ -65,8 +65,8 @@ Database migrations are not part of a deploy and are not rolled back by
 - `.env.local` is the prod env. Edit it there, then run `./deploy.sh rebuild`.
   **pm2 no longer reads it directly**: `pm2 restart dance-hub` restarts the
   release with the copy it was built with.
-- `.env.preprod` is the preprod env. Edit it there, then
-  `./deploy-preprod.sh rebuild`.
+- `.env.preprod` is the preprod env (plus `.env.preprod.test` / `.live`, see
+  below). Edit it there, then `./deploy-preprod.sh rebuild`.
 - `scripts/cron-trigger.sh`, run by crontab, still reads `CRON_SECRET` from
   the main repo's `.env.local`, logs to its `logs/`, and calls
   `http://localhost:3007`. Nothing changes for cron.
@@ -111,6 +111,19 @@ pm2's `dance-hub-preprod` goes from `/home/debian/apps/dance-hub-preprod` to
 mv /home/debian/apps/dance-hub-preprod/.env.preprod.{test,live} /home/debian/apps/dance-hub/
 git -C /home/debian/apps/dance-hub worktree remove --force /home/debian/apps/dance-hub-preprod
 ```
+
+## Stripe mode on preprod
+
+`./stripe-mode.sh test|live` replaces the `STRIPE_*` and
+`NEXT_PUBLIC_STRIPE_*` lines of the main repo's `.env.preprod` with those of
+`.env.preprod.test` / `.live` (looked up in the main repo, then in the old
+preprod worktree). Every other line stays as it is: the mode files still
+carry an old Neon `DATABASE_URL`, and copying them whole would point preprod
+back at Neon. It then runs `./deploy-preprod.sh rebuild`, because the
+publishable key is compiled into the browser bundle. `./stripe-mode.sh` with
+no argument shows the mode of `.env.preprod`, of the running server's env and
+of its browser bundle. It only ever prints the key prefix (`sk_test`,
+`sk_live`, ...).
 
 ## Rolling back
 

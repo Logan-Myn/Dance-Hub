@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 #
-# Shared by deploy.sh (prod) and deploy-preprod.sh, so that a
+# Shared by deploy.sh (prod), deploy-preprod.sh and stripe-mode.sh, so that a
 # preprod deploy runs exactly the code a prod deploy will run.
 #
 # Every deploy is built in its own release directory, and the live app is
@@ -283,4 +283,59 @@ install_nginx_vhost() {
   fi
   rm -f "$backup"
   sudo nginx -s reload
+}
+
+# --- env files ------------------------------------------------------------
+
+# Print only the mode prefix of STRIPE_SECRET_KEY in env file $1 (sk_test,
+# sk_live, rk_test, rk_live), never any character of the key itself.
+stripe_key_mode() {
+  local prefix
+  [[ -r "$1" ]] || {
+    echo "unreadable"
+    return 0
+  }
+  prefix=$(sed -nE "s/^[[:space:]]*(export[[:space:]]+)?STRIPE_SECRET_KEY[[:space:]]*=[[:space:]]*[\"']?((sk|rk)_(test|live))_.*/\2/p" "$1" | tail -n 1)
+  echo "${prefix:-unknown}"
+}
+
+# Copy every STRIPE_* / NEXT_PUBLIC_STRIPE_* line of env file $1 into env
+# file $2, replacing the existing lines and leaving every other line alone.
+stripe_env_merge() {
+  local src="$1" dest="$2" tmp
+  tmp=$(mktemp "$dest.XXXXXX")
+  awk '
+    function key(line, k) {
+      k = line
+      sub(/^[[:space:]]*(export[[:space:]]+)?/, "", k)
+      sub(/[[:space:]]*=.*/, "", k)
+      return k
+    }
+    function is_stripe(k) { return k ~ /^(NEXT_PUBLIC_)?STRIPE_[A-Z0-9_]*$/ }
+    NR == FNR {
+      if ($0 ~ /=/) {
+        k = key($0)
+        if (is_stripe(k)) {
+          if (!(k in val)) order[++n] = k
+          val[k] = $0
+        }
+      }
+      next
+    }
+    {
+      if ($0 ~ /=/) {
+        k = key($0)
+        if (k in val) {
+          if (!(k in done)) { print val[k]; done[k] = 1 }
+          next
+        }
+      }
+      print
+    }
+    END {
+      for (i = 1; i <= n; i++) if (!(order[i] in done)) print val[order[i]]
+    }
+  ' "$src" "$dest" > "$tmp"
+  chmod --reference="$dest" "$tmp"
+  mv -f "$tmp" "$dest"
 }

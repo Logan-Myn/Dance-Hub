@@ -1,5 +1,5 @@
 /**
- * Deploy scripts (deploy.sh, deploy-preprod.sh, deploy/lib.sh).
+ * Deploy scripts (deploy.sh, deploy-preprod.sh, stripe-mode.sh, deploy/lib.sh).
  * pm2, bun, ss and sudo are replaced by stubs in a temp dir, so nothing here
  * touches a real app, port, nginx or env file.
  *
@@ -12,7 +12,7 @@ import path from 'path';
 
 const ROOT = path.resolve(__dirname, '../..');
 const LIB = path.join(ROOT, 'deploy/lib.sh');
-const SCRIPTS = ['deploy.sh', 'deploy-preprod.sh', 'deploy/lib.sh', 'deploy/nginx/update-cloudflare-ips.sh'];
+const SCRIPTS = ['deploy.sh', 'deploy-preprod.sh', 'stripe-mode.sh', 'deploy/lib.sh', 'deploy/nginx/update-cloudflare-ips.sh'];
 
 let tmp: string;
 
@@ -58,6 +58,85 @@ it('every deploy script parses', () => {
   for (const s of SCRIPTS) {
     expect(run('bash', ['-n', path.join(ROOT, s)])).toEqual({ code: 0, out: '' });
   }
+});
+
+describe('stripe_key_mode', () => {
+  const mode = (line: string) => {
+    const file = path.join(tmp, 'key.env');
+    write(file, `${line}\n`);
+    return bash(`source "${LIB}"; stripe_key_mode "${file}"`).out.trim();
+  };
+
+  it('prints only the key prefix, never characters of the key', () => {
+    expect(mode('STRIPE_SECRET_KEY="sk_live_SECRETPART123"')).toBe('sk_live');
+    expect(mode("STRIPE_SECRET_KEY='sk_test_SECRETPART123'")).toBe('sk_test');
+    expect(mode('export STRIPE_SECRET_KEY=rk_live_SECRETPART123')).toBe('rk_live');
+    expect(mode('STRIPE_SECRET_KEY="SECRETPART123"')).toBe('unknown');
+    expect(mode('# STRIPE_SECRET_KEY="sk_live_SECRETPART123"')).toBe('unknown');
+  });
+});
+
+describe('stripe_env_merge', () => {
+  it('swaps only the Stripe lines and keeps everything else (e.g. DATABASE_URL)', () => {
+    const src = path.join(tmp, 'merge/.env.preprod.live');
+    const dest = path.join(tmp, 'merge/.env.preprod');
+    write(
+      src,
+      [
+        'DATABASE_URL="postgres://stale-neon"',
+        'STRIPE_SECRET_KEY="sk_live_A"',
+        'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_live_A"',
+        'STRIPE_WEBHOOK_SECRET="whsec_live"',
+        'STRIPE_NEW_KEY="new"',
+        '',
+      ].join('\n')
+    );
+    write(
+      dest,
+      [
+        '# preprod',
+        'DATABASE_URL="postgres://127.0.0.1/dance_hub_preprod"',
+        'STRIPE_SECRET_KEY="sk_test_B"',
+        'STRIPE_WEBHOOK_SECRET="whsec_test"',
+        'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_test_B"',
+        'OTHER=1',
+        '',
+      ].join('\n'),
+      0o640
+    );
+    expect(bash(`source "${LIB}"; stripe_env_merge "${src}" "${dest}"`).code).toBe(0);
+    expect(fs.readFileSync(dest, 'utf8')).toBe(
+      [
+        '# preprod',
+        'DATABASE_URL="postgres://127.0.0.1/dance_hub_preprod"',
+        'STRIPE_SECRET_KEY="sk_live_A"',
+        'STRIPE_WEBHOOK_SECRET="whsec_live"',
+        'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_live_A"',
+        'OTHER=1',
+        'STRIPE_NEW_KEY="new"',
+        '',
+      ].join('\n')
+    );
+    expect(fs.statSync(dest).mode & 0o777).toBe(0o640);
+  });
+});
+
+describe('stripe-mode.sh status', () => {
+  it('reports the preprod env mode without printing the key', () => {
+    const repo = path.join(tmp, 'status-repo');
+    write(path.join(repo, '.env.preprod'), 'STRIPE_SECRET_KEY="sk_live_SECRETPART123"\n');
+    write(path.join(tmp, 'status-bin/ss'), '#!/bin/sh\nexit 0\n', 0o755);
+    const res = run(path.join(ROOT, 'stripe-mode.sh'), [], {
+      env: {
+        DEPLOY_MAIN_REPO: repo,
+        DEPLOY_RELEASES_ROOT: path.join(tmp, 'status-releases'),
+        PATH: `${path.join(tmp, 'status-bin')}:${process.env.PATH}`,
+      },
+    });
+    expect(res.code).toBe(1);
+    expect(res.out).toContain('sk_live');
+    expect(res.out).not.toContain('SECRETPART');
+  });
 });
 
 describe('nginx templates', () => {
