@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import Link from "next/link";
 import { FileText } from "lucide-react";
 import { LegalPageLayout } from "@/components/landing/legal-page-layout";
 
@@ -73,7 +74,9 @@ export default function TermsOfServicePage() {
       <h3>Platform Fees</h3>
       <p>
         DanceHub charges a percentage-based fee on transactions processed through the platform.
-        Current fee structure is displayed on our pricing page and may be updated with notice.
+        The current fee structure is shown in the{" "}
+        <Link href="/#pricing">pricing section of our home page</Link> and may be updated with
+        notice.
       </p>
 
       <h3>Payment Processing</h3>

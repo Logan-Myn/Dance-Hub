@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sql, queryOne } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { requireSession } from "@/lib/community-auth";
+import { membershipFeePercentage } from "@/lib/platform-fees";
 
 interface CommunityDetails {
   id: string;
@@ -98,22 +99,8 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
       );
     }
 
-    // Calculate platform fee percentage (same logic as regular join)
-    const communityAge = Date.now() - new Date(community.created_at).getTime();
-    const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
-    const isPromotional = communityAge < thirtyDaysInMs;
-
-    let feePercentage = 0;
-
-    if (!isPromotional) {
-      if (community.active_member_count <= 50) {
-        feePercentage = 8.0;
-      } else if (community.active_member_count <= 100) {
-        feePercentage = 6.0;
-      } else {
-        feePercentage = 4.0;
-      }
-    }
+    // Calculate platform fee percentage (same rule as regular join)
+    const feePercentage = membershipFeePercentage(community);
 
     // Create Stripe customer on connected account
     const customer = await stripe.customers.create(

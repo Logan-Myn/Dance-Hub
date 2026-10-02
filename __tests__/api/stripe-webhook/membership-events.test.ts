@@ -6,12 +6,14 @@ import { recordBroadcastSubscription } from '@/lib/broadcasts/billing';
 const mockConstructEvent = jest.fn();
 const mockSubRetrieve = jest.fn();
 const mockSubUpdate = jest.fn();
+const mockInvoiceUpdate = jest.fn();
 const mockStripeClient = {
   webhooks: { constructEvent: (...a: unknown[]) => mockConstructEvent(...a) },
   subscriptions: {
     retrieve: (...a: unknown[]) => mockSubRetrieve(...a),
     update: (...a: unknown[]) => mockSubUpdate(...a),
   },
+  invoices: { update: (...a: unknown[]) => mockInvoiceUpdate(...a) },
 };
 jest.mock('@/lib/stripe', () => ({
   STRIPE_API_VERSION: '2025-12-15.clover',
@@ -426,4 +428,28 @@ describe('broadcast subscription lifecycle', () => {
       expect(mockSendEmail).not.toHaveBeenCalled();
     }
   );
+});
+
+describe('invoice.created platform fee', () => {
+  // Landing page: 8% under 50 members, 6% from 50 to 100, 4% above.
+  it.each([
+    [49, 8, 160],
+    [50, 6, 120],
+    [101, 4, 80],
+  ])('sets the advertised fee for a community with %i members', async (members, fee, amount) => {
+    mockQueryOne.mockImplementation((strings: string[]) =>
+      Promise.resolve(/FROM communities/.test(strings.join('?')) ? { ...community, active_member_count: members } : null)
+    );
+    mockSubRetrieve.mockResolvedValue(subscription({ application_fee_percent: 0 }));
+    mockConstructEvent.mockReturnValue({
+      ...invoiceEvent({ status: 'draft', amount_due: 2000, application_fee_amount: 0 }),
+      type: 'invoice.created',
+    });
+
+    const res = await post();
+
+    expect(res.status).toBe(200);
+    expect(mockInvoiceUpdate).toHaveBeenCalledWith('in_1', { application_fee_amount: amount });
+    expect(mockSubUpdate).toHaveBeenCalledWith('sub_1', expect.objectContaining({ application_fee_percent: fee }));
+  });
 });

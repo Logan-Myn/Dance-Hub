@@ -11,6 +11,7 @@ import { CommunityOpeningEmail } from '@/lib/resend/templates/community/communit
 import { recordBroadcastSubscription } from '@/lib/broadcasts/billing';
 import { claimWebhookEvent, finishWebhookEvent } from '@/lib/stripe-webhook-events';
 import { LIVE_SUBSCRIPTION_STATUSES, memberSubscriptionStatus } from '@/lib/membership-ended';
+import { isInLaunchPromo, membershipFeePercentage } from '@/lib/platform-fees';
 import React from 'react';
 import Stripe from 'stripe';
 
@@ -133,21 +134,9 @@ async function applyPaidMembership(
   `;
   if (!community) return 'applied';
 
-  const communityAge = Date.now() - new Date(community.created_at).getTime();
-  const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
-  const isStillPromotional = communityAge < thirtyDaysInMs;
-
-  let newFeePercentage = 0;
+  const isStillPromotional = isInLaunchPromo(community.created_at);
+  const newFeePercentage = membershipFeePercentage(community);
   if (!isStillPromotional) {
-    // Calculate standard tiered pricing
-    if (community.active_member_count <= 50) {
-      newFeePercentage = 8.0;
-    } else if (community.active_member_count <= 100) {
-      newFeePercentage = 6.0;
-    } else {
-      newFeePercentage = 4.0;
-    }
-
     // Update the subscription's application fee if it has changed
     if (subscription.application_fee_percent !== newFeePercentage) {
       console.log(`🔄 Updating subscription ${subscription.id} fee from ${subscription.application_fee_percent}% to ${newFeePercentage}%`);
@@ -752,20 +741,7 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
           }
 
           // Compute correct fee % based on community grace period + tier
-          const draftCommunityAge = Date.now() - new Date(draftCommunity.created_at).getTime();
-          const thirtyDaysInMsDraft = 30 * 24 * 60 * 60 * 1000;
-          const draftIsStillPromotional = draftCommunityAge < thirtyDaysInMsDraft;
-
-          let draftFeePercentage = 0;
-          if (!draftIsStillPromotional) {
-            if (draftCommunity.active_member_count <= 50) {
-              draftFeePercentage = 8.0;
-            } else if (draftCommunity.active_member_count <= 100) {
-              draftFeePercentage = 6.0;
-            } else {
-              draftFeePercentage = 4.0;
-            }
-          }
+          const draftFeePercentage = membershipFeePercentage(draftCommunity);
 
           // Update the invoice's application_fee_amount directly (only possible while draft)
           // This ensures the CURRENT cycle gets the correct fee, not just future ones.

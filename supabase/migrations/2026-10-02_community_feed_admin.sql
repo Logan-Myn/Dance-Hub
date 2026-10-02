@@ -47,3 +47,21 @@ ALTER TABLE email_broadcasts
 
 COMMENT ON COLUMN email_broadcasts.failed_recipients IS
   'Recipients a send failed for: [{userId, email, error}]. Empty when everyone received it.';
+
+-- M31: the member-count fee tiers, as the landing page states them: 8% under
+-- 50 members, 6% from 50 to 100, 4% above 100 (this function charged 8% at
+-- exactly 50). The app computes the fee it charges in lib/platform-fees.ts;
+-- this function only fills community_members.platform_fee_percentage from
+-- the member-count trigger, and must agree with it.
+CREATE OR REPLACE FUNCTION calculate_platform_fee_percentage(member_count INT)
+RETURNS DECIMAL AS $$
+BEGIN
+  IF member_count < 50 THEN
+    RETURN 8.0;
+  ELSIF member_count <= 100 THEN
+    RETURN 6.0;
+  ELSE
+    RETURN 4.0;
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
