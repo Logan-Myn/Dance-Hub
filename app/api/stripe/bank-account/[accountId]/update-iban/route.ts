@@ -9,6 +9,7 @@ import {
   PAYOUT_SUPPORT_EMAIL,
 } from '@/lib/payout-bank-formats';
 import { OLD_BANK_NOT_REMOVED, replaceBankAccount } from '@/lib/stripe-external-accounts';
+import { stripeErrorReply } from '@/lib/stripe-connect-errors';
 
 interface CommunityOwnership {
   id: string;
@@ -131,11 +132,10 @@ export async function POST(request: Request, props: { params: Promise<{ accountI
   } catch (error: any) {
     console.error('Error updating bank account IBAN:', error);
 
-    if (error.type === 'StripeError') {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.statusCode || 400 }
-      );
+    // error.type is the subclass name, never 'StripeError', so check the class.
+    const reply = stripeErrorReply(error);
+    if (reply) {
+      return NextResponse.json({ error: reply.error }, { status: reply.status });
     }
 
     return NextResponse.json(

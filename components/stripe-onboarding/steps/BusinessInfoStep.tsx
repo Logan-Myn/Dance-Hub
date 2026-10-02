@@ -130,7 +130,6 @@ export function BusinessInfoStep({
   const handleSubmit = async () => {
     console.log("BusinessInfoStep handleSubmit called");
     console.log("Current data.accountId:", data.accountId);
-    console.log("Current businessInfo:", businessInfo);
     
     if (!validateForm()) {
       toast.error("Please fix the validation errors");

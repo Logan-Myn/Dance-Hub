@@ -4,6 +4,7 @@
  * follows the account's country, the new account becomes the default and the
  * old ones are removed.
  */
+import Stripe from 'stripe';
 import { POST } from '@/app/api/stripe/bank-account/[accountId]/update-iban/route';
 
 const mockGetSession = jest.fn();
@@ -118,4 +119,32 @@ it('refuses an IBAN for a country whose banks do not use one', async () => {
   expect(res.status).toBe(400);
   expect((await res.json()).error).toContain('hello@dance-hub.io');
   expect(mockCreateExternal).not.toHaveBeenCalled();
+});
+
+it("passes on Stripe's message when it rejects the bank details", async () => {
+  mockCreateExternal.mockRejectedValue(
+    new Stripe.errors.StripeInvalidRequestError({
+      type: 'invalid_request_error',
+      message: 'The bank account could not be added. Please check the IBAN.',
+      statusCode: 400,
+    })
+  );
+
+  const res = await POST(post({ iban: 'EE382200221020145685', accountHolderName: 'Ana' }), params);
+
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toBe('The bank account could not be added. Please check the IBAN.');
+});
+
+it('hides internal Stripe errors behind a retry message', async () => {
+  mockCreateExternal.mockRejectedValue(
+    new Stripe.errors.StripeAPIError({ type: 'api_error', message: 'Internal error req_123', statusCode: 500 })
+  );
+
+  const res = await POST(post({ iban: 'EE382200221020145685', accountHolderName: 'Ana' }), params);
+
+  expect(res.status).toBe(502);
+  const { error } = await res.json();
+  expect(error).not.toContain('req_123');
+  expect(error).toMatch(/try again/);
 });

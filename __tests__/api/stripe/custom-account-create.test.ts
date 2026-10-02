@@ -241,3 +241,32 @@ describe('safety net', () => {
     }
   });
 });
+
+describe('when creating the account fails', () => {
+  it("passes on Stripe's message for a request it rejects", async () => {
+    setupDb(null);
+    mockCreate.mockRejectedValue(
+      new Stripe.errors.StripeInvalidRequestError({
+        type: 'invalid_request_error',
+        message: 'Country XX is not supported.',
+        statusCode: 400,
+      })
+    );
+
+    const res = await POST(req());
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('Country XX is not supported.');
+  });
+
+  it('does not name the provider in the generic error', async () => {
+    setupDb(null);
+    mockCreate.mockRejectedValue(new Error('boom'));
+
+    const res = await POST(req());
+
+    expect(res.status).toBe(500);
+    const { error } = await res.json();
+    expect(error).toBe('Failed to create payout account');
+  });
+});

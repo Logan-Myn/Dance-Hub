@@ -1,3 +1,5 @@
+import Stripe from 'stripe';
+
 // A connected account is "gone" when Stripe says it no longer exists for this
 // platform: deleted, never created in this mode, or the connection was revoked.
 // Retrieving such an account fails with resource_missing (404) or with a 403
@@ -32,4 +34,21 @@ export function isConnectedAccountGone(
     return NO_ACCESS_TO_ACCOUNT.test(e.message ?? '');
   }
   return false;
+}
+
+/**
+ * A safe reply for an error thrown by a Stripe call, or null if it isn't a
+ * Stripe error. Requests Stripe rejects (bad bank details, unsupported
+ * country) pass Stripe's message on, since the owner can act on it; outages,
+ * network and key problems get a generic retry message.
+ */
+export function stripeErrorReply(error: unknown): { status: number; error: string } | null {
+  if (!(error instanceof Stripe.errors.StripeError)) return null;
+  if (
+    error instanceof Stripe.errors.StripeInvalidRequestError ||
+    error instanceof Stripe.errors.StripeCardError
+  ) {
+    return { status: 400, error: error.message };
+  }
+  return { status: 502, error: 'We could not reach the payment provider. Please try again in a moment.' };
 }

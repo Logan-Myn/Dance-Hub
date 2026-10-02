@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { queryOne, sql } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
-import { isConnectedAccountGone } from '@/lib/stripe-connect-errors';
+import { isConnectedAccountGone, stripeErrorReply } from '@/lib/stripe-connect-errors';
 
 // The wizard reacts to `code` and loads the linked account instead.
 const ACCOUNT_EXISTS = {
@@ -174,15 +174,14 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Error creating custom Stripe account:', error);
 
-    if (error.type === 'StripeError') {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.statusCode || 500 }
-      );
+    // error.type is the subclass name, never 'StripeError', so check the class.
+    const reply = stripeErrorReply(error);
+    if (reply) {
+      return NextResponse.json({ error: reply.error }, { status: reply.status });
     }
 
     return NextResponse.json(
-      { error: 'Failed to create Stripe account' },
+      { error: 'Failed to create payout account' },
       { status: 500 }
     );
   }
