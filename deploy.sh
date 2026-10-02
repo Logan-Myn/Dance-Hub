@@ -4,57 +4,50 @@ set -euo pipefail
 APP_NAME="dance-hub"
 APP_PORT=3007
 DOMAIN="dance-hub.io"
-PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# The main checkout: deploys pull here, and its .env.local is THE prod env.
+# Each release gets a copy of it; this file is never modified.
+MAIN_REPO="${DEPLOY_MAIN_REPO:-$SCRIPT_DIR}"
+ENV_SOURCE="$MAIN_REPO/.env.local"
 NGINX_CONF="/etc/nginx/sites-available/$DOMAIN"
+CLOUDFLARE_SNIPPET="/etc/nginx/snippets/cloudflare-real-ip.conf"
 
-cd "$PROJECT_DIR"
+# shellcheck source=deploy/lib.sh
+source "$SCRIPT_DIR/deploy/lib.sh"
+init_releases
 
-# Run the Next.js server directly under PM2. Starting it through `npm start`
-# or `npx next` left the real server orphaned when the wrapper exited: PM2
-# then crash-looped on EADDRINUSE while the orphan kept serving with a dead
-# stdout/stderr, and froze at 100% CPU on its first logged error.
-pm2_start_next() {
-  pm2 start "$1/node_modules/next/dist/bin/next" --name "$APP_NAME" --cwd "$1" \
-    --interpreter node -- start -p "$APP_PORT"
-}
-
-# Fail loudly if something other than PM2's own process holds the port.
-check_port_owner() {
-  sleep 5
-  local holder managed
-  holder=$(ss -ltnp 2>/dev/null | grep ":$APP_PORT " | grep -oE "pid=[0-9]+" | head -1 | cut -d= -f2 || true)
-  managed=$(pm2 pid "$APP_NAME" 2>/dev/null || true)
-  if [[ -z "$holder" || "$holder" != "$managed" ]]; then
-    echo "!! Port $APP_PORT is held by pid '${holder:-none}', PM2 runs '${managed:-none}'."
-    echo "!! An orphaned server may still be serving old code. Kill it, then rerun."
-    exit 1
+# `git pull origin main`, but only on a clean main checkout, and never a
+# merge: a diverged main stops the deploy instead.
+pull_main() {
+  local branch
+  branch=$(git -C "$MAIN_REPO" symbolic-ref --quiet --short HEAD || true)
+  [[ "$branch" == "main" ]] || die "$MAIN_REPO is on '${branch:-a detached HEAD}', not main."
+  if ! git -C "$MAIN_REPO" diff --quiet || ! git -C "$MAIN_REPO" diff --cached --quiet; then
+    die "$MAIN_REPO has uncommitted changes to tracked files. Commit or stash them first."
   fi
-  echo "==> Port $APP_PORT served by PM2 pid $managed."
+  say "Pulling latest code..."
+  git -C "$MAIN_REPO" pull --ff-only origin main
 }
 
 cmd_full() {
-  echo "==> Installing dependencies..."
-  npm install
-
-  echo "==> Building..."
-  npm run build
+  local sha
+  lock_releases
+  sha=$(resolve_commit HEAD)
+  build_release "$sha" "main" || exit 1
 
   echo "==> Configuring Nginx..."
-  write_nginx_config
-  sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/
-  sudo nginx -t && sudo nginx -s reload
+  sudo install -m 644 "$MAIN_REPO/deploy/nginx/cloudflare-real-ip.conf" "$CLOUDFLARE_SNIPPET"
+  install_nginx_vhost "$NGINX_CONF" "$(render_nginx_config)"
 
-  echo "==> Starting app with PM2..."
-  pm2 delete "$APP_NAME" 2>/dev/null || true
-  pm2_start_next "$PROJECT_DIR"
-  pm2 save
-  check_port_owner
+  switch_to_release "$BUILT_RELEASE"
 
   echo ""
   echo "Done! App running on port $APP_PORT behind Nginx."
   pm2 status
 }
 
+# Prod uses Cloudflare origin certificates (see render_nginx_config), not
+# certbot. Kept for a setup without Cloudflare in front.
 cmd_ssl() {
   echo "==> Requesting SSL certificates..."
   sudo certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN"
@@ -63,30 +56,71 @@ cmd_ssl() {
 }
 
 cmd_code() {
-  echo "==> Pulling latest code..."
-  git pull origin main
+  local before sha
+  if [[ -z "${DEPLOY_PULLED:-}" ]]; then
+    before=$(git -C "$MAIN_REPO" rev-parse HEAD)
+    pull_main
+    # If the pull changed the deploy scripts, run the new version.
+    if ! git -C "$MAIN_REPO" diff --quiet "$before" HEAD -- deploy.sh deploy/; then
+      say "Deploy scripts changed; continuing with the new version..."
+      DEPLOY_PULLED=1 exec "$MAIN_REPO/deploy.sh" code
+    fi
+  fi
 
-  echo "==> Installing dependencies..."
-  bun install
-
-  echo "==> Building..."
-  bun run build
-
-  echo "==> Reloading app..."
-  pm2 restart "$APP_NAME" 2>/dev/null || pm2_start_next "$PROJECT_DIR"
-  pm2 save
-  check_port_owner
+  lock_releases
+  sha=$(resolve_commit HEAD)
+  deploy_commit "$sha" "main"
 
   echo ""
   echo "Done! Redeployed."
   pm2 status
 }
 
-write_nginx_config() {
-  sudo tee "$NGINX_CONF" > /dev/null <<NGINX
+cmd_rebuild() {
+  lock_releases
+  rebuild_current
+  echo "Done! Rebuilt with the current $ENV_SOURCE."
+}
+
+cmd_rollback() {
+  lock_releases
+  rollback_release "${1:-}"
+  echo "Done! Rolled back."
+}
+
+render_nginx_config() {
+  cat <<NGINX
+# Redirect HTTP to HTTPS and www to bare domain
 server {
     listen 80;
     server_name $DOMAIN www.$DOMAIN;
+    return 301 https://$DOMAIN\$request_uri;
+}
+
+# Redirect www HTTPS to bare domain
+server {
+    listen 443 ssl;
+    server_name www.$DOMAIN;
+
+    ssl_certificate /etc/ssl/cloudflare/$DOMAIN.pem;
+    ssl_certificate_key /etc/ssl/cloudflare/$DOMAIN.key;
+
+    return 301 https://$DOMAIN\$request_uri;
+}
+
+# Main server block
+server {
+    listen 443 ssl;
+    server_name $DOMAIN;
+    # Uploads go through the app server (images, documents, audio tracks).
+    client_max_body_size 100m;
+
+    ssl_certificate /etc/ssl/cloudflare/$DOMAIN.pem;
+    ssl_certificate_key /etc/ssl/cloudflare/$DOMAIN.key;
+
+    # The site is behind Cloudflare: take the visitor IP from
+    # CF-Connecting-IP, only for connections from Cloudflare's ranges.
+    include $CLOUDFLARE_SNIPPET;
 
     location /_next/static {
         proxy_pass http://localhost:$APP_PORT;
@@ -98,8 +132,10 @@ server {
         proxy_http_version 1.1;
 
         proxy_set_header Host \$host;
+        # Both carry only the address nginx trusts. Never append to a
+        # client-sent X-Forwarded-For: its first entry is client-controlled.
         proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For \$remote_addr;
         proxy_set_header X-Forwarded-Proto \$scheme;
 
         proxy_set_header Upgrade \$http_upgrade;
@@ -114,14 +150,25 @@ NGINX
 
 case "${1:-}" in
   full) cmd_full ;;
-  ssl)  cmd_ssl  ;;
+  ssl) cmd_ssl ;;
   code) cmd_code ;;
+  rebuild) cmd_rebuild ;;
+  rollback) cmd_rollback "${2:-}" ;;
+  releases) list_releases ;;
+  nginx-config) render_nginx_config ;;
   *)
-    echo "Usage: ./deploy.sh [full|ssl|code]"
+    echo "Usage: ./deploy.sh [full|ssl|code|rebuild|rollback [release]|releases|nginx-config]"
     echo ""
-    echo "  full  — First-time setup (install, build, nginx, pm2)"
-    echo "  ssl   — Request SSL certificates with Certbot"
-    echo "  code  — Pull, build, and reload"
+    echo "  full          First-time setup: build a release, nginx, pm2"
+    echo "  ssl           Request certificates with Certbot (prod uses Cloudflare origin certs)"
+    echo "  code          Pull main, build a new release, switch to it if the build succeeds"
+    echo "  rebuild       Rebuild the live commit with the current .env.local"
+    echo "  rollback      Switch back to the previous release (or the one named)"
+    echo "  releases      List releases (* = live)"
+    echo "  nginx-config  Print the nginx vhost 'full' would write"
+    echo ""
+    echo "Releases live in $RELEASES_DIR; pm2 serves $CURRENT_LINK."
+    echo "The prod env is $ENV_SOURCE, copied into each release. See deploy/README.md."
     exit 1
     ;;
 esac
