@@ -173,7 +173,7 @@ export async function PUT(
 
     const validationError =
       lessonPriceError(regularPrice, memberPrice) ??
-      maxBookingsError(maxBookings) ??
+      (sets(updateData, "max_bookings_per_month") ? maxBookingsError(maxBookings) : null) ??
       (sets(updateData, "location_type") ? locationTypeError(updateData.location_type) : null);
     if (validationError) {
       return NextResponse.json({ error: validationError }, { status: 400 });
