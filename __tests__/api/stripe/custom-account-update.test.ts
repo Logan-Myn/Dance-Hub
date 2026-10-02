@@ -280,23 +280,30 @@ describe('business_info', () => {
     expect(updateArg.business_profile).toEqual({ url: 'https://dance-hub.io/salsa', mcc: '8299' });
   });
 
-  it('keeps an individual name, address and phone together', async () => {
+  it("leaves an individual's name, address and phone to the personal step", async () => {
+    // Step 1 is re-saved when the owner goes back to it; splitting "Maria José
+    // Garcia" on spaces would overwrite the legal name from step 2.
     mockRetrieve.mockResolvedValue(account({ country: 'EE' }));
 
     await PUT(
       put({
         step: 'business_info',
-        businessInfo: { type: 'individual', name: 'Ana Maria Lopez', address, phone: '+3725551234' },
+        businessInfo: {
+          type: 'individual',
+          name: 'Maria José Garcia',
+          address,
+          phone: '+3725551234',
+          url: 'https://dance-hub.io/salsa',
+          mcc: '8299',
+        },
       }),
       params
     );
 
-    expect(mockUpdate.mock.calls[0][1].individual).toEqual({
-      first_name: 'Ana',
-      last_name: 'Maria Lopez',
-      address,
-      phone: '+3725551234',
-    });
+    const updateArg = mockUpdate.mock.calls[0][1];
+    expect(updateArg.individual).toBeUndefined();
+    expect(updateArg.business_type).toBe('individual');
+    expect(updateArg.business_profile).toEqual({ url: 'https://dance-hub.io/salsa', mcc: '8299' });
   });
 
   it('records ToS acceptance with the server time and the request user agent', async () => {

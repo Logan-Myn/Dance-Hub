@@ -103,20 +103,18 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
       case 'business_info':
         if (businessInfo) {
           const isCompany = businessInfo.type === 'company';
-          // One object per entity, so the name, address and phone all reach
-          // Stripe (two spreads under the same key used to drop the name).
-          const entity: Record<string, unknown> = {};
-          if (businessInfo.name) {
-            if (isCompany) {
-              entity.name = businessInfo.name;
-            } else {
-              const [first, ...rest] = businessInfo.name.trim().split(/\s+/);
-              entity.first_name = first;
-              entity.last_name = rest.join(' ');
-            }
+          // One object for the company, so its name, address and phone all
+          // reach Stripe (two spreads under the same key used to drop the
+          // name). An individual's name, address and phone come from the
+          // personal step only: step 1 is re-saved whenever the owner goes
+          // back to it, and splitting the business name on spaces would
+          // overwrite their legal name.
+          const company: Record<string, unknown> = {};
+          if (isCompany) {
+            if (businessInfo.name) company.name = businessInfo.name;
+            if (businessInfo.address) company.address = businessInfo.address;
+            if (businessInfo.phone) company.phone = businessInfo.phone;
           }
-          if (businessInfo.address) entity.address = businessInfo.address;
-          if (businessInfo.phone) entity.phone = businessInfo.phone;
 
           updateParams = {
             business_type: businessInfo.type,
@@ -124,7 +122,7 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
               ...(businessInfo.url && { url: businessInfo.url }),
               ...(businessInfo.mcc && { mcc: businessInfo.mcc }),
             },
-            ...(Object.keys(entity).length > 0 && { [isCompany ? 'company' : 'individual']: entity }),
+            ...(Object.keys(company).length > 0 && { company }),
           };
 
           // Handle Terms of Service acceptance for Custom accounts. The time
