@@ -9,7 +9,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Each release gets a copy of it; this file is never modified.
 MAIN_REPO="${DEPLOY_MAIN_REPO:-$SCRIPT_DIR}"
 ENV_SOURCE="$MAIN_REPO/.env.local"
-NGINX_CONF="/etc/nginx/sites-available/$DOMAIN"
+# Overridable for tests only.
+NGINX_CONF="${DEPLOY_NGINX_CONF:-/etc/nginx/sites-available/$DOMAIN}"
 CLOUDFLARE_SNIPPET="/etc/nginx/snippets/cloudflare-real-ip.conf"
 
 # shellcheck source=deploy/lib.sh
@@ -29,6 +30,25 @@ pull_main() {
   git -C "$MAIN_REPO" pull --ff-only origin main
 }
 
+# The app takes the client IP only from X-Real-IP. Behind Cloudflare that is
+# the visitor only once the live vhost has the real-IP include, so that
+# nginx change has to be live before the app is deployed
+# (deploy/nginx/README.md).
+require_nginx_real_ip() {
+  if [[ "${SKIP_NGINX_CHECK:-}" == "1" ]]; then
+    echo "!! SKIP_NGINX_CHECK=1: not checking $NGINX_CONF for the Cloudflare real-IP include."
+    return 0
+  fi
+  if ! grep -qE "^[[:space:]]*include[[:space:]]+$CLOUDFLARE_SNIPPET;" "$NGINX_CONF" 2> /dev/null \
+    || grep -qE '^[[:space:]]*proxy_set_header[[:space:]]+X-Forwarded-For[[:space:]]+\$proxy_add_x_forwarded_for' "$NGINX_CONF" 2> /dev/null; then
+    echo "!! $NGINX_CONF does not have the Cloudflare real-IP setup yet"
+    echo "!! (include $CLOUDFLARE_SNIPPET; and X-Forwarded-For \$remote_addr)."
+    echo "!! Without it the app sees Cloudflare's address instead of the visitor's."
+    echo "!! Apply deploy/nginx/README.md first, or rerun with SKIP_NGINX_CHECK=1."
+    exit 1
+  fi
+}
+
 cmd_full() {
   local sha
   lock_releases
@@ -38,6 +58,7 @@ cmd_full() {
   echo "==> Configuring Nginx..."
   sudo install -m 644 "$MAIN_REPO/deploy/nginx/cloudflare-real-ip.conf" "$CLOUDFLARE_SNIPPET"
   install_nginx_vhost "$NGINX_CONF" "$(render_nginx_config)"
+  require_nginx_real_ip
 
   switch_to_release "$BUILT_RELEASE"
 
@@ -57,6 +78,7 @@ cmd_ssl() {
 
 cmd_code() {
   local before sha
+  require_nginx_real_ip
   if [[ -z "${DEPLOY_PULLED:-}" ]]; then
     before=$(git -C "$MAIN_REPO" rev-parse HEAD)
     pull_main
@@ -77,6 +99,7 @@ cmd_code() {
 }
 
 cmd_rebuild() {
+  require_nginx_real_ip
   lock_releases
   rebuild_current
   echo "Done! Rebuilt with the current $ENV_SOURCE."

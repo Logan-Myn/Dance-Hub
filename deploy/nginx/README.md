@@ -25,8 +25,17 @@ The fix:
 
 Preprod is not behind Cloudflare, so it only gets the `X-Forwarded-For` change.
 
-Apply the nginx change together with (or right after) the app deploy that
-reads `x-real-ip`. Until both are live, the app sees Cloudflare addresses.
+**Order: nginx first, then the app.** The new app takes the client IP only
+from `X-Real-IP`, so this nginx change must be live BEFORE the app deploy
+that contains it. Otherwise the app sees Cloudflare's address for every
+visitor, and everyone coming through the same Cloudflare edge shares one
+rate-limit bucket. The nginx change is backward compatible with the app
+running now: that app reads the first `X-Forwarded-For` entry, which after
+this change is the visitor IP as well (and can no longer be forged).
+
+`./deploy.sh code` and `./deploy.sh rebuild` refuse to run until the live
+vhost has the include and `X-Forwarded-For $remote_addr`. `SKIP_NGINX_CHECK=1`
+overrides that, for example for an urgent fix before nginx is done.
 
 `deploy.sh nginx-config` and `deploy-preprod.sh nginx-config` print the full
 vhost the scripts would write; it matches the live files apart from these
@@ -34,7 +43,9 @@ changes and comments.
 
 ## Apply on the live server (prod, dance-hub.io)
 
-Run as `debian` from the main repo, after this change is on `main` there.
+Do this before deploying the app. Run as `debian` from the main repo after
+`git pull --ff-only origin main` there (pulling alone changes nothing that
+is served; the next `./deploy.sh code` does).
 
 1. Back up the current vhost:
 

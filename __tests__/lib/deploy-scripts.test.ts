@@ -139,6 +139,54 @@ describe('stripe-mode.sh status', () => {
   });
 });
 
+describe('prod deploy refuses until nginx has the real-IP setup', () => {
+  const vhost = () => path.join(tmp, 'precheck/dance-hub.io');
+  const prod = (args: string[], extra: Record<string, string> = {}) =>
+    run(path.join(ROOT, 'deploy.sh'), args, {
+      env: {
+        DEPLOY_NGINX_CONF: vhost(),
+        // Not a git repo: if the check let `code` through, the pull would fail.
+        DEPLOY_MAIN_REPO: path.join(tmp, 'precheck/not-a-repo'),
+        DEPLOY_RELEASES_ROOT: path.join(tmp, 'precheck/releases'),
+        ...extra,
+      },
+    });
+  const template = () => run(path.join(ROOT, 'deploy.sh'), ['nginx-config'], {
+    env: { DEPLOY_RELEASES_ROOT: path.join(tmp, 'precheck/releases') },
+  }).out;
+  // The live vhost before the change: no include, X-Forwarded-For appended.
+  const oldVhost = () =>
+    template()
+      .replace(/^\s*include \/etc\/nginx\/snippets\/cloudflare-real-ip\.conf;\n/m, '')
+      .replace('X-Forwarded-For $remote_addr;', 'X-Forwarded-For $proxy_add_x_forwarded_for;');
+
+  it('refuses `code` and `rebuild` without the include, before touching git', () => {
+    write(vhost(), oldVhost());
+    for (const cmd of ['code', 'rebuild']) {
+      const res = prod([cmd]);
+      expect(res.code).toBe(1);
+      expect(res.out).toContain('deploy/nginx/README.md');
+      expect(res.out).not.toContain('Pulling');
+    }
+  });
+
+  it('refuses when the include is there but X-Forwarded-For is still appended', () => {
+    write(vhost(), template().replace('X-Forwarded-For $remote_addr;', 'X-Forwarded-For $proxy_add_x_forwarded_for;'));
+    expect(prod(['rebuild']).out).toContain('deploy/nginx/README.md');
+  });
+
+  it('lets the deploy go on once the vhost has it, or with SKIP_NGINX_CHECK=1', () => {
+    write(vhost(), template());
+    // Past the check, `rebuild` stops only because there is no release yet.
+    expect(prod(['rebuild']).out).toContain('No current release of dance-hub to rebuild.');
+
+    write(vhost(), oldVhost());
+    const skipped = prod(['rebuild'], { SKIP_NGINX_CHECK: '1' });
+    expect(skipped.out).toContain('SKIP_NGINX_CHECK=1');
+    expect(skipped.out).toContain('No current release of dance-hub to rebuild.');
+  });
+});
+
 describe('nginx templates', () => {
   const render = (script: string) =>
     run(path.join(ROOT, script), ['nginx-config'], {
