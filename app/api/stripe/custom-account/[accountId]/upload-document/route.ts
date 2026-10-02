@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { queryOne, sql } from '@/lib/db';
 import { requireStripeAccountManager } from '@/lib/community-auth';
+import { findRepresentative } from '@/lib/stripe-representative';
 
 // Only verification uploads belong on this route; other file purposes
 // (disputes, branding, etc.) must not be reachable from here.
@@ -20,6 +21,16 @@ const ALLOWED_FILE_TYPES = [
 ];
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
+
+// Identity documents and where they go in a `verification` hash. They belong
+// to the individual on individual accounts and to the representative person
+// on company accounts.
+const IDENTITY_DOCUMENTS: Record<string, { field: 'document' | 'additional_document'; side: 'front' | 'back' }> = {
+  identity_document: { field: 'document', side: 'front' },
+  identity_document_back: { field: 'document', side: 'back' },
+  additional_document: { field: 'additional_document', side: 'front' },
+  additional_document_back: { field: 'additional_document', side: 'back' },
+};
 
 interface OnboardingProgress {
   stripe_account_id: string;
@@ -93,6 +104,30 @@ export async function POST(request: Request, props: { params: Promise<{ accountI
       );
     }
 
+    const identityDocument = Object.hasOwn(IDENTITY_DOCUMENTS, documentType)
+      ? IDENTITY_DOCUMENTS[documentType]
+      : undefined;
+    if (!identityDocument && documentType !== 'company_document') {
+      return NextResponse.json(
+        { error: 'Invalid document type' },
+        { status: 400 }
+      );
+    }
+
+    // Company accounts verify their representative, who is created from the
+    // personal information step.
+    let representativeId: string | null = null;
+    if (identityDocument && account.business_type === 'company') {
+      const representative = await findRepresentative(accountId);
+      if (!representative) {
+        return NextResponse.json(
+          { error: 'Please complete your personal information first' },
+          { status: 400 }
+        );
+      }
+      representativeId = representative.id;
+    }
+
     // Convert file to buffer for Stripe upload
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -107,80 +142,22 @@ export async function POST(request: Request, props: { params: Promise<{ accountI
       purpose,
     });
 
-    // Map document types to Stripe account update parameters
-    let updateParams: any = {};
-
-    switch (documentType) {
-      case 'identity_document':
-        updateParams = {
-          individual: {
-            verification: {
-              document: {
-                front: stripeFile.id
-              }
-            }
-          }
-        };
-        break;
-
-      case 'identity_document_back':
-        updateParams = {
-          individual: {
-            verification: {
-              document: {
-                back: stripeFile.id
-              }
-            }
-          }
-        };
-        break;
-
-      case 'additional_document':
-        updateParams = {
-          individual: {
-            verification: {
-              additional_document: {
-                front: stripeFile.id
-              }
-            }
-          }
-        };
-        break;
-
-      case 'additional_document_back':
-        updateParams = {
-          individual: {
-            verification: {
-              additional_document: {
-                back: stripeFile.id
-              }
-            }
-          }
-        };
-        break;
-
-      case 'company_document':
-        updateParams = {
-          company: {
-            verification: {
-              document: {
-                front: stripeFile.id
-              }
-            }
-          }
-        };
-        break;
-
-      default:
-        return NextResponse.json(
-          { error: 'Invalid document type' },
-          { status: 400 }
-        );
-    }
-
-    // Update the Stripe account with the document
+    // Attach the document to the person or company it verifies
     try {
-      await stripe.accounts.update(accountId, updateParams);
+      if (identityDocument) {
+        const verification = {
+          [identityDocument.field]: { [identityDocument.side]: stripeFile.id },
+        };
+        if (representativeId) {
+          await stripe.accounts.updatePerson(accountId, representativeId, { verification });
+        } else {
+          await stripe.accounts.update(accountId, { individual: { verification } });
+        }
+      } else {
+        await stripe.accounts.update(accountId, {
+          company: { verification: { document: { front: stripeFile.id } } },
+        });
+      }
     } catch (stripeError: any) {
       console.error('Error updating account with document:', stripeError);
       return NextResponse.json(

@@ -2,13 +2,11 @@ import { NextResponse } from 'next/server';
 import { stripe, mapStripeRequirement, isStripeAccountFullyVerified } from '@/lib/stripe';
 import { queryOne } from '@/lib/db';
 import { requireStripeAccountManager } from '@/lib/community-auth';
+import { isConnectedAccountGone } from '@/lib/stripe-connect-errors';
 
 interface OnboardingProgress {
   current_step: number;
   completed_steps: number[];
-  business_info: Record<string, unknown>;
-  personal_info: Record<string, unknown>;
-  bank_account: Record<string, unknown>;
   documents: unknown[];
   updated_at: string;
 }
@@ -31,7 +29,7 @@ export async function GET(request: Request, props: { params: Promise<{ accountId
 
     // Get onboarding progress from database
     const progress = await queryOne<OnboardingProgress>`
-      SELECT *
+      SELECT current_step, completed_steps, documents, updated_at
       FROM stripe_onboarding_progress
       WHERE stripe_account_id = ${accountId}
     `;
@@ -40,8 +38,12 @@ export async function GET(request: Request, props: { params: Promise<{ accountId
       currentlyDue: (account.requirements?.currently_due ?? []).map(mapStripeRequirement),
       pastDue: (account.requirements?.past_due ?? []).map(mapStripeRequirement),
       eventuallyDue: (account.requirements?.eventually_due ?? []).map(mapStripeRequirement),
+      // Submitted and being checked by Stripe; nothing for the owner to do yet.
+      pendingVerification: (account.requirements?.pending_verification ?? []).map(mapStripeRequirement),
       currentDeadline: account.requirements?.current_deadline,
       disabledReason: account.requirements?.disabled_reason,
+      // Why a submitted detail was rejected (e.g. an unreadable document).
+      errors: (account.requirements?.errors ?? []).map((e) => ({ code: e.requirement, reason: e.reason })),
     };
 
     const isFullyVerified = isStripeAccountFullyVerified(account);
@@ -119,14 +121,13 @@ export async function GET(request: Request, props: { params: Promise<{ accountId
       // Requirements
       requirements,
 
-      // Progress tracking
+      // Progress tracking. The stored step details are never sent back: rows
+      // written before they were redacted can still hold bank numbers, dates
+      // of birth and ID numbers. Bank accounts are listed below by last 4.
       progress: progress ? {
         currentStep: progress.current_step,
         completedSteps: progress.completed_steps || [],
-        businessInfo: progress.business_info || {},
-        personalInfo: progress.personal_info || {},
-        bankAccount: progress.bank_account || {},
-        documents: progress.documents || [],
+        documentsUploaded: (progress.documents || []).length,
         updatedAt: progress.updated_at
       } : null,
 
@@ -154,6 +155,15 @@ export async function GET(request: Request, props: { params: Promise<{ accountId
 
   } catch (error: any) {
     console.error('Error fetching custom Stripe account status:', error);
+
+    // The wizard uses this code to send the owner back to step 1, where a
+    // new account is created.
+    if (isConnectedAccountGone(error)) {
+      return NextResponse.json(
+        { error: 'This payout account is no longer available', code: 'account_gone' },
+        { status: 404 }
+      );
+    }
 
     if (error.type === 'StripeError') {
       return NextResponse.json(

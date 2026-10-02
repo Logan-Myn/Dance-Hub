@@ -2,6 +2,14 @@ import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { queryOne } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
+import {
+  buildPayoutBankAccount,
+  countryName,
+  getPayoutBankFormat,
+  PAYOUT_SUPPORT_EMAIL,
+} from '@/lib/payout-bank-formats';
+import { OLD_BANK_NOT_REMOVED, replaceBankAccount } from '@/lib/stripe-external-accounts';
+import { stripeErrorReply } from '@/lib/stripe-connect-errors';
 
 interface CommunityOwnership {
   id: string;
@@ -53,47 +61,57 @@ export async function POST(request: Request, props: { params: Promise<{ accountI
       );
     }
 
-    // Get current external accounts (bank accounts)
-    const existingBankAccounts = await stripe.accounts.listExternalAccounts(
-      accountId,
-      { object: 'bank_account', limit: 10 }
-    );
-
-    const currentBankAccount = existingBankAccounts.data[0];
-    const currency = currentBankAccount?.currency || account.default_currency || 'eur';
-    const isCurrentlyDefault = currentBankAccount?.default_for_currency || false;
-
-    // Create new bank account with updated IBAN
-    const newBankAccount = await stripe.accounts.createExternalAccount(accountId, {
-      external_account: {
-        object: 'bank_account',
-        country: account.country || 'FR', // Default to France for IBAN
-        currency: currency,
-        account_holder_name: accountHolderName,
-        account_holder_type: 'individual',
-        iban: iban,
-      } as any, // Type assertion needed for IBAN field
-    });
-
-    // If the old bank account was default, make the new one default
-    if (isCurrentlyDefault && newBankAccount.id) {
-      await stripe.accounts.updateExternalAccount(
-        accountId,
-        newBankAccount.id,
-        { default_for_currency: true }
+    // The currency is the account's default currency (or its country's:
+    // SEK in Sweden, CHF in Switzerland, EUR in the euro area), not whatever
+    // the old account used.
+    const format = getPayoutBankFormat(account.country);
+    const acceptsIban =
+      format.kind === 'iban' || (format.kind === 'local' && format.ibanAlternative);
+    if (!acceptsIban) {
+      return NextResponse.json(
+        {
+          error: `Banks in your country don't use an IBAN. Email ${PAYOUT_SUPPORT_EMAIL} and we'll help you change your payout bank.`,
+        },
+        { status: 400 }
       );
     }
 
-    // Delete the old bank account if it exists
-    if (currentBankAccount?.id) {
-      try {
-        await stripe.accounts.deleteExternalAccount(accountId, currentBankAccount.id);
-      } catch (deleteError: any) {
-        console.warn('Could not delete old bank account:', deleteError.message);
-        // Don't fail the request if we can't delete the old account
-        // The new account has been created successfully
-      }
+    const built = buildPayoutBankAccount(account.country, { iban }, true, {
+      currency: account.default_currency,
+    });
+    if (!built.ok) {
+      return NextResponse.json(
+        { error: built.errors.iban ?? built.errors.form ?? 'Invalid IBAN' },
+        { status: 400 }
+      );
     }
+
+    // Stripe takes an IBAN as the account_number; there is no `iban` field.
+    // The new account becomes the default and the old ones are removed.
+    let replaced;
+    try {
+      replaced = await replaceBankAccount(accountId, {
+        object: 'bank_account',
+        country: built.country,
+        currency: built.currency,
+        account_holder_name: accountHolderName,
+        account_holder_type: account.business_type === 'company' ? 'company' : 'individual',
+        account_number: built.accountNumber,
+      });
+    } catch (stripeError: any) {
+      // Most euro accounts may use a euro bank in another country, but not
+      // all; say what to do instead of passing the raw error on.
+      if (built.country !== account.country && stripeError?.type === 'StripeInvalidRequestError') {
+        return NextResponse.json(
+          {
+            error: `Payouts to a bank account in ${countryName(built.country)} aren't available for this account. Use a bank account in ${countryName(account.country)}.`,
+          },
+          { status: 400 }
+        );
+      }
+      throw stripeError;
+    }
+    const { bankAccount: newBankAccount, removedOld } = replaced;
 
     // Cast the response to BankAccount type for proper property access
     const bankAccountData = newBankAccount as any;
@@ -108,17 +126,16 @@ export async function POST(request: Request, props: { params: Promise<{ accountI
         account_holder_name: bankAccountData.account_holder_name,
         default_for_currency: bankAccountData.default_for_currency,
       },
-      message: 'Bank account updated successfully'
+      message: removedOld ? 'Bank account updated successfully' : OLD_BANK_NOT_REMOVED
     });
 
   } catch (error: any) {
     console.error('Error updating bank account IBAN:', error);
 
-    if (error.type === 'StripeError') {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.statusCode || 400 }
-      );
+    // error.type is the subclass name, never 'StripeError', so check the class.
+    const reply = stripeErrorReply(error);
+    if (reply) {
+      return NextResponse.json({ error: reply.error }, { status: reply.status });
     }
 
     return NextResponse.json(

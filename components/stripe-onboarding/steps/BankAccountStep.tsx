@@ -1,35 +1,35 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, ArrowRight, CreditCard, Building2, AlertCircle, Shield, AlertTriangle } from "lucide-react";
+import { ArrowLeft, ArrowRight, CreditCard, Building2, AlertCircle, Mail } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
-
-interface BankAccount {
-  // International fields
-  iban?: string;
-  // US fields
-  accountNumber?: string;
-  routingNumber?: string;
-  accountHolderName: string;
-  accountType?: "checking" | "savings";
-  country: string;
-  currency: string;
-}
+import { STRIPE_COUNTRIES, type AccountLookup } from "../constants";
+import {
+  buildPayoutBankAccount,
+  formatIbanForDisplay,
+  getBankFields,
+  getPayoutBankFormat,
+  PAYOUT_SUPPORT_EMAIL,
+  unsupportedCountryMessage,
+} from "@/lib/payout-bank-formats";
 
 interface BankAccountStepProps {
   data: {
-    bankAccount: BankAccount;
     personalInfo: any;
     businessInfo: any;
     accountId?: string;
+    /** Country of the payout account. Bank fields follow it. */
+    accountCountry?: string;
+    /** The payout account's default currency, when known. */
+    accountCurrency?: string;
   };
-  updateData: (data: any) => void;
+  /** How far the wizard got looking up the linked account. */
+  accountLookup?: AccountLookup;
   onNext: () => void;
   onPrevious: () => void;
   isLoading: boolean;
@@ -37,121 +37,48 @@ interface BankAccountStepProps {
 
 export function BankAccountStep({
   data,
-  updateData,
+  accountLookup = "done",
   onNext,
   onPrevious,
   isLoading,
 }: BankAccountStepProps) {
-  // Get country from user's personal info address
-  const userCountry = data.personalInfo?.address?.country || data.businessInfo?.businessAddress?.country || 'US';
-  const isUS = userCountry === 'US';
+  // Fields come only from the payout account's own country. No guessing
+  // from an address while it loads: wrong fields are worse than a wait.
+  const accountCountry = data.accountCountry ?? "";
+  const format = getPayoutBankFormat(accountCountry);
+  const countryName =
+    STRIPE_COUNTRIES.find((c) => c.value === format.country)?.label ?? format.country;
+  const currency = (data.accountCurrency || (format.kind === "unsupported" ? "" : format.currency)).toLowerCase();
 
-  // Initialize bank account with proper defaults based on country
-  const initializeBankAccount = () => {
-    const existingAccount = data.bankAccount;
-    if (isUS) {
-      return {
-        accountNumber: existingAccount?.accountNumber || "",
-        routingNumber: existingAccount?.routingNumber || "",
-        accountHolderName: existingAccount?.accountHolderName || "",
-        accountType: existingAccount?.accountType || "checking" as "checking" | "savings",
-        country: userCountry,
-        currency: "usd",
-      };
-    } else {
-      return {
-        iban: existingAccount?.iban || "",
-        accountHolderName: existingAccount?.accountHolderName || "",
-        country: userCountry,
-        currency: userCountry === 'GB' ? 'gbp' : 'eur',
-      };
-    }
-  };
+  const defaultHolderName =
+    data.businessInfo?.businessType === "company"
+      ? data.businessInfo?.legalBusinessName ?? ""
+      : [data.personalInfo?.firstName, data.personalInfo?.lastName].filter(Boolean).join(" ");
 
-  const [bankAccount, setBankAccount] = useState<BankAccount>(initializeBankAccount());
+  // Bank details live only in this component's state. They are not saved in
+  // the browser or passed up to the wizard.
+  const [accountHolderName, setAccountHolderName] = useState<string>(defaultHolderName);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [useIban, setUseIban] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isValidating, setIsValidating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const { session } = useAuth();
 
-  // Only update parent when bankAccount actually changes
-  useEffect(() => {
-    const hasChanges = JSON.stringify(bankAccount) !== JSON.stringify(data.bankAccount);
-    if (hasChanges) {
-      updateData({ bankAccount });
-    }
-  }, [bankAccount]); // Remove updateData from dependencies to prevent loops
+  const fields = getBankFields(format, useIban);
 
-  const validateIBAN = (iban: string): boolean => {
-    // Basic IBAN validation
-    if (!iban) return false;
-    
-    // Remove spaces and convert to uppercase
-    const cleanIBAN = iban.replace(/\s/g, '').toUpperCase();
-    
-    // Check length (15-34 characters)
-    if (cleanIBAN.length < 15 || cleanIBAN.length > 34) return false;
-    
-    // Check format (starts with 2 letters followed by 2 digits)
-    if (!/^[A-Z]{2}\d{2}[A-Z0-9]+$/.test(cleanIBAN)) return false;
-    
-    // Basic IBAN checksum validation (simplified)
-    return true;
-  };
-
-  const validateRoutingNumber = (routingNumber: string): boolean => {
-    // Basic routing number validation (9 digits + checksum)
-    if (!/^\d{9}$/.test(routingNumber)) return false;
-
-    // Luhn algorithm checksum validation for routing numbers
-    const digits = routingNumber.split('').map(Number);
-    const weights = [3, 7, 1, 3, 7, 1, 3, 7, 1];
-    const sum = digits.reduce((acc, digit, index) => acc + digit * weights[index], 0);
-    return sum % 10 === 0;
-  };
-
-  const validateForm = () => {
+  const validate = () => {
     const newErrors: Record<string, string> = {};
-
-    if (!bankAccount.accountHolderName.trim()) {
+    if (!accountHolderName.trim()) {
       newErrors.accountHolderName = "Account holder name is required";
     }
-
-    if (isUS) {
-      // US validation - routing number and account number
-      if (!bankAccount.routingNumber?.trim()) {
-        newErrors.routingNumber = "Routing number is required";
-      } else if (!/^\d{9}$/.test(bankAccount.routingNumber)) {
-        newErrors.routingNumber = "Routing number must be exactly 9 digits";
-      } else if (!validateRoutingNumber(bankAccount.routingNumber)) {
-        newErrors.routingNumber = "Invalid routing number";
-      }
-
-      if (!bankAccount.accountNumber?.trim()) {
-        newErrors.accountNumber = "Account number is required";
-      } else if (bankAccount.accountNumber.length < 4 || bankAccount.accountNumber.length > 17) {
-        newErrors.accountNumber = "Account number must be between 4 and 17 digits";
-      } else if (!/^\d+$/.test(bankAccount.accountNumber)) {
-        newErrors.accountNumber = "Account number must contain only digits";
-      }
-
-      if (!bankAccount.accountType) {
-        newErrors.accountType = "Account type is required";
-      }
-    } else {
-      // International validation - IBAN
-      if (!bankAccount.iban?.trim()) {
-        newErrors.iban = "IBAN is required";
-      } else if (!validateIBAN(bankAccount.iban)) {
-        newErrors.iban = "Invalid IBAN format";
-      }
-    }
-
+    const built = buildPayoutBankAccount(format.country, values, useIban, { currency });
+    if (!built.ok) Object.assign(newErrors, built.errors);
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) {
+    if (!validate()) {
       toast.error("Please fix the validation errors");
       return;
     }
@@ -161,31 +88,15 @@ export function BankAccountStep({
       return;
     }
 
-    setIsValidating(true);
+    setIsSaving(true);
 
     try {
       if (!session) {
         throw new Error("Not authenticated");
       }
 
-      // Build bank account data based on country
-      const bankAccountData: any = {
-        account_holder_name: bankAccount.accountHolderName,
-        account_holder_type: "individual",
-        country: bankAccount.country,
-        currency: bankAccount.currency,
-      };
-
-      if (isUS) {
-        // US format - routing number + account number
-        bankAccountData.account_number = bankAccount.accountNumber;
-        bankAccountData.routing_number = bankAccount.routingNumber;
-      } else {
-        // International format - IBAN (remove spaces for API)
-        bankAccountData.account_number = bankAccount.iban?.replace(/\s/g, '');
-      }
-
-      // Update the bank account information via API
+      // The server checks these again against the account's country and
+      // picks the currency itself.
       const response = await fetch(`/api/stripe/custom-account/${data.accountId}/update`, {
         method: "PUT",
         headers: {
@@ -193,91 +104,111 @@ export function BankAccountStep({
         },
         body: JSON.stringify({
           step: "bank_account",
-          bankAccount: bankAccountData,
+          bankAccount: {
+            account_holder_name: accountHolderName.trim(),
+            fields: Object.fromEntries(
+              fields.map((f) => [f.key, f.key === "iban" ? (values.iban ?? "").replace(/\s/g, "") : values[f.key] ?? ""])
+            ),
+            use_iban: useIban,
+          },
           currentStep: 3,
         }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.fieldErrors) setErrors(errorData.fieldErrors);
         throw new Error(errorData.error || "Failed to update bank account information");
       }
 
-      toast.success("Bank account information saved successfully!");
+      const result = await response.json().catch(() => ({}));
+      toast.success("Bank account saved");
+      if (result.warning) toast(result.warning, { duration: 8000 });
       onNext();
     } catch (error) {
       console.error("Error updating bank account:", error);
       toast.error(error instanceof Error ? error.message : "Failed to save bank account information");
     } finally {
-      setIsValidating(false);
+      setIsSaving(false);
     }
   };
 
-  const updateField = (field: string, value: string) => {
-    setBankAccount(prev => ({
-      ...prev,
-      [field]: value,
-    }));
-
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors(prev => ({
-        ...prev,
-        [field]: "",
-      }));
+  const updateValue = (key: string, raw: string) => {
+    setValues((prev) => ({ ...prev, [key]: key === "iban" ? formatIbanForDisplay(raw) : raw }));
+    if (errors[key]) {
+      setErrors((prev) => ({ ...prev, [key]: "" }));
     }
   };
 
-  const formatAccountNumber = (value: string) => {
-    // Remove all non-digits
-    const digits = value.replace(/\D/g, '');
-    return digits;
+  const toggleIban = () => {
+    setUseIban((prev) => !prev);
+    setValues({});
+    setErrors({});
   };
 
-  const formatRoutingNumber = (value: string) => {
-    // Remove all non-digits and limit to 9
-    const digits = value.replace(/\D/g, '').slice(0, 9);
-    return digits;
-  };
+  if (!data.accountId || !data.accountCountry) {
+    let message: string;
+    if (accountLookup === "loading") message = "Loading your payout account...";
+    else if (data.accountId || accountLookup === "failed") {
+      message = "We couldn't load your payout account. Please refresh the page to try again.";
+    } else message = "We couldn't find your payout account. Go back to the first step to set it up.";
 
-  const formatIBAN = (value: string) => {
-    // Remove all non-alphanumeric characters and convert to uppercase
-    const clean = value.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-    // For display, add spaces every 4 characters for readability (but we'll remove them when sending to API)
-    return clean.replace(/(.{4})/g, '$1 ').trim();
-  };
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold mb-2">Bank Account Information</h2>
+          <p className="text-gray-600">{message}</p>
+        </div>
+        <div className="flex justify-between">
+          <Button variant="outline" onClick={onPrevious} className="flex items-center gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Previous
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
-  // Get country-specific information
-  const getCountryInfo = () => {
-    const countryNames: Record<string, string> = {
-      'US': 'United States',
-      'EE': 'Estonia',
-      'GB': 'United Kingdom',
-      'DE': 'Germany',
-      'FR': 'France',
-      'ES': 'Spain',
-      'IT': 'Italy',
-      'NL': 'Netherlands',
-      'SE': 'Sweden',
-      'NO': 'Norway',
-      'DK': 'Denmark',
-      'FI': 'Finland',
-    };
+  if (format.kind === "unsupported") {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold mb-2">Bank Account Information</h2>
+        </div>
 
-    return {
-      name: countryNames[userCountry] || userCountry,
-      isEU: ['EE', 'DE', 'FR', 'ES', 'IT', 'NL', 'SE', 'DK', 'FI', 'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'GR', 'HU', 'IE', 'LV', 'LT', 'LU', 'MT', 'PL', 'PT', 'RO', 'SK', 'SI'].includes(userCountry),
-    };
-  };
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <Mail className="h-5 w-5 text-amber-700 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-amber-900 space-y-2">
+                <p>{unsupportedCountryMessage(countryName || undefined)}</p>
+                <a
+                  href={`mailto:${PAYOUT_SUPPORT_EMAIL}`}
+                  className="font-medium underline"
+                >
+                  {PAYOUT_SUPPORT_EMAIL}
+                </a>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-  const countryInfo = getCountryInfo();
+        <div className="flex justify-between">
+          <Button variant="outline" onClick={onPrevious} className="flex items-center gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Previous
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold mb-2">Bank Account Information</h2>
         <p className="text-gray-600">
-          Add the bank account where you'd like to receive your payments. This information is encrypted and secure.
+          Add the bank account where you&apos;d like to receive your payments.
         </p>
       </div>
 
@@ -287,11 +218,14 @@ export function BankAccountStep({
           <div className="text-sm text-blue-800">
             <p className="font-medium mb-1">Important Information</p>
             <ul className="list-disc list-inside space-y-1 text-blue-700">
-              <li>This must be a bank account in {countryInfo.name} in your name</li>
+              {currency === "eur" ? (
+                <li>Use a euro bank account in your name. It can be at a bank in another euro country</li>
+              ) : (
+                <li>Use a bank account in {countryName} in your name</li>
+              )}
+              <li>Payouts are paid in {currency.toUpperCase()}</li>
               <li>Payments typically arrive in 2-7 business days</li>
               <li>You can update this information later if needed</li>
-              <li>All bank information is encrypted and securely stored</li>
-              {!isUS && <li>For {countryInfo.name}, we use IBAN for international transfers</li>}
             </ul>
           </div>
         </div>
@@ -311,9 +245,12 @@ export function BankAccountStep({
               <Label htmlFor="accountHolderName">Account Holder Name *</Label>
               <Input
                 id="accountHolderName"
-                value={bankAccount.accountHolderName}
-                onChange={(e) => updateField("accountHolderName", e.target.value)}
-                placeholder={isUS ? "John Doe" : "Jack Sparrow"}
+                value={accountHolderName}
+                onChange={(e) => {
+                  setAccountHolderName(e.target.value);
+                  if (errors.accountHolderName) setErrors((prev) => ({ ...prev, accountHolderName: "" }));
+                }}
+                placeholder="Jane Doe"
                 className={errors.accountHolderName ? "border-red-500" : ""}
               />
               {errors.accountHolderName && (
@@ -323,37 +260,6 @@ export function BankAccountStep({
                 Must match the name on your bank account exactly
               </p>
             </div>
-
-            {isUS && (
-              <div>
-                <Label htmlFor="accountType">Account Type *</Label>
-                <Select
-                  value={bankAccount.accountType || ""}
-                  onValueChange={(value: "checking" | "savings") => updateField("accountType", value)}
-                >
-                  <SelectTrigger className={errors.accountType ? "border-red-500" : ""}>
-                    <SelectValue placeholder="Select account type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="checking">
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="h-4 w-4" />
-                        <span>Checking Account</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="savings">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4" />
-                        <span>Savings Account</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.accountType && (
-                  <p className="text-red-500 text-sm mt-1">{errors.accountType}</p>
-                )}
-              </div>
-            )}
           </CardContent>
         </Card>
 
@@ -366,83 +272,29 @@ export function BankAccountStep({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* IBAN Support Info */}
-            {userCountry && userCountry !== 'US' && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-start space-x-3">
-                  <AlertCircle className="h-5 w-5 text-green-600 mt-0.5" />
-                  <div>
-                    <h4 className="text-sm font-medium text-green-800">
-                      International Bank Account Support
-                    </h4>
-                    <p className="text-sm text-green-700 mt-1">
-                      IBAN accounts are fully supported! Your {countryInfo.name} bank account will be processed securely.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {isUS ? (
-              <>
-                <div>
-                  <Label htmlFor="routingNumber">Routing Number *</Label>
-                  <Input
-                    id="routingNumber"
-                    value={bankAccount.routingNumber || ""}
-                    onChange={(e) => updateField("routingNumber", formatRoutingNumber(e.target.value))}
-                    placeholder="123456789"
-                    maxLength={9}
-                    className={errors.routingNumber ? "border-red-500" : ""}
-                  />
-                  {errors.routingNumber && (
-                    <p className="text-red-500 text-sm mt-1">{errors.routingNumber}</p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">
-                    9-digit number found on your checks or bank statements
-                  </p>
-                </div>
-
-                <div>
-                  <Label htmlFor="accountNumber">Account Number *</Label>
-                  <Input
-                    id="accountNumber"
-                    value={bankAccount.accountNumber || ""}
-                    onChange={(e) => updateField("accountNumber", formatAccountNumber(e.target.value))}
-                    placeholder="1234567890"
-                    className={errors.accountNumber ? "border-red-500" : ""}
-                  />
-                  {errors.accountNumber && (
-                    <p className="text-red-500 text-sm mt-1">{errors.accountNumber}</p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">
-                    Account number from your checks or bank statements
-                  </p>
-                </div>
-              </>
-            ) : (
-              <div>
-                <Label htmlFor="iban">IBAN (International Bank Account Number) *</Label>
+            {fields.map((field) => (
+              <div key={field.key}>
+                <Label htmlFor={field.key}>{field.label} *</Label>
                 <Input
-                  id="iban"
-                  value={bankAccount.iban || ""}
-                  onChange={(e) => updateField("iban", formatIBAN(e.target.value))}
-                  placeholder={userCountry === 'EE' ? "EE38 2200 2210 2014 5685" : "GB82 WEST 1234 5698 7654 32"}
-                  className={errors.iban ? "border-red-500" : ""}
+                  id={field.key}
+                  value={values[field.key] ?? ""}
+                  onChange={(e) => updateValue(field.key, e.target.value)}
+                  placeholder={field.placeholder}
+                  inputMode={field.numeric ? "numeric" : "text"}
+                  autoComplete="off"
+                  className={errors[field.key] ? "border-red-500" : ""}
                 />
-                {errors.iban && (
-                  <p className="text-red-500 text-sm mt-1">{errors.iban}</p>
+                {errors[field.key] && (
+                  <p className="text-red-500 text-sm mt-1">{errors[field.key]}</p>
                 )}
-                <p className="text-xs text-gray-500 mt-1">
-                  {countryInfo.isEU 
-                    ? "European IBAN format (e.g., EE38 2200 2210 2014 5685)"
-                    : "International bank account identifier for your country"
-                  }
-                </p>
-                <p className="text-xs text-blue-600 mt-1">
-                  💡 <strong>Testing:</strong> Use Stripe's test IBAN: <code>EE382200221020145685</code> for Estonia
-                </p>
+                {field.hint && <p className="text-xs text-gray-500 mt-1">{field.hint}</p>}
               </div>
+            ))}
+
+            {format.kind === "local" && format.ibanAlternative && (
+              <Button type="button" variant="link" className="px-0" onClick={toggleIban}>
+                {useIban ? "Use sort code and account number instead" : "Use an IBAN instead"}
+              </Button>
             )}
           </CardContent>
         </Card>
@@ -459,8 +311,8 @@ export function BankAccountStep({
               <div className="text-sm text-green-800">
                 <p className="font-medium">Your information is secure</p>
                 <p className="mt-1">
-                  We use bank-level encryption to protect your financial information. 
-                  Stripe is PCI DSS Level 1 certified and SOC 2 compliant.
+                  Your bank details are sent over an encrypted connection to our payment
+                  provider. Dance-Hub only keeps the last 4 digits.
                 </p>
               </div>
             </div>
@@ -473,15 +325,15 @@ export function BankAccountStep({
           <ArrowLeft className="h-4 w-4" />
           Previous
         </Button>
-        <Button 
-          onClick={handleSubmit} 
-          disabled={isLoading || isValidating} 
+        <Button
+          onClick={handleSubmit}
+          disabled={isLoading || isSaving}
           className="flex items-center gap-2"
         >
-          {isLoading || isValidating ? "Validating..." : "Continue"}
+          {isLoading || isSaving ? "Saving..." : "Continue"}
           <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
     </div>
   );
-} 
+}

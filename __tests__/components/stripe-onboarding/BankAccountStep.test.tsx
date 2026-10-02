@@ -1,0 +1,187 @@
+/**
+ * The bank step shows the fields for the payout account's country (not the
+ * owner's home address), and owners in countries the form can't handle get
+ * a contact message instead of a broken IBAN field.
+ */
+import React from "react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { toast } from "react-hot-toast";
+import { BankAccountStep } from "@/components/stripe-onboarding/steps/BankAccountStep";
+
+jest.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ session: { id: "s1" } }) }));
+jest.mock("react-hot-toast", () => {
+  const t = Object.assign(jest.fn(), { success: jest.fn(), error: jest.fn() });
+  return { __esModule: true, toast: t, default: t };
+});
+
+const fetchMock = jest.fn();
+beforeEach(() => {
+  fetchMock.mockReset();
+  fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+  global.fetch = fetchMock as unknown as typeof fetch;
+});
+
+function renderStep(accountCountry: string | undefined, homeCountry = "US", accountCurrency?: string) {
+  const onNext = jest.fn();
+  render(
+    <BankAccountStep
+      data={{
+        accountId: "acct_1",
+        accountCountry,
+        accountCurrency,
+        personalInfo: { firstName: "Ana", lastName: "Lopez", address: { country: homeCountry } },
+        businessInfo: { businessType: "individual", businessAddress: { country: accountCountry ?? "EE" } },
+      }}
+      onNext={onNext}
+      onPrevious={jest.fn()}
+      isLoading={false}
+    />
+  );
+  return { onNext };
+}
+
+it("asks for an IBAN in the account's currency, whatever the home address says", () => {
+  renderStep("SE", "US");
+
+  expect(screen.getByLabelText(/IBAN/)).toBeInTheDocument();
+  expect(screen.queryByLabelText(/Routing number/)).not.toBeInTheDocument();
+  expect(screen.getByText(/SEK/)).toBeInTheDocument();
+});
+
+it("asks for routing and account numbers for a US account", () => {
+  renderStep("US", "EE");
+
+  expect(screen.getByLabelText(/Routing number/)).toBeInTheDocument();
+  expect(screen.getByLabelText(/Account number/)).toBeInTheDocument();
+  expect(screen.queryByLabelText(/IBAN/)).not.toBeInTheDocument();
+});
+
+it("lets GB owners switch from sort code to IBAN", async () => {
+  renderStep("GB");
+
+  expect(screen.getByLabelText(/Sort code/)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: /IBAN instead/i }));
+  expect(screen.getByLabelText(/IBAN/)).toBeInTheDocument();
+  expect(screen.queryByLabelText(/Sort code/)).not.toBeInTheDocument();
+});
+
+it("shows a contact message for countries the form can't handle", () => {
+  renderStep("JP");
+
+  expect(screen.getByText(/can't be set up here yet/)).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "hello@dance-hub.io" })).toHaveAttribute(
+    "href",
+    "mailto:hello@dance-hub.io"
+  );
+  expect(screen.queryByLabelText(/IBAN/)).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Continue/ })).not.toBeInTheDocument();
+});
+
+it("sends the entered fields and moves on", async () => {
+  const { onNext } = renderStep("SE");
+
+  await userEvent.type(screen.getByLabelText(/IBAN/), "SE35 5000 0000 0549 1000 0003");
+  await userEvent.click(screen.getByRole("button", { name: /Continue/ }));
+
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(url).toBe("/api/stripe/custom-account/acct_1/update");
+  expect(JSON.parse(init.body)).toEqual({
+    step: "bank_account",
+    bankAccount: {
+      account_holder_name: "Ana Lopez",
+      fields: { iban: "SE3550000000054910000003" },
+      use_iban: false,
+    },
+    currentStep: 3,
+  });
+  expect(onNext).toHaveBeenCalled();
+});
+
+it("shows the error for an invalid IBAN without sending it", async () => {
+  renderStep("EE");
+
+  await userEvent.type(screen.getByLabelText(/IBAN/), "EE382200221020145686");
+  await userEvent.click(screen.getByRole("button", { name: /Continue/ }));
+
+  expect(screen.getByText(/not valid/)).toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("accepts a euro IBAN from another country for a euro account", async () => {
+  renderStep("EE", "EE", "eur");
+
+  expect(screen.getByText(/another euro country/)).toBeInTheDocument();
+  await userEvent.type(screen.getByLabelText(/IBAN/), "LT12 1000 0111 0100 1000");
+  await userEvent.click(screen.getByRole("button", { name: /Continue/ }));
+
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body).bankAccount.fields).toEqual({ iban: "LT121000011101001000" });
+});
+
+it("asks for a domestic bank for a non-euro account", async () => {
+  renderStep("SE", "SE", "sek");
+
+  await userEvent.type(screen.getByLabelText(/IBAN/), "DE89 3704 0044 0532 0130 00");
+  await userEvent.click(screen.getByRole("button", { name: /Continue/ }));
+
+  expect(screen.getByText("Use a bank account in Sweden. This IBAN is from Germany.")).toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("shows the account's own currency", () => {
+  renderStep("SE", "SE", "eur");
+  expect(screen.getByText(/Payouts are paid in EUR/)).toBeInTheDocument();
+});
+
+it("tells the owner when the previous bank account could not be removed", async () => {
+  fetchMock.mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ success: true, warning: "The previous bank account couldn't be removed." }),
+  });
+  const { onNext } = renderStep("EE", "EE", "eur");
+
+  await userEvent.type(screen.getByLabelText(/IBAN/), "EE382200221020145685");
+  await userEvent.click(screen.getByRole("button", { name: /Continue/ }));
+
+  expect(toast).toHaveBeenCalledWith("The previous bank account couldn't be removed.", expect.anything());
+  expect(onNext).toHaveBeenCalled();
+});
+
+describe("while the payout account is not known", () => {
+  function renderWithout(accountId: string | undefined, accountLookup: "loading" | "done" | "failed" | "gone") {
+    render(
+      <BankAccountStep
+        data={{
+          accountId,
+          personalInfo: {},
+          // The old fallback: never show fields for the business address country.
+          businessInfo: { businessType: "individual", businessAddress: { country: "US" } },
+        }}
+        accountLookup={accountLookup}
+        onNext={jest.fn()}
+        onPrevious={jest.fn()}
+        isLoading={false}
+      />
+    );
+  }
+
+  it("waits for the account country instead of guessing US fields", () => {
+    renderWithout("acct_1", "loading");
+    expect(screen.getByText(/Loading your payout account/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Routing number/)).not.toBeInTheDocument();
+  });
+
+  it("says when the account could not be loaded", () => {
+    renderWithout("acct_1", "failed");
+    expect(screen.getByText(/couldn't load your payout account/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Routing number/)).not.toBeInTheDocument();
+  });
+
+  it("sends owners without an account back to the first step", () => {
+    renderWithout(undefined, "gone");
+    expect(screen.getByText(/Go back to the first step/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Routing number/)).not.toBeInTheDocument();
+  });
+});

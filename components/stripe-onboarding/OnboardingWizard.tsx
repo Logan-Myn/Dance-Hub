@@ -12,9 +12,14 @@ import { PersonalInfoStep } from "./steps/PersonalInfoStep";
 import { BankAccountStep } from "./steps/BankAccountStep";
 import { DocumentUploadStep } from "./steps/DocumentUploadStep";
 import { VerificationStep } from "./steps/VerificationStep";
+import type { AccountLookup } from "./constants";
 
 interface OnboardingData {
   accountId?: string;
+  /** Country the payout account was created in; drives the bank fields. */
+  accountCountry?: string;
+  /** The payout account's default currency. */
+  accountCurrency?: string;
   businessInfo: {
     businessType: "individual" | "company";
     legalBusinessName: string;
@@ -50,17 +55,6 @@ interface OnboardingData {
     email: string;
     ssnLast4: string;
   };
-  bankAccount: {
-    // International fields
-    iban?: string;
-    // US fields  
-    accountNumber?: string;
-    routingNumber?: string;
-    accountHolderName: string;
-    accountType?: "checking" | "savings";
-    country: string;
-    currency: string;
-  };
   documents: Array<{
     type: string;
     purpose: string;
@@ -82,10 +76,58 @@ const STEPS = [
   { id: 5, title: "Verification", description: "Final review and verification" },
 ];
 
+// Only the position in the wizard is kept in the browser. Names, addresses,
+// dates of birth, ID and bank numbers stay in memory and are sent straight to
+// the server; the account id is always re-read from the community.
+interface SavedProgress {
+  currentStep: number;
+  completedSteps: number[];
+}
+
+const storageKey = (communityId: string) => `stripe-onboarding-${communityId}`;
+
+function readSavedProgress(communityId: string): SavedProgress {
+  const progress: SavedProgress = { currentStep: 1, completedSteps: [] };
+  try {
+    const raw = window.localStorage.getItem(storageKey(communityId));
+    if (!raw) return progress;
+    const parsed = JSON.parse(raw);
+    const isStep = (n: unknown): n is number =>
+      typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= STEPS.length;
+    if (isStep(parsed?.currentStep)) progress.currentStep = parsed.currentStep;
+    if (Array.isArray(parsed?.completedSteps)) {
+      progress.completedSteps = parsed.completedSteps.filter(isStep);
+    }
+  } catch {
+    // Unreadable or blocked storage: start from the first step.
+  }
+  return progress;
+}
+
+function writeSavedProgress(communityId: string, progress: SavedProgress) {
+  try {
+    window.localStorage.setItem(storageKey(communityId), JSON.stringify(progress));
+  } catch {
+    // Storage can be full or blocked; the wizard still works without it.
+  }
+}
+
+function clearSavedProgress(communityId: string) {
+  try {
+    window.localStorage.removeItem(storageKey(communityId));
+  } catch {
+    // Ignore.
+  }
+}
+
 export function OnboardingWizard({ communityId, communitySlug, onComplete }: OnboardingWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  // Don't save until the saved position has been read, or the first render's
+  // step 1 would overwrite it.
+  const [progressRestored, setProgressRestored] = useState(false);
+  const [accountLookup, setAccountLookup] = useState<AccountLookup>("loading");
   const [onboardingData, setOnboardingData] = useState<OnboardingData>({
     businessInfo: {
       businessType: "individual",
@@ -119,40 +161,52 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
       email: "",
       ssnLast4: "",
     },
-    bankAccount: {
-      accountNumber: "",
-      routingNumber: "",
-      accountHolderName: "",
-      accountType: "checking",
-      country: "US",
-      currency: "usd",
-    },
     documents: [],
   });
 
-  const { user, session } = useAuth();
+  const { session } = useAuth();
 
   useEffect(() => {
     if (!session) return;
 
     let cancelled = false;
     const checkExistingAccount = async () => {
+      let lookup: AccountLookup = "failed";
       try {
         const response = await fetch(`/api/community/${communitySlug}`);
         if (!response.ok || cancelled) return;
         const data = await response.json();
-        if (!data.stripe_account_id) return;
+        if (!data.stripe_account_id) {
+          lookup = "done";
+          return;
+        }
 
         const statusResponse = await fetch(`/api/stripe/custom-account/${data.stripe_account_id}/status`);
         if (cancelled) return;
+        const statusData = await statusResponse.json().catch(() => ({}));
+        if (cancelled) return;
         if (statusResponse.ok) {
-          setOnboardingData(prev => ({ ...prev, accountId: data.stripe_account_id }));
-          toast.success("Loaded existing Stripe account");
+          setOnboardingData(prev => ({
+            ...prev,
+            accountId: data.stripe_account_id,
+            accountCountry: statusData.country ?? prev.accountCountry,
+            accountCurrency: statusData.default_currency ?? prev.accountCurrency,
+          }));
+          lookup = "done";
+          toast.success("Loaded your payout account");
+        } else if (statusData.code === "account_gone") {
+          // The saved steps belonged to that account. Step 1 creates a new one.
+          lookup = "gone";
+          setCurrentStep(1);
+          setCompletedSteps([]);
+          toast.error("Your previous payout account is no longer available. Start again from the first step to set up a new one.");
         } else {
-          toast("Previous Stripe account was invalid, you can create a new one");
+          toast.error("We couldn't load your payout account. Please refresh the page to try again.");
         }
       } catch (error) {
         console.error("Error checking existing Stripe account:", error);
+      } finally {
+        if (!cancelled) setAccountLookup(lookup);
       }
     };
 
@@ -163,41 +217,26 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
   }, [session, communitySlug]);
 
   useEffect(() => {
-    // Load any existing progress from localStorage
-    const savedProgress = localStorage.getItem(`stripe-onboarding-${communityId}`);
-    if (savedProgress) {
-      try {
-        const parsed = JSON.parse(savedProgress);
-        setOnboardingData(parsed.data || onboardingData);
-        setCurrentStep(parsed.currentStep || 1);
-        setCompletedSteps(parsed.completedSteps || []);
-      } catch (error) {
-        console.error("Failed to load saved progress:", error);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Restore the step position. Rewriting it straight away also replaces a
+    // blob saved by the old wizard, which held bank and identity details.
+    const saved = readSavedProgress(communityId);
+    writeSavedProgress(communityId, saved);
+    setCurrentStep(saved.currentStep);
+    setCompletedSteps(saved.completedSteps);
+    setProgressRestored(true);
   }, [communityId]);
 
-  const saveProgress = useCallback(() => {
-    const progressData = {
-      data: onboardingData,
-      currentStep,
-      completedSteps,
-      timestamp: new Date().toISOString(),
-    };
-    localStorage.setItem(`stripe-onboarding-${communityId}`, JSON.stringify(progressData));
-  }, [onboardingData, currentStep, completedSteps, communityId]);
+  useEffect(() => {
+    if (!progressRestored) return;
+    writeSavedProgress(communityId, { currentStep, completedSteps });
+  }, [progressRestored, communityId, currentStep, completedSteps]);
 
   const updateData = useCallback((stepData: Partial<OnboardingData>) => {
     setOnboardingData(prev => ({ ...prev, ...stepData }));
-    // Auto-save progress with a debounce
-    setTimeout(saveProgress, 100);
-  }, [saveProgress]);
+  }, []);
 
   const markStepCompleted = (step: number) => {
-    if (!completedSteps.includes(step)) {
-      setCompletedSteps(prev => [...prev, step]);
-    }
+    setCompletedSteps(prev => (prev.includes(step) ? prev : [...prev, step]));
   };
 
   const canProceedToStep = (step: number): boolean => {
@@ -209,7 +248,6 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
     if (currentStep < STEPS.length) {
       markStepCompleted(currentStep);
       setCurrentStep(currentStep + 1);
-      saveProgress();
     }
   };
 
@@ -253,7 +291,7 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
         console.log("Account creation failed:", errorData);
         
         // If account already exists, try to get the existing account ID
-        if (errorData.error === "Community already has a Stripe account") {
+        if (errorData.code === "account_exists") {
           console.log("Account already exists, fetching existing account...");
           try {
             const communityResponse = await fetch(`/api/community/${communitySlug}`);
@@ -262,11 +300,18 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
               console.log("Fetched community data for existing account:", communityData);
               if (communityData.stripe_account_id) {
                 console.log("Found existing account ID:", communityData.stripe_account_id);
-                setOnboardingData(prev => ({ 
-                  ...prev, 
-                  accountId: communityData.stripe_account_id 
+                // The bank step needs the account's country.
+                const statusResponse = await fetch(
+                  `/api/stripe/custom-account/${communityData.stripe_account_id}/status`
+                );
+                const statusData = statusResponse.ok ? await statusResponse.json().catch(() => ({})) : {};
+                setOnboardingData(prev => ({
+                  ...prev,
+                  accountId: communityData.stripe_account_id,
+                  accountCountry: statusData.country ?? prev.accountCountry,
+            accountCurrency: statusData.default_currency ?? prev.accountCurrency,
                 }));
-                toast.success("Using existing Stripe account");
+                toast.success("Using your existing payout account");
                 return communityData.stripe_account_id;
               }
             }
@@ -275,53 +320,66 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
           }
         }
         
-        throw new Error(errorData.error || "Failed to create Stripe account");
+        throw new Error(errorData.error || "Failed to create payout account");
       }
 
       const result = await response.json();
-      setOnboardingData(prev => ({ ...prev, accountId: result.accountId }));
-      toast.success("Stripe account created successfully!");
+      setOnboardingData(prev => ({
+        ...prev,
+        accountId: result.accountId,
+        accountCountry: result.country,
+        accountCurrency: result.defaultCurrency,
+      }));
+      toast.success("Payout account created");
       return result.accountId;
     } catch (error) {
       console.error("Error creating Stripe account:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to create Stripe account");
+      toast.error(error instanceof Error ? error.message : "Failed to create payout account");
       throw error;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleFinish = async () => {
+  // Resolves true when onboarding is done, false to keep the owner on the
+  // verification step (the step then re-checks its status).
+  const handleFinish = async (): Promise<boolean> => {
+    const accountId = onboardingData.accountId;
+    if (!accountId) {
+      toast.error("We couldn't find your payout account. Go back to the first step to set it up.");
+      return false;
+    }
+
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      
-      if (!onboardingData.accountId) {
-        throw new Error("No account ID available");
+      const verifyResponse = await fetch(`/api/stripe/custom-account/${accountId}/verify`, {
+        method: "POST",
+      });
+      const result = await verifyResponse.json().catch(() => ({}));
+
+      if (!verifyResponse.ok) {
+        throw new Error(result.error || "We couldn't check your verification status. Please try again.");
       }
 
-      // Verify the account is ready
-      const statusResponse = await fetch(`/api/stripe/custom-account/${onboardingData.accountId}/status`);
-      const statusData = await statusResponse.json();
-
-      if (statusData.requiresVerification) {
-        // Final verification step
-        const verifyResponse = await fetch(`/api/stripe/custom-account/${onboardingData.accountId}/verify`, {
-          method: "POST",
-        });
-
-        if (!verifyResponse.ok) {
-          throw new Error("Verification failed");
-        }
+      if (result.verified) {
+        toast.success("Payments are set up");
+      } else if (result.status === "pending_review") {
+        toast.success("Your details are submitted. Payments will be enabled once verification is complete.");
+      } else if (result.requirements) {
+        toast.error("Some information is still needed. Check the list on this page.");
+        return false;
+      } else {
+        toast.error("We couldn't confirm your verification yet. Refresh the status in a moment, or email hello@dance-hub.io.");
+        return false;
       }
 
-      // Clear the saved progress
-      localStorage.removeItem(`stripe-onboarding-${communityId}`);
-      
-      toast.success("Stripe onboarding completed successfully!");
-      onComplete(onboardingData.accountId);
+      clearSavedProgress(communityId);
+      onComplete(accountId);
+      return true;
     } catch (error) {
       console.error("Error completing onboarding:", error);
-      toast.error("Failed to complete onboarding");
+      toast.error(error instanceof Error ? error.message : "Failed to complete onboarding");
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -337,6 +395,8 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
       accountId: onboardingData.accountId,
       onCreateAccount: handleCreateAccount,
       communitySlug,
+      // Without a session the lookup never starts, so don't show it as loading.
+      accountLookup: (session ? accountLookup : "done") as AccountLookup,
     };
 
     switch (currentStep) {
@@ -349,7 +409,13 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
       case 4:
         return <DocumentUploadStep {...stepProps} />;
       case 5:
-        return <VerificationStep {...stepProps} onFinish={handleFinish} />;
+        return (
+          <VerificationStep
+            {...stepProps}
+            onFinish={handleFinish}
+            onGoToStep={(step: number) => setCurrentStep(step)}
+          />
+        );
       default:
         return null;
     }
@@ -360,7 +426,7 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
       <div className="space-y-6">
         <header className="space-y-2">
           <h1 className="font-display text-3xl sm:text-4xl font-semibold text-foreground">
-            Stripe Payment Setup
+            Payment Setup
           </h1>
           <p className="text-sm text-muted-foreground">
             Step {currentStep} of {STEPS.length}: {STEPS[currentStep - 1]?.title}

@@ -3,6 +3,9 @@ import { stripe } from '@/lib/stripe';
 import { sql } from '@/lib/db';
 import { requireStripeAccountManager } from '@/lib/community-auth';
 import { getClientIp } from '@/lib/client-ip';
+import { buildPayoutBankAccount, countryName } from '@/lib/payout-bank-formats';
+import { OLD_BANK_NOT_REMOVED, replaceBankAccount } from '@/lib/stripe-external-accounts';
+import { upsertRepresentative } from '@/lib/stripe-representative';
 
 interface BusinessInfo {
   type: 'individual' | 'company';
@@ -43,13 +46,11 @@ interface PersonalInfo {
 }
 
 interface BankAccountInfo {
-  account_number?: string;
-  routing_number?: string;
   account_holder_name?: string;
-  account_holder_type?: 'individual' | 'company';
-  country?: string;
-  currency?: string;
-  iban?: string;
+  /** Raw form values, keyed as in lib/payout-bank-formats (iban, routingNumber, ...). */
+  fields?: Record<string, string>;
+  /** GB only: an IBAN was entered instead of sort code and account number. */
+  use_iban?: boolean;
   skipped?: boolean;
 }
 
@@ -71,7 +72,8 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
       businessInfo?: BusinessInfo;
       personalInfo?: PersonalInfo;
       bankAccount?: BankAccountInfo;
-      tosAcceptance?: { accepted: boolean; date: string; userAgent: string };
+      // Only `accepted` is used; the date and user agent are taken server-side.
+      tosAcceptance?: { accepted: boolean };
       currentStep?: number;
     };
 
@@ -94,37 +96,46 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
     }
 
     let updateParams: any = {};
+    let progressBankAccount: Record<string, unknown> | undefined;
+    let bankWarning: string | undefined;
 
     // Handle different steps of the onboarding process
     switch (step) {
       case 'business_info':
         if (businessInfo) {
+          const isCompany = businessInfo.type === 'company';
+          // One object for the company, so its name, address and phone all
+          // reach Stripe (two spreads under the same key used to drop the
+          // name). An individual's name, address and phone come from the
+          // personal step only: step 1 is re-saved whenever the owner goes
+          // back to it, and splitting the business name on spaces would
+          // overwrite their legal name.
+          const company: Record<string, unknown> = {};
+          if (isCompany) {
+            if (businessInfo.name) company.name = businessInfo.name;
+            if (businessInfo.address) company.address = businessInfo.address;
+            if (businessInfo.phone) company.phone = businessInfo.phone;
+          }
+
           updateParams = {
             business_type: businessInfo.type,
-            ...(businessInfo.name && {
-              [businessInfo.type === 'individual' ? 'individual' : 'company']: {
-                ...(businessInfo.type === 'individual' ? { first_name: businessInfo.name.split(' ')[0], last_name: businessInfo.name.split(' ').slice(1).join(' ') } : { name: businessInfo.name })
-              }
-            }),
             business_profile: {
               ...(businessInfo.url && { url: businessInfo.url }),
               ...(businessInfo.mcc && { mcc: businessInfo.mcc }),
             },
-            ...(businessInfo.address && {
-              [businessInfo.type === 'individual' ? 'individual' : 'company']: {
-                address: businessInfo.address
-              }
-            })
+            ...(Object.keys(company).length > 0 && { company }),
           };
 
-          // Handle Terms of Service acceptance for Custom accounts
+          // Handle Terms of Service acceptance for Custom accounts. The time
+          // and user agent are ours, not values the browser can choose.
           if (tosAcceptance && tosAcceptance.accepted) {
             const clientIP = getClientIp(request.headers) || '127.0.0.1';
+            const userAgent = request.headers.get('user-agent');
 
             updateParams.tos_acceptance = {
-              date: Math.floor(new Date(tosAcceptance.date).getTime() / 1000),
+              date: Math.floor(Date.now() / 1000),
               ip: clientIP,
-              user_agent: tosAcceptance.userAgent,
+              ...(userAgent && { user_agent: userAgent }),
             };
           }
         }
@@ -132,17 +143,31 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
 
       case 'personal_info':
         if (personalInfo) {
-          updateParams = {
-            individual: {
-              ...(personalInfo.first_name && { first_name: personalInfo.first_name }),
-              ...(personalInfo.last_name && { last_name: personalInfo.last_name }),
-              ...(personalInfo.email && { email: personalInfo.email }),
-              ...(personalInfo.phone && { phone: personalInfo.phone }),
-              ...(personalInfo.dob && { dob: personalInfo.dob }),
-              ...(personalInfo.address && { address: personalInfo.address }),
-              ...(personalInfo.ssn_last_4 && { ssn_last_4: personalInfo.ssn_last_4 }),
-            }
+          const person = {
+            ...(personalInfo.first_name && { first_name: personalInfo.first_name }),
+            ...(personalInfo.last_name && { last_name: personalInfo.last_name }),
+            ...(personalInfo.email && { email: personalInfo.email }),
+            ...(personalInfo.phone && { phone: personalInfo.phone }),
+            ...(personalInfo.dob && { dob: personalInfo.dob }),
+            ...(personalInfo.address && { address: personalInfo.address }),
+            ...(personalInfo.ssn_last_4 && { ssn_last_4: personalInfo.ssn_last_4 }),
           };
+
+          if (account.business_type === 'company') {
+            // Company accounts are verified through their representative;
+            // `individual` isn't accepted on them.
+            try {
+              await upsertRepresentative(accountId, person);
+            } catch (stripeError: any) {
+              console.error('Error saving company representative:', stripeError);
+              return NextResponse.json(
+                { error: 'Failed to update account: ' + stripeError.message },
+                { status: 400 }
+              );
+            }
+          } else {
+            updateParams = { individual: person };
+          }
         }
         break;
 
@@ -155,45 +180,55 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
             break;
           }
 
-          try {
-            // For US accounts using routing/account numbers
-            if (bankAccount.routing_number && bankAccount.account_number) {
-              // Create external account with routing/account numbers
-              await stripe.accounts.createExternalAccount(accountId, {
-                external_account: {
-                  object: 'bank_account',
-                  country: bankAccount.country || 'US',
-                  currency: bankAccount.currency || 'usd',
-                  account_holder_name: bankAccount.account_holder_name,
-                  account_holder_type: bankAccount.account_holder_type || 'individual',
-                  routing_number: bankAccount.routing_number,
-                  account_number: bankAccount.account_number,
-                }
-              } as any);
-            }
-            // For international accounts using IBAN (according to Perplexity solution)
-            else if (bankAccount.iban || (bankAccount.account_number && bankAccount.account_number.startsWith('EE'))) {
-              const ibanValue = bankAccount.iban || bankAccount.account_number;
+          // Bank fields and currency follow the Stripe account's country,
+          // whatever country or currency the browser sent.
+          const built = buildPayoutBankAccount(
+            account.country,
+            bankAccount.fields ?? {},
+            bankAccount.use_iban === true,
+            { currency: account.default_currency }
+          );
+          if (!built.ok) {
+            return NextResponse.json(
+              { error: built.errors.form ?? 'Please check your bank details', fieldErrors: built.errors },
+              { status: 400 }
+            );
+          }
+          const holderName = bankAccount.account_holder_name?.trim();
+          if (!holderName) {
+            return NextResponse.json(
+              { error: 'Account holder name is required', fieldErrors: { accountHolderName: 'Account holder name is required' } },
+              { status: 400 }
+            );
+          }
 
-              // Create external account with IBAN as account_number (Perplexity solution)
-              await stripe.accounts.createExternalAccount(accountId, {
-                external_account: {
-                  object: 'bank_account',
-                  country: bankAccount.country, // Must be European country
-                  currency: bankAccount.currency, // Must match IBAN country (eur for EE)
-                  account_holder_name: bankAccount.account_holder_name,
-                  account_holder_type: bankAccount.account_holder_type || 'individual',
-                  account_number: ibanValue, // IBAN goes here, NOT in iban field
-                  // NO routing_number for European accounts
-                }
-              } as any);
-            }
-            else {
-              throw new Error('Invalid bank account information. Please provide either routing_number + account_number (US) or IBAN (international).');
-            }
+          try {
+            const { bankAccount: created, removedOld } = await replaceBankAccount(accountId, {
+              object: 'bank_account',
+              country: built.country,
+              currency: built.currency,
+              account_holder_name: holderName,
+              account_holder_type: account.business_type === 'company' ? 'company' : 'individual',
+              account_number: built.accountNumber,
+              ...(built.routingNumber && { routing_number: built.routingNumber }),
+            });
+            // Only what's needed to recognise the account later; never the numbers.
+            progressBankAccount = {
+              account_holder_name: holderName,
+              country: built.country,
+              currency: built.currency,
+              last4: created.last4 ?? built.accountNumber.slice(-4),
+            };
+            if (!removedOld) bankWarning = OLD_BANK_NOT_REMOVED;
           } catch (stripeError: any) {
             console.error('Error creating external account:', stripeError);
-            throw new Error(`Failed to create bank account: ${stripeError.message}`);
+            // Most euro accounts may use a euro bank in another country, but
+            // not all; say what to do instead of passing the raw error on.
+            const error =
+              built.country !== account.country && stripeError?.type === 'StripeInvalidRequestError'
+                ? `Payouts to a bank account in ${countryName(built.country)} aren't available for this account. Use a bank account in ${countryName(account.country)}.`
+                : `Failed to add bank account: ${stripeError.message}`;
+            return NextResponse.json({ error }, { status: 400 });
           }
         }
         break;
@@ -219,13 +254,21 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
     }
 
     // Update onboarding progress in database (one jsonb column per branch).
+    // Stripe holds the submitted details; we keep only what identifies the
+    // step, never dates of birth, ID numbers, addresses, phones or bank numbers.
     if (businessInfo) {
       await sql`
         UPDATE stripe_onboarding_progress
         SET
           updated_at = NOW(),
           current_step = COALESCE(${currentStep ?? null}, current_step),
-          business_info = ${sql.json(businessInfo as any)}
+          business_info = ${sql.json({
+            type: businessInfo.type,
+            ...(businessInfo.name && { name: businessInfo.name }),
+            ...(businessInfo.url && { url: businessInfo.url }),
+            ...(businessInfo.mcc && { mcc: businessInfo.mcc }),
+            ...(businessInfo.address?.country && { country: businessInfo.address.country }),
+          })}
         WHERE stripe_account_id = ${accountId}
       `;
     } else if (personalInfo) {
@@ -234,7 +277,11 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
         SET
           updated_at = NOW(),
           current_step = COALESCE(${currentStep ?? null}, current_step),
-          personal_info = ${sql.json(personalInfo as any)}
+          personal_info = ${sql.json({
+            ...(personalInfo.first_name && { first_name: personalInfo.first_name }),
+            ...(personalInfo.last_name && { last_name: personalInfo.last_name }),
+            ...(personalInfo.email && { email: personalInfo.email }),
+          })}
         WHERE stripe_account_id = ${accountId}
       `;
     } else if (bankAccount) {
@@ -243,7 +290,7 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
         SET
           updated_at = NOW(),
           current_step = COALESCE(${currentStep ?? null}, current_step),
-          bank_account = ${sql.json(bankAccount as any)}
+          bank_account = ${sql.json((progressBankAccount ?? { skipped: true }) as any)}
         WHERE stripe_account_id = ${accountId}
       `;
     } else if (currentStep !== undefined) {
@@ -271,7 +318,8 @@ export async function PUT(request: Request, props: { params: Promise<{ accountId
       charges_enabled: updatedAccount.charges_enabled,
       payouts_enabled: updatedAccount.payouts_enabled,
       details_submitted: updatedAccount.details_submitted,
-      message: `${step} updated successfully`
+      message: `${step} updated successfully`,
+      ...(bankWarning && { warning: bankWarning }),
     });
 
   } catch (error: any) {

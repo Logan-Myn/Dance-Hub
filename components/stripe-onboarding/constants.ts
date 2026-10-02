@@ -42,3 +42,10 @@ export const STRIPE_COUNTRIES = [
   { value: "NZ", label: "New Zealand" },
   { value: "TH", label: "Thailand" },
 ] as const;
+
+/**
+ * Where the wizard is in looking up the community's linked payout account:
+ * still loading, done (found, or none linked), failed (try again later), or
+ * gone (the account no longer exists; start again from step 1).
+ */
+export type AccountLookup = "loading" | "done" | "failed" | "gone";

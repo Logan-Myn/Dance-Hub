@@ -130,7 +130,6 @@ export function BusinessInfoStep({
   const handleSubmit = async () => {
     console.log("BusinessInfoStep handleSubmit called");
     console.log("Current data.accountId:", data.accountId);
-    console.log("Current businessInfo:", businessInfo);
     
     if (!validateForm()) {
       toast.error("Please fix the validation errors");
@@ -183,11 +182,9 @@ export function BusinessInfoStep({
             phone: businessInfo.businessPhone,
             mcc: businessInfo.mccCode,
           },
+          // The server records the acceptance time, IP and user agent itself.
           tosAcceptance: {
             accepted: tosAccepted,
-            date: new Date().toISOString(),
-            ip: null, // Will be filled by server from request headers
-            userAgent: navigator.userAgent,
           },
         }),
       });
