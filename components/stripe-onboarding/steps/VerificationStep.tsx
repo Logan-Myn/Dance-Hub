@@ -71,8 +71,12 @@ function deriveStatus(status: AccountStatus): ViewStatus {
   const r = status.requirements ?? {};
   const due = (r.currentlyDue?.length ?? 0) + (r.pastDue?.length ?? 0);
   if (typeof r.disabledReason === "string" && r.disabledReason.startsWith("rejected")) return "rejected";
-  // "Complete" needs both: charges alone still leaves payouts blocked.
-  if (status.charges_enabled && status.payouts_enabled && due === 0) return "complete";
+  // "Complete" needs both: charges alone still leaves payouts blocked. It
+  // also needs details_submitted, as /verify does, or finishing would fail
+  // with nothing listed to fix.
+  if (status.charges_enabled && status.payouts_enabled && status.details_submitted && due === 0) {
+    return "complete";
+  }
   if (due > 0) return "action_required";
   return "pending";
 }
@@ -296,26 +300,38 @@ export function VerificationStep({
         </Card>
       )}
 
-      {(beingReviewed.length > 0 || verificationErrors.length > 0) && status !== "complete" && (
-        <Card className="border-yellow-200 bg-yellow-50">
-          <CardHeader>
-            <CardTitle className="text-yellow-800">Being reviewed</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {beingReviewed.length > 0 && (
+      {verificationErrors.length > 0 && status !== "complete" && (
+        <section aria-label="Needs fixing">
+          <Card className="border-red-200 bg-red-50">
+            <CardHeader>
+              <CardTitle className="text-red-800">Needs fixing</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="list-disc list-inside space-y-1 text-red-700">
+                {verificationErrors.map((e) => (
+                  <li key={`${e.code}-${e.reason}`}>{e.reason}</li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {beingReviewed.length > 0 && status !== "complete" && (
+        <section aria-label="Being reviewed">
+          <Card className="border-yellow-200 bg-yellow-50">
+            <CardHeader>
+              <CardTitle className="text-yellow-800">Being reviewed</CardTitle>
+            </CardHeader>
+            <CardContent>
               <ul className="list-disc list-inside space-y-1 text-yellow-700">
                 {beingReviewed.map((req) => (
                   <li key={req.code}>{req.message}</li>
                 ))}
               </ul>
-            )}
-            {verificationErrors.map((e) => (
-              <p key={`${e.code}-${e.reason}`} className="text-sm text-red-700">
-                {e.reason}
-              </p>
-            ))}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </section>
       )}
 
       {status === "rejected" && (

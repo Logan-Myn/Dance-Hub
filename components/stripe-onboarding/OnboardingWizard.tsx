@@ -365,8 +365,11 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
         toast.success("Payments are set up");
       } else if (result.status === "pending_review") {
         toast.success("Your details are submitted. Payments will be enabled once verification is complete.");
-      } else {
+      } else if (result.requirements) {
         toast.error("Some information is still needed. Check the list on this page.");
+        return false;
+      } else {
+        toast.error("We couldn't confirm your verification yet. Refresh the status in a moment, or email hello@dance-hub.io.");
         return false;
       }
 

@@ -4,7 +4,7 @@
  * payments when both charges and payouts are enabled.
  */
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { VerificationStep } from "@/components/stripe-onboarding/steps/VerificationStep";
 
@@ -101,9 +101,23 @@ it("shows what is being reviewed and why a document was rejected", async () => {
   renderStep();
 
   expect(await screen.findByText("Verification in progress")).toBeInTheDocument();
-  expect(screen.getByText("Government-issued photo ID required")).toBeInTheDocument();
-  expect(screen.getByText("The address could not be verified.")).toBeInTheDocument();
+  const reviewed = screen.getByRole("region", { name: "Being reviewed" });
+  expect(within(reviewed).getByText("Government-issued photo ID required")).toBeInTheDocument();
+  // A rejection reason is something to fix, not something under review.
+  expect(within(reviewed).queryByText("The address could not be verified.")).not.toBeInTheDocument();
+  const toFix = screen.getByRole("region", { name: "Needs fixing" });
+  expect(within(toFix).getByText("The address could not be verified.")).toBeInTheDocument();
   expect(finishButton()).toBeEnabled();
+});
+
+it("does not call an account complete before its details are submitted", async () => {
+  // /verify requires details_submitted too; otherwise finishing would fail
+  // with nothing listed to fix.
+  fetchMock.mockResolvedValue(status({ charges_enabled: true, payouts_enabled: true, details_submitted: false }));
+  renderStep();
+
+  expect(await screen.findByText("Verification in progress")).toBeInTheDocument();
+  expect(screen.queryByText(/ready to accept payments/)).not.toBeInTheDocument();
 });
 
 it("tells the owner when the account was rejected", async () => {

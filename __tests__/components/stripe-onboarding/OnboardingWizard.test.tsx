@@ -242,6 +242,18 @@ describe("finishing", () => {
     expect(toast.error).toHaveBeenCalled();
   });
 
+  it("does not point at an empty list when /verify can't confirm the status", async () => {
+    const { onComplete } = setup({
+      ok: true,
+      body: { success: false, verified: false, status: "unknown" },
+    });
+    await finish();
+
+    expect(await screen.findByText("finished: false")).toBeInTheDocument();
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/couldn't confirm/));
+  });
+
   it("stays on the step when the check fails", async () => {
     const { onComplete } = setup({ ok: false, body: { error: "Failed to verify account" } });
     await finish();
