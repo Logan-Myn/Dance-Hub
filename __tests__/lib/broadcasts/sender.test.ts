@@ -178,6 +178,26 @@ describe('runBroadcast with Resend 6 results ({ data, error } instead of throwin
     expect(result.failedRecipients).toHaveLength(2);
   }, 15000);
 
+  it('retries while an earlier attempt with the same key is still being processed', async () => {
+    mockBatchSend
+      .mockResolvedValueOnce(fail(409, 'concurrent_idempotent_requests', 'Same key in flight'))
+      .mockResolvedValueOnce(ok);
+
+    const result = await run();
+
+    expect(mockBatchSend).toHaveBeenCalledTimes(2);
+    expect(result.status).toBe('sent');
+  });
+
+  it('does not retry a reused key with a different payload', async () => {
+    mockBatchSend.mockResolvedValue(fail(409, 'invalid_idempotent_request', 'Key reused'));
+
+    const result = await run();
+
+    expect(mockBatchSend).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe('failed');
+  });
+
   it('sends each batch with its own idempotency key, so a retry cannot send twice', async () => {
     mockBatchSend
       .mockResolvedValueOnce(fail(503, 'application_error', 'Unavailable'))

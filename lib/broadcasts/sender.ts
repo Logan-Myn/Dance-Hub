@@ -159,8 +159,14 @@ async function sendBatchWithRetry(
       const result = await resend.batch.send(emails, { idempotencyKey });
       // Resend 6 reports failures in the result instead of throwing.
       if (result.error) {
-        const { statusCode, message } = result.error;
-        const retryable = statusCode === null || statusCode === 429 || statusCode >= 500;
+        const { statusCode, message, name } = result.error;
+        // concurrent_idempotent_requests (409): an earlier attempt with this
+        // key is still being processed; asking again later gets its result.
+        const retryable =
+          statusCode === null ||
+          statusCode === 429 ||
+          statusCode >= 500 ||
+          name === 'concurrent_idempotent_requests';
         throw new BatchSendError(message, retryable, retryAfterMs(result.headers));
       }
       return { batchId: result.data?.data?.[0]?.id ?? null };
