@@ -12,8 +12,19 @@ jest.mock('@/lib/broadcasts/auth', () => ({
 jest.mock('@/lib/db', () => ({
   queryOne: jest.fn(),
   query: jest.fn(),
-  sql: jest.fn(),
+  sql: Object.assign(jest.fn(), { json: (v: unknown) => v }),
 }));
+// The send runs in next/server after(); collect it so a test can run it.
+const mockAfter: Array<() => unknown> = [];
+jest.mock('next/server', () => ({
+  ...jest.requireActual('next/server'),
+  after: (fn: () => unknown) => {
+    mockAfter.push(fn);
+  },
+}));
+const runAfter = async () => {
+  while (mockAfter.length) await mockAfter.shift()!();
+};
 jest.mock('@/lib/broadcasts/quota', () => ({ checkCanSend: jest.fn() }));
 jest.mock('@/lib/broadcasts/recipients', () => ({
   getActiveRecipientsForCommunity: jest.fn(),
@@ -129,13 +140,14 @@ describe('POST broadcasts', () => {
       expect.objectContaining({
         broadcastId: 'b-new',
         recipientCount: 1,
-        status: 'sent',
+        status: 'sending',
       })
     );
+    await runAfter();
     expect(mockedRun).toHaveBeenCalledTimes(1);
   });
 
-  it('marks the row failed and returns 500 when runBroadcast throws', async () => {
+  it('marks the row failed when runBroadcast throws after the response', async () => {
     grantAccess();
     mockedCanSend.mockResolvedValueOnce({ allowed: true });
     mockedQueryOne
@@ -147,7 +159,8 @@ describe('POST broadcasts', () => {
     mockedRun.mockRejectedValueOnce(new Error('resend down'));
 
     const res = await POST(makeReq(), { params: Promise.resolve({ communitySlug: 'salsa' }) });
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(200);
+    await runAfter();
     // last sql call should be the cleanup UPDATE marking the row failed
     const lastCall = mockedSql.mock.calls[mockedSql.mock.calls.length - 1];
     const sqlText = lastCall[0].join('?');

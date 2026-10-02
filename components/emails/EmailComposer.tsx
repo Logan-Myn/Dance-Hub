@@ -17,6 +17,40 @@ interface Props {
   quota: { tier: 'vip' | 'paid' | 'free'; used: number; limit: number | null };
 }
 
+const POLL_INTERVAL_MS = 2000;
+const POLL_TIMEOUT_MS = 10 * 60 * 1000;
+
+interface SendOutcome {
+  status: 'sending' | 'sent' | 'partial_failure' | 'failed';
+  recipientCount: number;
+  /** Null when the server can't tell how many missed it. */
+  failedCount: number | null;
+}
+
+/**
+ * Publishing returns as soon as the send has started; this follows it until
+ * it has finished. Null when it is still sending after POLL_TIMEOUT_MS.
+ */
+async function waitForSend(communitySlug: string, broadcastId: string): Promise<SendOutcome | null> {
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(
+        `/api/community/${communitySlug}/broadcasts/${broadcastId}/status`,
+        { cache: 'no-store' }
+      );
+      if (res.ok) {
+        const outcome = (await res.json()) as SendOutcome;
+        if (outcome.status !== 'sending') return outcome;
+      }
+    } catch {
+      // A dropped poll isn't a failed send; try again.
+    }
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+  }
+  return null;
+}
+
 export function EmailComposer(props: Props) {
   const router = useRouter();
   const [subject, setSubject] = useState('');
@@ -67,7 +101,21 @@ export function EmailComposer(props: Props) {
         throw new Error(msg);
       }
       const data = await res.json();
-      if (data.status === 'failed') {
+      const broadcastPage = communityPath(props.communitySlug, `/admin/emails/${data.broadcastId}`);
+
+      let outcome: SendOutcome | null = data;
+      if (data.status === 'sending') {
+        const progress = toast.loading(`Sending to ${data.recipientCount} members…`);
+        outcome = await waitForSend(props.communitySlug, data.broadcastId);
+        toast.dismiss(progress);
+      }
+      if (!outcome) {
+        toast('Still sending. The broadcast page will show how it went.', { duration: 8000 });
+        router.push(broadcastPage);
+        return;
+      }
+
+      if (outcome.status === 'failed') {
         // Nothing went out (and it doesn't count against the monthly quota):
         // keep the draft so the owner can try again.
         toast.error("Your email couldn't be sent to anyone. Please try again in a few minutes.", {
@@ -75,15 +123,18 @@ export function EmailComposer(props: Props) {
         });
         return;
       }
-      if (data.status === 'partial_failure') {
+      if (outcome.status === 'partial_failure') {
+        const { recipientCount, failedCount } = outcome;
         toast.error(
-          `Sent to ${data.successfulCount} of ${data.recipientCount} members. ${data.failedCount} didn't receive it.`,
+          failedCount === null
+            ? `Some of your ${recipientCount} members didn't receive it.`
+            : `Sent to ${recipientCount - failedCount} of ${recipientCount} members. ${failedCount} didn't receive it.`,
           { duration: 8000 }
         );
       } else {
-        toast.success(`Published to ${data.successfulCount ?? data.recipientCount} readers.`);
+        toast.success(`Published to ${outcome.recipientCount} readers.`);
       }
-      router.push(communityPath(props.communitySlug, `/admin/emails/${data.broadcastId}`));
+      router.push(broadcastPage);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Send failed');
     } finally {
