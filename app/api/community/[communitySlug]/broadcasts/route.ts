@@ -111,6 +111,21 @@ export async function POST(req: Request, props: { params: Promise<{ communitySlu
       WHERE id = ${broadcastId}
     `;
 
+    // Who didn't get it, so a resend can target only them. Separate and best
+    // effort: the column comes with the 2026-10-02 migration, and the
+    // status above must be saved even before that runs.
+    if (result.failedRecipients.length > 0) {
+      try {
+        await sql`
+          UPDATE email_broadcasts
+          SET failed_recipients = ${sql.json(result.failedRecipients as any)}
+          WHERE id = ${broadcastId}
+        `;
+      } catch (recordErr) {
+        console.error('[broadcasts:POST] could not record failed recipients', recordErr);
+      }
+    }
+
     return NextResponse.json({
       broadcastId,
       recipientCount: recipients.length,

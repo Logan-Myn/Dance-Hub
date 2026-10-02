@@ -67,13 +67,21 @@ export function EmailComposer(props: Props) {
         throw new Error(msg);
       }
       const data = await res.json();
+      if (data.status === 'failed') {
+        // Nothing went out (and it doesn't count against the monthly quota):
+        // keep the draft so the owner can try again.
+        toast.error("Your email couldn't be sent to anyone. Please try again in a few minutes.", {
+          duration: 8000,
+        });
+        return;
+      }
       if (data.status === 'partial_failure') {
-        toast(
-          `Sent to ${data.successfulCount} of ${data.recipientCount}. ${data.failedCount} failed.`,
-          { icon: '⚠️' }
+        toast.error(
+          `Sent to ${data.successfulCount} of ${data.recipientCount} members. ${data.failedCount} didn't receive it.`,
+          { duration: 8000 }
         );
       } else {
-        toast.success(`Published to ${data.recipientCount} readers.`);
+        toast.success(`Published to ${data.successfulCount ?? data.recipientCount} readers.`);
       }
       router.push(communityPath(props.communitySlug, `/admin/emails/${data.broadcastId}`));
     } catch (err) {
@@ -95,7 +103,10 @@ export function EmailComposer(props: Props) {
           body: JSON.stringify({ subject, htmlContent: html, previewText }),
         }
       );
-      if (!res.ok) throw new Error('Test send failed');
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Test send failed');
+      }
       toast.success(`Test sent to ${props.ownerEmail}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Test send failed');

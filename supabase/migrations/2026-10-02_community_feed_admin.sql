@@ -38,3 +38,12 @@ BEGIN
 
   CREATE UNIQUE INDEX courses_community_id_slug_key ON courses (community_id, slug);
 END $$;
+
+-- M10: who didn't receive a broadcast ([{ "userId", "email", "error" }]), so a
+-- resend can target only them. The broadcast route writes it in a separate,
+-- best-effort UPDATE, so sending works before this column exists.
+ALTER TABLE email_broadcasts
+  ADD COLUMN IF NOT EXISTS failed_recipients jsonb NOT NULL DEFAULT '[]'::jsonb;
+
+COMMENT ON COLUMN email_broadcasts.failed_recipients IS
+  'Recipients a send failed for: [{userId, email, error}]. Empty when everyone received it.';
