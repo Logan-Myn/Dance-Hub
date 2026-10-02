@@ -20,6 +20,7 @@ type Msg = { payload: Uint8Array; from?: { identity: string } };
 
 type RoomProps = {
   children?: React.ReactNode;
+  token?: string;
   onDisconnected?: (reason?: number) => void;
   onError?: (e: Error) => void;
 };
@@ -98,6 +99,7 @@ const lookupNames = jest.fn(async (ids: string[]) =>
 );
 const setCanPublish = jest.fn();
 const onLeave = jest.fn();
+const getFreshToken = jest.fn();
 
 const participant = (identity: string, canPublish = false) => ({
   identity,
@@ -123,6 +125,7 @@ async function renderRoom(isTeacher: boolean) {
       localName={isTeacher ? "Anna" : "Sam"}
       lookupNames={lookupNames}
       moderation={{ teacherIdentity: "u-teacher", setCanPublish }}
+      getFreshToken={getFreshToken}
     />
   );
   return view;
@@ -137,6 +140,7 @@ beforeEach(() => {
   setCanPublish.mockReset().mockResolvedValue(undefined);
   lookupNames.mockClear();
   onLeave.mockReset();
+  getFreshToken.mockReset().mockResolvedValue({ token: "fresh", serverUrl: "wss://media" });
 });
 
 describe("as a student", () => {
@@ -320,6 +324,20 @@ describe("when the connection ends", () => {
     await userEvent.click(screen.getByRole("button", { name: /rejoin/i }));
     expect(screen.getByTestId("room")).toBeInTheDocument();
     expect(mockRoomMounts).toBe(2);
+    // With a new token, not the one from the first join.
+    expect(getFreshToken).toHaveBeenCalledTimes(1);
+    expect(mockRoomProps.token).toBe("fresh");
+  });
+
+  it("explains why it can't rejoin when a new token is refused", async () => {
+    getFreshToken.mockRejectedValue(new Error("Class has ended"));
+    await renderRoom(false);
+    act(() => mockRoomProps.onDisconnected?.(0));
+
+    await userEvent.click(screen.getByRole("button", { name: /rejoin/i }));
+
+    expect(await screen.findByText("Class has ended")).toBeInTheDocument();
+    expect(screen.queryByTestId("room")).not.toBeInTheDocument();
   });
 
   it("does nothing special when the user leaves on purpose", async () => {

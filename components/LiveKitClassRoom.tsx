@@ -46,6 +46,8 @@ interface LiveKitClassRoomProps {
   lookupNames?: (identities: string[]) => Promise<Record<string, string>>;
   /** Name shown on the local participant's own chat messages. */
   localName?: string;
+  /** Get a new token to rejoin with. Without it, Rejoin reuses `token`. */
+  getFreshToken?: () => Promise<{ token: string; serverUrl: string }>;
 }
 
 interface CallInterfaceProps {
@@ -472,10 +474,14 @@ function DisconnectedScreen({
   reason,
   onRejoin,
   onLeave,
+  rejoining,
+  rejoinError,
 }: {
   reason: EndReason;
   onRejoin: () => void;
   onLeave: () => void;
+  rejoining: boolean;
+  rejoinError: string | null;
 }) {
   const { title, body, canRejoin } = describeDisconnect(reason);
   return (
@@ -483,8 +489,13 @@ function DisconnectedScreen({
       <div className="w-full max-w-sm text-center space-y-4">
         <h2 className="text-lg font-semibold text-white">{title}</h2>
         <p className="text-sm text-gray-400">{body}</p>
+        {rejoinError && <p className="text-sm text-red-400">{rejoinError}</p>}
         <div className="flex justify-center gap-3">
-          {canRejoin && <Button onClick={onRejoin}>Rejoin</Button>}
+          {canRejoin && (
+            <Button onClick={onRejoin} disabled={rejoining}>
+              {rejoining ? "Rejoining..." : "Rejoin"}
+            </Button>
+          )}
           <Button variant="outline" onClick={onLeave}>
             Leave
           </Button>
@@ -505,11 +516,36 @@ export default function LiveKitClassRoom({
   moderation,
   lookupNames,
   localName,
+  getFreshToken,
 }: LiveKitClassRoomProps) {
   // Bumped to remount the room, which connects again.
   const [connection, setConnection] = useState(0);
   const [ended, setEnded] = useState<EndReason | null>(null);
+  const [freshCredentials, setFreshCredentials] = useState<{ token: string; serverUrl: string } | null>(null);
+  const [rejoining, setRejoining] = useState(false);
+  const [rejoinError, setRejoinError] = useState<string | null>(null);
   const connected = useRef(false);
+  const credentials = freshCredentials ?? { token, serverUrl };
+
+  const rejoin = async () => {
+    setRejoinError(null);
+    if (getFreshToken) {
+      // A new token re-checks access (the class may have ended) and isn't
+      // close to expiring.
+      setRejoining(true);
+      try {
+        setFreshCredentials(await getFreshToken());
+      } catch (error) {
+        setRejoinError(error instanceof Error ? error.message : "Couldn't rejoin the class.");
+        return;
+      } finally {
+        setRejoining(false);
+      }
+    }
+    connected.current = false;
+    setEnded(null);
+    setConnection((c) => c + 1);
+  };
 
   const handleDisconnected = useCallback((reason?: DisconnectReason) => {
     // Leaving (or navigating away) disconnects on purpose.
@@ -528,11 +564,9 @@ export default function LiveKitClassRoom({
       <DisconnectedScreen
         reason={ended}
         onLeave={onLeave}
-        onRejoin={() => {
-          connected.current = false;
-          setEnded(null);
-          setConnection((c) => c + 1);
-        }}
+        onRejoin={rejoin}
+        rejoining={rejoining}
+        rejoinError={rejoinError}
       />
     );
   }
@@ -540,8 +574,8 @@ export default function LiveKitClassRoom({
   return (
     <LiveKitRoom
       key={connection}
-      token={token}
-      serverUrl={serverUrl}
+      token={credentials.token}
+      serverUrl={credentials.serverUrl}
       connectOptions={{ autoSubscribe: true }}
       style={{ height: "100%" }}
       onConnected={() => {

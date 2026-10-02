@@ -99,6 +99,14 @@ export default function LiveClassVideoPage({ classId, liveClass, canManage = fal
     [classId]
   );
 
+  // Rejoining asks for a new token, which also re-checks the class is on.
+  const getFreshToken = useCallback(async () => {
+    const response = await fetch(`/api/live-classes/${classId}/video-token`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Couldn't rejoin the class.");
+    return { token: data.token as string, serverUrl: data.serverUrl as string };
+  }, [classId]);
+
   const teacherIdentity = videoToken?.teacherIdentity;
   const moderation = useMemo(
     () =>
@@ -337,6 +345,7 @@ export default function LiveClassVideoPage({ classId, liveClass, canManage = fal
             moderation={moderation}
             lookupNames={lookupNames}
             localName={videoToken.displayName}
+            getFreshToken={getFreshToken}
           />
         </div>
       )}
