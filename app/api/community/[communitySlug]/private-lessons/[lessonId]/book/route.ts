@@ -214,6 +214,9 @@ export async function POST(
       {
         amount: amountCents,
         currency: "eur",
+        // Cards only, like memberships: delayed methods would leave the
+        // payment processing while the slot stays free for someone else.
+        payment_method_types: ["card"],
         ...(feeCents > 0 ? { application_fee_amount: feeCents } : {}),
         metadata: {
           type: "private_lesson",

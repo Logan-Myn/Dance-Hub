@@ -8,13 +8,18 @@ import { useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 import { Loader2 } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
+import { communityPath } from "@/lib/safe-redirect";
+
+/** 'processing': paid with a method that settles later; the booking follows. */
+export type LessonPaymentOutcome = "succeeded" | "processing";
 
 interface PrivateLessonPaymentFormProps {
   clientSecret: string;
   price: number;
-  onSuccess: () => void;
+  onSuccess: (outcome: LessonPaymentOutcome) => void;
   onClose: () => void;
   lessonTitle: string;
+  communitySlug: string;
 }
 
 function PrivateLessonPaymentForm({ 
@@ -22,7 +27,8 @@ function PrivateLessonPaymentForm({
   price, 
   onSuccess, 
   onClose,
-  lessonTitle 
+  lessonTitle,
+  communitySlug,
 }: PrivateLessonPaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
@@ -39,7 +45,9 @@ function PrivateLessonPaymentForm({
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}?payment=success`,
+          // Only used when the payment needs a redirect; that page explains
+          // the outcome (lib/lesson-payment-return.ts).
+          return_url: `${window.location.origin}${communityPath(communitySlug, '/private-lessons')}?lesson_payment=return`,
         },
         redirect: 'if_required',
       });
@@ -48,7 +56,10 @@ function PrivateLessonPaymentForm({
         toast.error(error.message || 'Payment failed');
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         toast.success("Payment successful!");
-        onSuccess();
+        onSuccess('succeeded');
+      } else if (paymentIntent && paymentIntent.status === 'processing') {
+        // Not a failure: paying again would charge twice once it settles.
+        onSuccess('processing');
       } else {
         toast.error('Payment was not completed');
       }
@@ -101,7 +112,8 @@ interface PrivateLessonPaymentModalProps {
   stripeAccountId: string | null;
   price: number;
   lessonTitle: string;
-  onSuccess: () => void;
+  communitySlug: string;
+  onSuccess: (outcome: LessonPaymentOutcome) => void;
 }
 
 export default function PrivateLessonPaymentModal({ 
@@ -111,6 +123,7 @@ export default function PrivateLessonPaymentModal({
   stripeAccountId,
   price,
   lessonTitle,
+  communitySlug,
   onSuccess 
 }: PrivateLessonPaymentModalProps) {
   const stripePromise = useMemo(
@@ -146,6 +159,7 @@ export default function PrivateLessonPaymentModal({
             clientSecret={clientSecret}
             price={price}
             lessonTitle={lessonTitle}
+            communitySlug={communitySlug}
             onSuccess={onSuccess}
             onClose={onClose}
           />

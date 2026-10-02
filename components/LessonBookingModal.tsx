@@ -14,7 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAuthModal } from "@/contexts/AuthModalContext";
 import { formatPrice } from "@/lib/utils";
 import { getLocationText } from "@/lib/private-lessons-display";
-import PrivateLessonPaymentModal from "./PrivateLessonPaymentModal";
+import PrivateLessonPaymentModal, { type LessonPaymentOutcome } from "./PrivateLessonPaymentModal";
 import { WeekSlotPicker } from './WeekSlotPicker';
 import { naiveToUtc } from '@/lib/timezone';
 import { useUserTimezone } from '@/hooks/useUserTimezone';
@@ -201,8 +201,14 @@ export default function LessonBookingModal({
     }
   };
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = (outcome: LessonPaymentOutcome) => {
     setPaymentData(null);
+    if (outcome === "processing") {
+      // The booking is created once the payment settles; don't report it yet.
+      onClose();
+      toast.success("Your payment is processing. We'll email you as soon as your booking is confirmed.");
+      return;
+    }
     onSuccess();
     onClose();
     toast.success("Payment successful! The teacher will contact you soon.");
@@ -363,6 +369,7 @@ export default function LessonBookingModal({
           stripeAccountId={paymentData.stripeAccountId}
           price={paymentData.price}
           lessonTitle={lesson.title}
+          communitySlug={communitySlug}
           onSuccess={handlePaymentSuccess}
         />
       )}

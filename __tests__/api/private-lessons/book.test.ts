@@ -258,3 +258,13 @@ describe('POST /private-lessons/[lessonId]/book: price and monthly limit', () =>
     expect(queriesMatching(/COUNT\(\*\)/i)).toHaveLength(0);
   });
 });
+
+describe('POST /private-lessons/[lessonId]/book: payment methods', () => {
+  it('accepts cards only, like memberships, so a payment never sits in processing', async () => {
+    await book(validBody);
+
+    const [params] = mockPaymentIntentsCreate.mock.calls[0];
+    expect(params.payment_method_types).toEqual(['card']);
+    expect(params.automatic_payment_methods).toBeUndefined();
+  });
+});
