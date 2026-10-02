@@ -8,7 +8,8 @@ import { Card } from "@/components/ui/card";
 interface PreRegistrationComingSoonProps {
   communityName: string;
   communitySlug: string;
-  openingDate: string;
+  /** Null once the community has opened but this member's first charge is still to come. */
+  openingDate: string | null;
   membershipPrice: number;
   onCancel: () => void;
 }
@@ -34,6 +35,7 @@ export function PreRegistrationComingSoon({
   };
 
   const calculateTimeRemaining = () => {
+    if (!openingDate) return '';
     const now = new Date();
     const opening = new Date(openingDate);
     const diff = opening.getTime() - now.getTime();
@@ -86,7 +88,9 @@ export function PreRegistrationComingSoon({
         {/* Opening Date */}
         <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg p-6 text-center">
           <p className="text-sm font-semibold uppercase tracking-wide mb-2">Opens On</p>
-          <p className="text-2xl font-bold mb-4">{formatDate(openingDate)}</p>
+          <p className="text-2xl font-bold mb-4">
+            {openingDate ? formatDate(openingDate) : 'Very soon'}
+          </p>
           {timeRemaining && (
             <div className="flex items-center justify-center space-x-2 text-blue-100">
               <Clock className="h-4 w-4" />
@@ -119,7 +123,7 @@ export function PreRegistrationComingSoon({
               <div>
                 <p className="font-medium text-gray-900">Automatic Charge on Opening</p>
                 <p className="text-sm text-gray-600">
-                  On {new Date(openingDate).toLocaleDateString()}, you'll be automatically charged €{(Number(membershipPrice) || 0).toFixed(2)}/month
+                  {openingDate ? `On ${new Date(openingDate).toLocaleDateString()}, you` : 'When your membership starts, you'}'ll be automatically charged €{(Number(membershipPrice) || 0).toFixed(2)}/month
                 </p>
               </div>
             </div>
@@ -171,7 +175,7 @@ export function PreRegistrationComingSoon({
             Cancel Pre-Registration
           </Button>
           <p className="text-xs text-gray-500 text-center mt-2">
-            You can cancel anytime before {new Date(openingDate).toLocaleDateString()} without being charged
+            You can cancel anytime before {openingDate ? new Date(openingDate).toLocaleDateString() : 'your first payment'} without being charged
           </p>
         </div>
       </Card>

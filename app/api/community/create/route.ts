@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sql, query, queryOne } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
+import { checkCommunitySlug } from '@/lib/community-slug';
 
 interface ExistingCommunity {
   name: string;
@@ -47,28 +48,21 @@ export async function POST(request: Request) {
     const safeFocalY = clampInt(focalY, 0, 100, 50);
     const safeZoom = Number(clampFloat(zoom, 1, 5, 1).toFixed(2));
 
-    // Create a slug from the community name
-    const slug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)+/g, '');
-
-    // A name made only of characters the slug rule strips (accents, emoji, a
-    // non-Latin script) would produce an empty slug, and an empty slug makes the
-    // community live at the site root — every link to it lands on the home page.
-    if (!slug) {
-      return NextResponse.json(
-        { error: 'Please use at least one letter or number in the community name' },
-        { status: 400 }
-      );
+    // Create a slug from the community name. The shared rule refuses a name
+    // that gives no slug (it would put the community at the site root) or one
+    // that shadows an app route.
+    const slugCheck = checkCommunitySlug(name);
+    if (!slugCheck.ok) {
+      return NextResponse.json({ error: slugCheck.error }, { status: 400 });
     }
+    const slug = slugCheck.slug;
 
     // Check if name or slug already exists
     const existingCommunities = await query<ExistingCommunity>`
       SELECT name, slug
       FROM communities
       WHERE LOWER(name) = LOWER(${name})
-         OR slug = ${slug}
+         OR LOWER(slug) = ${slug}
       LIMIT 1
     `;
 
