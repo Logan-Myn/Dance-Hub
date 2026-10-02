@@ -67,7 +67,15 @@ export async function POST(request: Request) {
             { status: 502 }
           );
         }
-        console.log('Existing Stripe account is gone:', stripeError.message);
+        // Logged as an error so a wrongly unlinked account can be found and
+        // restored (UPDATE communities SET stripe_account_id = '<old id>').
+        console.error('Unlinking Stripe account that Stripe reports as gone', {
+          communityId,
+          oldStripeAccountId: community.stripe_account_id,
+          code: stripeError?.code,
+          statusCode: stripeError?.statusCode,
+          message: stripeError?.message,
+        });
         // Only clear the id we checked, never one another request just saved.
         await sql`
           UPDATE communities

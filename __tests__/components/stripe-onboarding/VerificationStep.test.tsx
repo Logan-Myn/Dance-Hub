@@ -165,12 +165,27 @@ it("waits while the wizard is still loading the account", async () => {
       data={{ accountId: undefined, businessInfo: {}, personalInfo: {}, documents: [] }}
       onPrevious={jest.fn()}
       onFinish={jest.fn()}
-      accountLoading
+      accountLookup="loading"
       isLoading={false}
     />
   );
 
   expect(screen.getByText("Checking your verification status")).toBeInTheDocument();
   expect(screen.queryByText(/couldn't find your payout account/)).not.toBeInTheDocument();
+  expect(finishButton()).toBeDisabled();
+});
+
+it("says when the wizard could not load the account", () => {
+  render(
+    <VerificationStep
+      data={{ accountId: undefined, businessInfo: {}, personalInfo: {}, documents: [] }}
+      onPrevious={jest.fn()}
+      onFinish={jest.fn()}
+      accountLookup="failed"
+      isLoading={false}
+    />
+  );
+
+  expect(screen.getByText(/couldn't load your payout account/)).toBeInTheDocument();
   expect(finishButton()).toBeDisabled();
 });

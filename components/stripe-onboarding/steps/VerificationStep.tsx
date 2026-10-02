@@ -17,6 +17,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { PAYOUT_SUPPORT_EMAIL } from "@/lib/payout-bank-formats";
+import type { AccountLookup } from "../constants";
 
 interface VerificationStepProps {
   data: {
@@ -30,8 +31,8 @@ interface VerificationStepProps {
   onFinish: () => Promise<boolean>;
   /** Jump back to a step to fix what's missing. */
   onGoToStep?: (step: number) => void;
-  /** The wizard is still looking up the linked account. */
-  accountLoading?: boolean;
+  /** How far the wizard got looking up the linked account. */
+  accountLookup?: AccountLookup;
   isLoading: boolean;
 }
 
@@ -56,7 +57,15 @@ interface AccountStatus {
   };
 }
 
-type ViewStatus = "missing" | "checking" | "error" | "complete" | "action_required" | "pending" | "rejected";
+type ViewStatus =
+  | "missing"
+  | "lookup_failed"
+  | "checking"
+  | "error"
+  | "complete"
+  | "action_required"
+  | "pending"
+  | "rejected";
 
 function deriveStatus(status: AccountStatus): ViewStatus {
   const r = status.requirements ?? {};
@@ -92,6 +101,10 @@ const STATUS_COPY: Record<ViewStatus, { title: string; description: string }> = 
   missing: {
     title: "We couldn't find your payout account",
     description: "Go back to the first step to set it up.",
+  },
+  lookup_failed: {
+    title: "We couldn't load your payout account",
+    description: "Please refresh the page to try again.",
   },
   checking: {
     title: "Checking your verification status",
@@ -134,7 +147,7 @@ export function VerificationStep({
   onPrevious,
   onFinish,
   onGoToStep,
-  accountLoading = false,
+  accountLookup = "done",
   isLoading,
 }: VerificationStepProps) {
   const accountId = data.accountId;
@@ -169,8 +182,9 @@ export function VerificationStep({
   const refresh = useCallback(() => setRefreshCount((n) => n + 1), []);
 
   let status: ViewStatus;
-  if (!accountId) status = accountLoading ? "checking" : "missing";
-  else if (result?.key !== requestKey) status = "checking";
+  if (!accountId) {
+    status = accountLookup === "loading" ? "checking" : accountLookup === "failed" ? "lookup_failed" : "missing";
+  } else if (result?.key !== requestKey) status = "checking";
   else if (!result.status) status = "error";
   else status = deriveStatus(result.status);
 
@@ -242,7 +256,7 @@ export function VerificationStep({
               <p className="text-gray-600 mt-1">{copy.description}</p>
             </div>
 
-            {status !== "missing" && (
+            {accountId && (
               <Button
                 variant="outline"
                 onClick={refresh}

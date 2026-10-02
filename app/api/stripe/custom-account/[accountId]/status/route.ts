@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { stripe, mapStripeRequirement, isStripeAccountFullyVerified } from '@/lib/stripe';
 import { queryOne } from '@/lib/db';
 import { requireStripeAccountManager } from '@/lib/community-auth';
+import { isConnectedAccountGone } from '@/lib/stripe-connect-errors';
 
 interface OnboardingProgress {
   current_step: number;
@@ -154,6 +155,15 @@ export async function GET(request: Request, props: { params: Promise<{ accountId
 
   } catch (error: any) {
     console.error('Error fetching custom Stripe account status:', error);
+
+    // The wizard uses this code to send the owner back to step 1, where a
+    // new account is created.
+    if (isConnectedAccountGone(error)) {
+      return NextResponse.json(
+        { error: 'This payout account is no longer available', code: 'account_gone' },
+        { status: 404 }
+      );
+    }
 
     if (error.type === 'StripeError') {
       return NextResponse.json(

@@ -12,6 +12,7 @@ import { PersonalInfoStep } from "./steps/PersonalInfoStep";
 import { BankAccountStep } from "./steps/BankAccountStep";
 import { DocumentUploadStep } from "./steps/DocumentUploadStep";
 import { VerificationStep } from "./steps/VerificationStep";
+import type { AccountLookup } from "./constants";
 
 interface OnboardingData {
   accountId?: string;
@@ -126,8 +127,7 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
   // Don't save until the saved position has been read, or the first render's
   // step 1 would overwrite it.
   const [progressRestored, setProgressRestored] = useState(false);
-  // Whether the community's linked account has been looked up yet.
-  const [accountLookupDone, setAccountLookupDone] = useState(false);
+  const [accountLookup, setAccountLookup] = useState<AccountLookup>("loading");
   const [onboardingData, setOnboardingData] = useState<OnboardingData>({
     businessInfo: {
       businessType: "individual",
@@ -171,31 +171,42 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
 
     let cancelled = false;
     const checkExistingAccount = async () => {
+      let lookup: AccountLookup = "failed";
       try {
         const response = await fetch(`/api/community/${communitySlug}`);
         if (!response.ok || cancelled) return;
         const data = await response.json();
-        if (!data.stripe_account_id) return;
+        if (!data.stripe_account_id) {
+          lookup = "done";
+          return;
+        }
 
         const statusResponse = await fetch(`/api/stripe/custom-account/${data.stripe_account_id}/status`);
         if (cancelled) return;
+        const statusData = await statusResponse.json().catch(() => ({}));
+        if (cancelled) return;
         if (statusResponse.ok) {
-          const statusData = await statusResponse.json().catch(() => ({}));
-          if (cancelled) return;
           setOnboardingData(prev => ({
             ...prev,
             accountId: data.stripe_account_id,
             accountCountry: statusData.country ?? prev.accountCountry,
             accountCurrency: statusData.default_currency ?? prev.accountCurrency,
           }));
+          lookup = "done";
           toast.success("Loaded your payout account");
+        } else if (statusData.code === "account_gone") {
+          // The saved steps belonged to that account. Step 1 creates a new one.
+          lookup = "gone";
+          setCurrentStep(1);
+          setCompletedSteps([]);
+          toast.error("Your previous payout account is no longer available. Start again from the first step to set up a new one.");
         } else {
           toast.error("We couldn't load your payout account. Please refresh the page to try again.");
         }
       } catch (error) {
         console.error("Error checking existing Stripe account:", error);
       } finally {
-        if (!cancelled) setAccountLookupDone(true);
+        if (!cancelled) setAccountLookup(lookup);
       }
     };
 
@@ -381,6 +392,8 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
       accountId: onboardingData.accountId,
       onCreateAccount: handleCreateAccount,
       communitySlug,
+      // Without a session the lookup never starts, so don't show it as loading.
+      accountLookup: (session ? accountLookup : "done") as AccountLookup,
     };
 
     switch (currentStep) {
@@ -398,7 +411,6 @@ export function OnboardingWizard({ communityId, communitySlug, onComplete }: Onb
             {...stepProps}
             onFinish={handleFinish}
             onGoToStep={(step: number) => setCurrentStep(step)}
-            accountLoading={Boolean(session) && !accountLookupDone}
           />
         );
       default:

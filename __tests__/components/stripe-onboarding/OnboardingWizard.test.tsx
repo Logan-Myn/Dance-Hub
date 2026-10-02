@@ -69,9 +69,16 @@ jest.mock("@/components/stripe-onboarding/steps/PersonalInfoStep", () => ({
   ),
 }));
 jest.mock("@/components/stripe-onboarding/steps/BankAccountStep", () => ({
-  BankAccountStep: ({ onNext }: StepProps) => (
+  BankAccountStep: ({
+    onNext,
+    data,
+    accountLookup,
+  }: StepProps & { data: { accountCountry?: string; accountCurrency?: string }; accountLookup?: string }) => (
     <div>
       <p>bank step</p>
+      <p>
+        account: {data.accountCountry ?? "-"} {data.accountCurrency ?? "-"} {accountLookup}
+      </p>
       <button onClick={onNext}>next</button>
     </div>
   ),
@@ -242,5 +249,41 @@ describe("finishing", () => {
     expect(await screen.findByText("finished: false")).toBeInTheDocument();
     expect(onComplete).not.toHaveBeenCalled();
     expect(window.localStorage.getItem(KEY)).not.toBeNull();
+  });
+});
+
+describe("reloading with a linked account", () => {
+  function setup(statusResponse: { ok: boolean; body: object }) {
+    window.localStorage.setItem(KEY, JSON.stringify({ currentStep: 3, completedSteps: [1, 2] }));
+    global.fetch = jest.fn((url: string) => {
+      if (url === "/api/community/salsa") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ stripe_account_id: "acct_1" }) });
+      }
+      if (url === "/api/stripe/custom-account/acct_1/status") {
+        return Promise.resolve({ ok: statusResponse.ok, json: () => Promise.resolve(statusResponse.body) });
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
+    }) as unknown as typeof fetch;
+    render(<OnboardingWizard communityId="c1" communitySlug="salsa" onComplete={jest.fn()} />);
+  }
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it("passes the account's country and currency to the bank step", async () => {
+    setup({ ok: true, body: { country: "EE", default_currency: "eur" } });
+    expect(await screen.findByText("account: EE eur done")).toBeInTheDocument();
+  });
+
+  it("tells the bank step when the account could not be loaded", async () => {
+    setup({ ok: false, body: { error: "boom" } });
+    expect(await screen.findByText("account: - - failed")).toBeInTheDocument();
+  });
+
+  it("starts over from step 1 when the linked account is gone", async () => {
+    setup({ ok: false, body: { error: "gone", code: "account_gone" } });
+
+    expect(await screen.findByText("business step")).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/no longer available/));
+    await waitFor(() => expect(JSON.parse(stored())).toEqual({ currentStep: 1, completedSteps: [] }));
   });
 });

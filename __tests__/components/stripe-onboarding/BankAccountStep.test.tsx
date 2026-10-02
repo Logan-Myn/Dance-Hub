@@ -148,3 +148,40 @@ it("tells the owner when the previous bank account could not be removed", async 
   expect(toast).toHaveBeenCalledWith("The previous bank account couldn't be removed.", expect.anything());
   expect(onNext).toHaveBeenCalled();
 });
+
+describe("while the payout account is not known", () => {
+  function renderWithout(accountId: string | undefined, accountLookup: "loading" | "done" | "failed" | "gone") {
+    render(
+      <BankAccountStep
+        data={{
+          accountId,
+          personalInfo: {},
+          // The old fallback: never show fields for the business address country.
+          businessInfo: { businessType: "individual", businessAddress: { country: "US" } },
+        }}
+        accountLookup={accountLookup}
+        onNext={jest.fn()}
+        onPrevious={jest.fn()}
+        isLoading={false}
+      />
+    );
+  }
+
+  it("waits for the account country instead of guessing US fields", () => {
+    renderWithout("acct_1", "loading");
+    expect(screen.getByText(/Loading your payout account/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Routing number/)).not.toBeInTheDocument();
+  });
+
+  it("says when the account could not be loaded", () => {
+    renderWithout("acct_1", "failed");
+    expect(screen.getByText(/couldn't load your payout account/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Routing number/)).not.toBeInTheDocument();
+  });
+
+  it("sends owners without an account back to the first step", () => {
+    renderWithout(undefined, "gone");
+    expect(screen.getByText(/Go back to the first step/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Routing number/)).not.toBeInTheDocument();
+  });
+});

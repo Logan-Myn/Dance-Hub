@@ -2,6 +2,7 @@
  * The onboarding status route must not send stored bank numbers, dates of
  * birth, ID numbers, addresses or phone numbers back to the browser.
  */
+import Stripe from 'stripe';
 import { GET } from '@/app/api/stripe/custom-account/[accountId]/status/route';
 
 const mockRetrieve = jest.fn();
@@ -91,4 +92,31 @@ it('reports what Stripe is still reviewing and why the account is disabled', asy
     { code: 'individual.verification.document', reason: 'The document could not be read.' },
   ]);
   expect(body.isFullyVerified).toBe(false);
+});
+
+it('says when the linked account is gone, so the wizard can start over', async () => {
+  mockRetrieve.mockRejectedValue(
+    new Stripe.errors.StripeInvalidRequestError({
+      type: 'invalid_request_error',
+      message: 'No such account: acct_1',
+      code: 'resource_missing',
+      statusCode: 404,
+    })
+  );
+
+  const res = await GET(get(), params);
+
+  expect(res.status).toBe(404);
+  expect((await res.json()).code).toBe('account_gone');
+});
+
+it('does not call a network failure "gone"', async () => {
+  mockRetrieve.mockRejectedValue(
+    new Stripe.errors.StripeConnectionError({ type: 'api_error', message: 'socket hang up' })
+  );
+
+  const res = await GET(get(), params);
+
+  expect(res.status).toBeGreaterThanOrEqual(500);
+  expect((await res.json()).code).toBeUndefined();
 });

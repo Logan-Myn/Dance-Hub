@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, ArrowRight, CreditCard, Building2, AlertCircle, Mail } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { STRIPE_COUNTRIES } from "../constants";
+import { STRIPE_COUNTRIES, type AccountLookup } from "../constants";
 import {
   buildPayoutBankAccount,
   formatIbanForDisplay,
@@ -28,6 +28,8 @@ interface BankAccountStepProps {
     /** The payout account's default currency, when known. */
     accountCurrency?: string;
   };
+  /** How far the wizard got looking up the linked account. */
+  accountLookup?: AccountLookup;
   onNext: () => void;
   onPrevious: () => void;
   isLoading: boolean;
@@ -35,13 +37,14 @@ interface BankAccountStepProps {
 
 export function BankAccountStep({
   data,
+  accountLookup = "done",
   onNext,
   onPrevious,
   isLoading,
 }: BankAccountStepProps) {
-  // The account was created with the business address country; fall back to
-  // it until the account's own country has loaded.
-  const accountCountry = data.accountCountry || data.businessInfo?.businessAddress?.country || "";
+  // Fields come only from the payout account's own country. No guessing
+  // from an address while it loads: wrong fields are worse than a wait.
+  const accountCountry = data.accountCountry ?? "";
   const format = getPayoutBankFormat(accountCountry);
   const countryName =
     STRIPE_COUNTRIES.find((c) => c.value === format.country)?.label ?? format.country;
@@ -142,6 +145,29 @@ export function BankAccountStep({
     setValues({});
     setErrors({});
   };
+
+  if (!data.accountId || !data.accountCountry) {
+    let message: string;
+    if (accountLookup === "loading") message = "Loading your payout account...";
+    else if (data.accountId || accountLookup === "failed") {
+      message = "We couldn't load your payout account. Please refresh the page to try again.";
+    } else message = "We couldn't find your payout account. Go back to the first step to set it up.";
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold mb-2">Bank Account Information</h2>
+          <p className="text-gray-600">{message}</p>
+        </div>
+        <div className="flex justify-between">
+          <Button variant="outline" onClick={onPrevious} className="flex items-center gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Previous
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (format.kind === "unsupported") {
     return (

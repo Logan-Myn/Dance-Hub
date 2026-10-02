@@ -177,3 +177,67 @@ it('drops its own new account when a concurrent request linked one first', async
   // No onboarding-progress row for the discarded account.
   expect(sqlTexts().some((q) => q.includes('INSERT INTO stripe_onboarding_progress'))).toBe(false);
 });
+
+describe('safety net', () => {
+  const noAccess = () =>
+    new Stripe.errors.StripePermissionError({
+      type: 'invalid_request_error',
+      message:
+        "The provided key 'sk_live_***' does not have access to account 'acct_old' (or that account does not exist). Application access may have been revoked.",
+      statusCode: 403,
+    });
+  const missing = () =>
+    new Stripe.errors.StripeInvalidRequestError({
+      type: 'invalid_request_error',
+      message: 'No such account: acct_old',
+      code: 'resource_missing',
+      statusCode: 404,
+    });
+
+  const originalKey = process.env.STRIPE_SECRET_KEY;
+  afterEach(() => {
+    if (originalKey === undefined) delete process.env.STRIPE_SECRET_KEY;
+    else process.env.STRIPE_SECRET_KEY = originalKey;
+  });
+
+  it('refuses to unlink on a live key when Stripe only says "no access"', async () => {
+    // A test key deployed to production would make every live account look
+    // like this; unlinking them all would be far worse than a 502.
+    process.env.STRIPE_SECRET_KEY = 'sk_live_dummy';
+    setupDb('acct_old');
+    mockRetrieve.mockRejectedValue(noAccess());
+
+    const res = await POST(req());
+
+    expect(res.status).toBe(502);
+    expect(sqlTexts().some((q) => q.includes('stripe_account_id = NULL'))).toBe(false);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('still unlinks a deleted account on a live key', async () => {
+    process.env.STRIPE_SECRET_KEY = 'sk_live_dummy';
+    setupDb('acct_old');
+    mockRetrieve.mockRejectedValue(missing());
+
+    const res = await POST(req());
+
+    expect(res.status).toBe(200);
+    expect(sqlTexts().some((q) => q.includes('stripe_account_id = NULL'))).toBe(true);
+  });
+
+  it('logs the community and old account before unlinking', async () => {
+    process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    setupDb('acct_old');
+    mockRetrieve.mockRejectedValue(noAccess());
+
+    try {
+      await POST(req());
+      const logged = errorSpy.mock.calls.map((c) => JSON.stringify(c)).join('\n');
+      expect(logged).toContain('c1');
+      expect(logged).toContain('acct_old');
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+});
