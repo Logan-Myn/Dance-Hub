@@ -4,6 +4,7 @@ import { stripe } from "@/lib/stripe";
 import { requireSession } from "@/lib/community-auth";
 import { toMembershipStatus, type MembershipRow } from "@/lib/community-data";
 import { ENDED_SUBSCRIPTION_STATUSES, markMembershipEnded } from "@/lib/membership-ended";
+import { cancelPreRegistration, PRE_REGISTERED_STATUSES } from "@/lib/pre-registration";
 
 interface Community {
   id: string;
@@ -20,6 +21,9 @@ interface Member {
   payment_intent_id: string | null;
   stripe_subscription_id: string | null;
   current_period_end: string | null;
+  stripe_customer_id: string | null;
+  stripe_invoice_id: string | null;
+  pre_registration_payment_method_id: string | null;
 }
 
 async function reconcileIfTerminal(
@@ -80,6 +84,40 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
     if (!member) {
       return NextResponse.json(
         { error: 'User is not a member of this community' },
+        { status: 400 }
+      );
+    }
+
+    // A pre-registration has no paid period to keep: leaving it is the same
+    // as cancelling it. (Cancelling its subscription "at period end" would
+    // end it on the opening date and count as a grace period until then.)
+    if (PRE_REGISTERED_STATUSES.includes(member.status)) {
+      try {
+        await cancelPreRegistration({
+          communityId: community.id,
+          userId,
+          stripeAccountId: community.stripe_account_id,
+          member,
+        });
+      } catch (error) {
+        console.error('Error cancelling pre-registration on leave:', error);
+        return NextResponse.json(
+          { error: 'Failed to cancel your pre-registration. Please try again.' },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        gracePeriod: false,
+        membership: toMembershipStatus(null),
+      });
+    }
+
+    // Only an active membership has a paid period to run out (or a row to
+    // leave). A pending checkout or an ended membership has nothing to leave.
+    if (member.status !== 'active') {
+      return NextResponse.json(
+        { error: 'You are not an active member of this community' },
         { status: 400 }
       );
     }
@@ -145,48 +183,13 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
       }
     }
 
-    // For free members or if there's no subscription, remove immediately
+    // For free members or if there's no subscription, remove immediately.
+    // members_count is kept by a trigger on community_members.
     await sql`
       DELETE FROM community_members
       WHERE community_id = ${community.id}
         AND user_id = ${userId}
     `;
-
-    // Update members_count in communities table
-    try {
-      await sql`SELECT decrement_members_count(${community.id})`;
-    } catch (rpcError) {
-      console.error('Error updating members count:', rpcError);
-      // Try to rollback the member deletion
-      await sql`
-        INSERT INTO community_members (
-          community_id,
-          user_id,
-          role,
-          status,
-          joined_at,
-          subscription_status,
-          payment_intent_id,
-          stripe_subscription_id,
-          current_period_end
-        ) VALUES (
-          ${community.id},
-          ${userId},
-          ${member.role},
-          ${member.status},
-          ${member.joined_at},
-          ${member.subscription_status},
-          ${member.payment_intent_id},
-          ${member.stripe_subscription_id},
-          ${member.current_period_end}
-        )
-      `;
-
-      return NextResponse.json(
-        { error: 'Failed to update members count' },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({
       success: true,

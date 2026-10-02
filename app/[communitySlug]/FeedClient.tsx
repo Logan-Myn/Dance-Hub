@@ -192,6 +192,10 @@ export default function FeedClient({
     null
   );
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  // Join in flight: the state disables the button, the ref also stops a
+  // second click that lands before the re-render.
+  const [isJoining, setIsJoining] = useState(false);
+  const joinInFlight = useRef(false);
   const [paymentMode, setPaymentMode] = useState<'payment' | 'setup'>('payment');
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('monthly');
   const [showPlanChooser, setShowPlanChooser] = useState(false);
@@ -328,15 +332,32 @@ export default function FeedClient({
     router.refresh();
   };
 
+  const onPaidJoinSuccess = () => {
+    setIsMember(true);
+    setShowPaymentModal(false);
+    toast.success("Successfully joined the community!");
+    window.location.reload();
+  };
+
   const startPaidJoin = async (plan: 'monthly' | 'yearly' = 'monthly') => {
-    if (!currentUser) return;
+    if (!currentUser || joinInFlight.current) return;
+    joinInFlight.current = true;
+    setIsJoining(true);
     try {
       const response = await fetch(`/api/community/${communitySlug}/join-paid`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan }),
       });
-      if (!response.ok) throw new Error("Failed to create payment");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        // An earlier checkout of theirs was already paid.
+        if (errorData.alreadyMember) {
+          onPaidJoinSuccess();
+          return;
+        }
+        throw new Error("Failed to create payment");
+      }
       const { clientSecret, requiresSetup, stripeAccountId } = await response.json();
       setPaymentClientSecret(clientSecret);
       setStripeAccountId(stripeAccountId);
@@ -346,6 +367,9 @@ export default function FeedClient({
     } catch (err) {
       console.error(err);
       toast.error("Failed to start checkout");
+    } finally {
+      setIsJoining(false);
+      joinInFlight.current = false;
     }
   };
 
@@ -354,10 +378,16 @@ export default function FeedClient({
       toast.error("Please sign in to join the community");
       return;
     }
+    if (joinInFlight.current) return;
 
+    // Set when this call holds the in-flight guard (the paid path takes it
+    // inside startPaidJoin instead).
+    let holdsJoin = false;
     try {
       // Check if community is in pre-registration mode
       if (community?.status === 'pre_registration') {
+        joinInFlight.current = holdsJoin = true;
+        setIsJoining(true);
         // Handle pre-registration
         const response = await fetch(
           `/api/community/${communitySlug}/join-pre-registration`,
@@ -391,6 +421,8 @@ export default function FeedClient({
         }
         await startPaidJoin('monthly');
       } else {
+        joinInFlight.current = holdsJoin = true;
+        setIsJoining(true);
         // Handle free membership
         const response = await fetch(`/api/community/${communitySlug}/join`, {
           method: "POST",
@@ -415,6 +447,11 @@ export default function FeedClient({
       toast.error(
         error instanceof Error ? error.message : "Failed to join community"
       );
+    } finally {
+      if (holdsJoin) {
+        joinInFlight.current = false;
+        setIsJoining(false);
+      }
     }
   };
 
@@ -790,6 +827,7 @@ export default function FeedClient({
                 onManageClick={() => setShowManageModal(true)}
                 onReactivateClick={handleReactivateMembership}
                 onJoinClick={handleJoinCommunity}
+                isJoining={isJoining}
               />
             </div>
           </div>
@@ -881,12 +919,7 @@ export default function FeedClient({
         price={selectedPlan === 'yearly' ? (community.yearlyPrice || 0) : (community.membershipPrice || 0)}
         plan={selectedPlan}
         mode={paymentMode}
-        onSuccess={() => {
-          setIsMember(true);
-          setShowPaymentModal(false);
-          toast.success("Successfully joined the community!");
-          window.location.reload();
-        }}
+        onSuccess={onPaidJoinSuccess}
         communitySlug={communitySlug}
       />
 

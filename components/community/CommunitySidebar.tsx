@@ -47,6 +47,8 @@ interface CommunitySidebarProps {
   onManageClick: () => void;
   onReactivateClick: () => void;
   onJoinClick: () => void;
+  /** True while a join request is in flight; disables the Join button. */
+  isJoining?: boolean;
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -111,6 +113,7 @@ export default function CommunitySidebar({
   onManageClick,
   onReactivateClick,
   onJoinClick,
+  isJoining = false,
 }: CommunitySidebarProps) {
   const [linksExpanded, setLinksExpanded] = useState(true);
   const [, setTick] = useState(0);
@@ -333,6 +336,7 @@ export default function CommunitySidebar({
             ) : (
               <Button
                 onClick={onJoinClick}
+                disabled={isJoining}
                 className="w-full bg-primary hover:bg-primary/90"
               >
                 {membershipEnabled && membershipPrice && stripeAccountId

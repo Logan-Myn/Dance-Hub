@@ -54,6 +54,26 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
       );
     }
 
+    // Only an active member who scheduled a cancellation can undo it. A
+    // pre-registered or pending row has nothing to reactivate (setting it
+    // active would grant access before the community opens or unpaid), and
+    // an ended membership has to join again.
+    if (member.status !== 'active') {
+      if (member.status === 'inactive') {
+        return NextResponse.json(
+          {
+            error: 'Your membership has ended. Join again to continue.',
+            membership: toMembershipStatus(member),
+          },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { error: 'There is no membership to reactivate.' },
+        { status: 400 }
+      );
+    }
+
     if (member.stripe_subscription_id && community.stripe_account_id) {
       // Check standing BEFORE touching the subscription: un-cancelling a
       // past_due / unpaid one would let the next retry charge and renew it

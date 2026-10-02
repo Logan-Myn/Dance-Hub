@@ -44,14 +44,15 @@ export function DeleteCommunityButton({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete community");
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to delete community");
       }
 
       toast.success("Community deleted successfully");
       router.refresh();
     } catch (error) {
       console.error("Error deleting community:", error);
-      toast.error("Failed to delete community");
+      toast.error(error instanceof Error ? error.message : "Failed to delete community");
     } finally {
       setIsDeleting(false);
       setShowDeleteDialog(false);

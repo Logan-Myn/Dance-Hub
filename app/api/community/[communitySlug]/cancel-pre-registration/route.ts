@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { queryOne, sql } from "@/lib/db";
-import { stripe } from "@/lib/stripe";
+import { queryOne } from "@/lib/db";
 import { requireSession } from "@/lib/community-auth";
+import { cancelPreRegistration, PRE_REGISTERED_STATUSES } from "@/lib/pre-registration";
 
 interface Community {
   id: string;
@@ -13,6 +13,7 @@ interface Member {
   community_id: string;
   user_id: string;
   status: string;
+  stripe_subscription_id: string | null;
   stripe_invoice_id: string | null;
   pre_registration_payment_method_id: string | null;
   stripe_customer_id: string | null;
@@ -42,7 +43,7 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
 
     // Get member record
     const member = await queryOne<Member>`
-      SELECT id, community_id, user_id, status, stripe_invoice_id, pre_registration_payment_method_id, stripe_customer_id
+      SELECT id, community_id, user_id, status, stripe_subscription_id, stripe_invoice_id, pre_registration_payment_method_id, stripe_customer_id
       FROM community_members
       WHERE community_id = ${community.id}
         AND user_id = ${userId}
@@ -56,66 +57,19 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
     }
 
     // Verify member is in pre-registration status
-    if (member.status !== 'pending_pre_registration' && member.status !== 'pre_registered') {
+    if (!PRE_REGISTERED_STATUSES.includes(member.status)) {
       return NextResponse.json(
         { error: "Member is not in pre-registration status" },
         { status: 400 }
       );
     }
 
-    // Cancel the scheduled invoice if it exists
-    if (member.stripe_invoice_id) {
-      try {
-        await stripe.invoices.voidInvoice(
-          member.stripe_invoice_id,
-          {
-            stripeAccount: community.stripe_account_id!,
-          }
-        );
-      } catch (stripeError: any) {
-        // If invoice is already voided or doesn't exist, that's fine
-        if (stripeError.code !== 'invoice_not_found' && stripeError.code !== 'resource_already_exists') {
-          console.error("Error voiding invoice:", stripeError);
-        }
-      }
-    }
-
-    // Delete the payment method from Stripe if it exists
-    if (member.pre_registration_payment_method_id) {
-      try {
-        await stripe.paymentMethods.detach(
-          member.pre_registration_payment_method_id,
-          {
-            stripeAccount: community.stripe_account_id!,
-          }
-        );
-      } catch (stripeError: any) {
-        // If payment method doesn't exist or is already detached, that's fine
-        console.error("Error detaching payment method:", stripeError);
-      }
-    }
-
-    // Delete the customer from Stripe if it exists
-    if (member.stripe_customer_id) {
-      try {
-        await stripe.customers.del(
-          member.stripe_customer_id,
-          {
-            stripeAccount: community.stripe_account_id!,
-          }
-        );
-      } catch (stripeError: any) {
-        // If customer doesn't exist, that's fine
-        console.error("Error deleting customer:", stripeError);
-      }
-    }
-
-    // Remove member record from database
-    await sql`
-      DELETE FROM community_members
-      WHERE community_id = ${community.id}
-        AND user_id = ${userId}
-    `;
+    await cancelPreRegistration({
+      communityId: community.id,
+      userId,
+      stripeAccountId: community.stripe_account_id,
+      member,
+    });
 
     return NextResponse.json({
       success: true,

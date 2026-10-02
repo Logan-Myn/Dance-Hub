@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
@@ -54,7 +54,12 @@ export function useJoinCommunity(
   const router = useRouter();
 
   const [isJoining, setIsJoining] = useState(false);
+  // Synchronous guard against a second join while one is in flight (state
+  // updates land too late to stop a double click or a double call).
+  const joinInFlight = useRef(false);
   const [paidCheckoutOpen, setPaidCheckoutOpen] = useState(false);
+  // True while the checkout must stay open (payment being confirmed or paid).
+  const [paymentLocked, setPaymentLocked] = useState(false);
   const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('monthly');
   const [showPlanChooser, setShowPlanChooser] = useState(false);
@@ -65,6 +70,7 @@ export function useJoinCommunity(
   const closePayment = () => {
     setPaidCheckoutOpen(false);
     setPaymentClientSecret(null);
+    setPaymentLocked(false);
   };
   const closePreReg = () => {
     setPreRegClientSecret(null);
@@ -88,7 +94,8 @@ export function useJoinCommunity(
   // Create the paid membership subscription for the chosen plan and open the
   // payment modal. join-paid selects the monthly vs yearly Stripe price.
   const startPaid = async (plan: 'monthly' | 'yearly') => {
-    if (!user || !community) return;
+    if (!user || !community || joinInFlight.current) return;
+    joinInFlight.current = true;
     setShowPlanChooser(false);
     setSelectedPlan(plan);
     // Open the checkout dialog right away so its own spinner covers the
@@ -104,6 +111,11 @@ export function useJoinCommunity(
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        // An earlier checkout of theirs was already paid.
+        if (errorData.alreadyMember) {
+          onJoinSuccess();
+          return;
+        }
         throw new Error(errorData.error || 'Failed to create payment');
       }
       const { clientSecret } = await response.json();
@@ -114,6 +126,7 @@ export function useJoinCommunity(
       setPaidCheckoutOpen(false);
     } finally {
       setIsJoining(false);
+      joinInFlight.current = false;
     }
   };
 
@@ -127,11 +140,14 @@ export function useJoinCommunity(
       return;
     }
 
+    if (joinInFlight.current) return;
+
     if (community.status === 'pre_registration') {
       if (!community.membershipEnabled || !community.membershipPrice) {
         toast.error('This community requires paid membership for pre-registration');
         return;
       }
+      joinInFlight.current = true;
       setIsJoining(true);
       try {
         const response = await fetch(
@@ -154,6 +170,7 @@ export function useJoinCommunity(
         toast.error(error instanceof Error ? error.message : 'Failed to join community');
       } finally {
         setIsJoining(false);
+        joinInFlight.current = false;
       }
       return;
     }
@@ -175,6 +192,7 @@ export function useJoinCommunity(
     }
 
     // Free membership.
+    joinInFlight.current = true;
     setIsJoining(true);
     try {
       const response = await fetch(`/api/community/${community.slug}/join`, {
@@ -191,6 +209,7 @@ export function useJoinCommunity(
       toast.error(error instanceof Error ? error.message : 'Failed to join community');
     } finally {
       setIsJoining(false);
+      joinInFlight.current = false;
     }
   };
 
@@ -226,7 +245,7 @@ export function useJoinCommunity(
         <Dialog
           open
           onOpenChange={(open) => {
-            if (!open) {
+            if (!open && !paymentLocked) {
               setShowPlanChooser(false);
               closePayment();
             }
@@ -245,6 +264,7 @@ export function useJoinCommunity(
                 plan={selectedPlan}
                 communitySlug={community.slug}
                 onSuccess={onJoinSuccess}
+                onLockChange={setPaymentLocked}
               />
             ) : (
               <>

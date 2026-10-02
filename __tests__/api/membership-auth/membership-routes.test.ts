@@ -68,6 +68,8 @@ const sqlValues = () => mockSql.mock.calls.flatMap((c) => c.slice(1));
 const queryValues = () => mockQueryOne.mock.calls.flatMap((c) => c.slice(1));
 /** SQL text of the nth sql`...` call. */
 const sqlText = (n: number) => (mockSql.mock.calls[n][0] as string[]).join('?');
+/** members_count is kept by a trigger on community_members; no route writes it by hand. */
+const countsByHand = () => mockSql.mock.calls.some((c) => /members_count/.test((c[0] as string[]).join('?')));
 
 beforeEach(() => {
   [
@@ -133,6 +135,15 @@ describe('join (free)', () => {
     const res = await joinPOST(req({}), { params });
     expect(res.status).toBe(400);
     expect(mockSql).not.toHaveBeenCalled();
+  });
+
+  it('only inserts the member row', async () => {
+    mockQueryOne.mockResolvedValueOnce(free).mockResolvedValueOnce(null);
+    const res = await joinPOST(req({}), { params });
+    expect(res.status).toBe(200);
+    expect(mockSql).toHaveBeenCalledTimes(1);
+    expect(sqlText(0)).toMatch(/INSERT INTO community_members/);
+    expect(countsByHand()).toBe(false);
   });
 });
 
@@ -237,6 +248,17 @@ describe('leave', () => {
     expect([...sqlValues(), ...queryValues()]).not.toContain('victim');
   });
 
+  it('only deletes the row of a free member who leaves', async () => {
+    mockQueryOne
+      .mockResolvedValueOnce({ id: 'c1', stripe_account_id: 'acct_1' })
+      .mockResolvedValueOnce({ user_id: 'u1', community_id: 'c1', role: 'member', status: 'active', stripe_subscription_id: null });
+    const res = await leavePOST(req({}), { params });
+    expect(res.status).toBe(200);
+    expect(mockSql).toHaveBeenCalledTimes(1);
+    expect(sqlText(0)).toMatch(/DELETE FROM community_members/);
+    expect(countsByHand()).toBe(false);
+  });
+
   it('returns the stored membership when cancelling at period end', async () => {
     const periodEnd = new Date(Date.now() + 30 * 86400_000);
     mockQueryOne
@@ -272,16 +294,17 @@ describe('leave', () => {
       mockSubscriptionsRetrieve.mockResolvedValueOnce({ id: 'sub_1', status: 'canceled' });
     };
 
-    it('marks the member inactive and counts them out', async () => {
+    it('marks the member inactive', async () => {
       setup();
       mockSql.mockResolvedValueOnce([{ status: 'inactive', subscription_status: 'canceled', current_period_end: null }]);
       const res = await leavePOST(req({}), { params });
       expect(await res.json()).toMatchObject({ success: true, reconciled: true });
       expect(sqlText(0)).toMatch(/status = 'inactive'/);
-      expect(sqlText(1)).toMatch(/decrement_members_count/);
+      expect(mockSql).toHaveBeenCalledTimes(1);
+      expect(countsByHand()).toBe(false);
     });
 
-    it('does not count the member out twice', async () => {
+    it('does not touch a row that is already inactive', async () => {
       setup();
       mockSql.mockResolvedValueOnce([]); // row was already inactive
       const res = await leavePOST(req({}), { params });
@@ -295,7 +318,12 @@ describe('reactivate', () => {
   const setup = () =>
     mockQueryOne
       .mockResolvedValueOnce({ id: 'c1', stripe_account_id: 'acct_1' })
-      .mockResolvedValueOnce({ id: 'm1', user_id: 'u1', community_id: 'c1', stripe_subscription_id: 'sub_1' });
+      // An active member who cancelled and is still in the paid period.
+      .mockResolvedValueOnce({
+        id: 'm1', user_id: 'u1', community_id: 'c1', stripe_subscription_id: 'sub_1',
+        status: 'active', subscription_status: 'canceling',
+        current_period_end: new Date(Date.now() + 30 * 86400_000),
+      });
 
   it.each(['active', 'trialing'])('restores access when the subscription is %s', async (status) => {
     setup();

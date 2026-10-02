@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { requireSession } from '@/lib/community-auth';
+import { toMembershipStatus } from '@/lib/community-data';
 
 interface CommunityId {
   id: string;
 }
 
 interface MemberStatus {
-  status: string | null;
+  status: string;
   subscription_status: string | null;
   current_period_end: string | null;
 }
@@ -53,13 +54,9 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
       });
     }
 
-    // Check if member has access:
-    // - status is 'active' OR
-    // - subscription is 'canceling' and current_period_end is in the future
-    const now = new Date();
-    const periodEnd = member.current_period_end ? new Date(member.current_period_end) : null;
-    const hasGracePeriodAccess = member.subscription_status === 'canceling' && periodEnd && periodEnd > now;
-    const isActive = member.status === 'active' || hasGracePeriodAccess;
+    // Same rule as every access check (an active membership, including one
+    // cancelled but still in its paid period).
+    const isActive = toMembershipStatus(member).isMember;
 
     return NextResponse.json({
       hasSubscription: isActive,

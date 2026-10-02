@@ -46,6 +46,13 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
       );
     }
 
+    if (community.status === 'inactive') {
+      return NextResponse.json(
+        { error: "This community is not accepting new members" },
+        { status: 400 }
+      );
+    }
+
     // numeric columns can arrive as strings ("20.00"), so coerce.
     const price = Number(community.membership_price ?? 0);
     if (community.membership_enabled && price > 0) {
@@ -95,24 +102,7 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
       );
     }
 
-    // Update members_count in communities table
-    try {
-      await sql`SELECT increment_members_count(${community.id})`;
-    } catch (updateError) {
-      console.error("Error updating members count:", updateError);
-      // Rollback the member addition
-      await sql`
-        DELETE FROM community_members
-        WHERE community_id = ${community.id}
-          AND user_id = ${userId}
-      `;
-
-      return NextResponse.json(
-        { error: "Failed to update members count" },
-        { status: 500 }
-      );
-    }
-
+    // members_count is kept by a trigger on community_members.
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error joining community:", error);

@@ -4,11 +4,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { loadStripe, StripeElementsOptions } from "@stripe/stripe-js";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useEffectEvent, useMemo } from "react";
 import { toast } from "react-hot-toast";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { payButtonDisplay } from "@/lib/pay-button-label";
+
+// Where the checkout is: 'submitting' while the card is being confirmed,
+// 'processing' once it is paid and we wait for the membership to activate,
+// 'timed_out' when that wait gave up.
+type PaymentStatus = 'idle' | 'submitting' | 'processing' | 'timed_out';
+
+// How long to wait for the membership to activate after a confirmed payment.
+const ACTIVATION_WAIT_MS = 60_000;
 
 interface PaymentFormProps {
   communitySlug: string;
@@ -17,46 +25,61 @@ interface PaymentFormProps {
   plan?: 'monthly' | 'yearly';
   dueTodayCents?: number | null;
   onSuccess: () => void;
+  onStatusChange?: (status: PaymentStatus) => void;
 }
 
-function PaymentForm({ communitySlug, price, mode, plan, dueTodayCents, onSuccess }: PaymentFormProps) {
+function PaymentForm({ communitySlug, price, mode, plan, dueTodayCents, onSuccess, onStatusChange }: PaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
   // The payment form iframe takes a moment to initialise after the modal
   // opens. Track when it is fully rendered so we can keep the branded spinner
   // up until then (instead of flashing a blank / secondary loading state).
   const [isFormReady, setIsFormReady] = useState(false);
   const { user } = useAuth();
+  const userId = user?.id;
+  // Parents pass inline callbacks; effect events keep the polling from
+  // restarting (and its time limit from resetting) on every parent render.
+  const notifyActivated = useEffectEvent(() => onSuccess());
+  const notifyTimedOut = useEffectEvent(() => onStatusChange?.('timed_out'));
 
-  // Check payment status periodically
+  // Check payment status periodically, for up to ACTIVATION_WAIT_MS.
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
+    if (!isProcessing || !userId) return;
 
-    if (isProcessing && user) {
-      intervalId = setInterval(async () => {
-        try {
-          const response = await fetch(`/api/community/${communitySlug}/check-subscription`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-          });
-          const data = await response.json();
+    const intervalId = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/community/${communitySlug}/check-subscription`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const data = await response.json();
 
-          if (data.hasSubscription) {
-            setIsProcessing(false);
-            onSuccess();
-          }
-        } catch (error) {
-          console.error("Error checking subscription:", error);
+        if (data.hasSubscription) {
+          clearInterval(intervalId);
+          clearTimeout(timeoutId);
+          setIsProcessing(false);
+          notifyActivated();
         }
-      }, 2000); // Check every 2 seconds
-    }
+      } catch (error) {
+        console.error("Error checking subscription:", error);
+      }
+    }, 2000); // Check every 2 seconds
+
+    const timeoutId = setTimeout(() => {
+      clearInterval(intervalId);
+      setIsProcessing(false);
+      setTimedOut(true);
+      notifyTimedOut();
+    }, ACTIVATION_WAIT_MS);
 
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      clearInterval(intervalId);
+      clearTimeout(timeoutId);
     };
-  }, [isProcessing, communitySlug, onSuccess, user]);
+  }, [isProcessing, communitySlug, userId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +87,7 @@ function PaymentForm({ communitySlug, price, mode, plan, dueTodayCents, onSucces
     if (!stripe || !elements) return;
 
     setIsLoading(true);
+    onStatusChange?.('submitting');
 
     try {
       const { error } =
@@ -86,25 +110,43 @@ function PaymentForm({ communitySlug, price, mode, plan, dueTodayCents, onSucces
       if (error) {
         toast.error(error.message || 'Payment failed');
         setIsProcessing(false);
+        onStatusChange?.('idle');
       } else {
         setIsProcessing(true);
+        onStatusChange?.('processing');
         toast.success("Payment successful! Processing your membership...");
       }
     } catch (error) {
       console.error('Payment error:', error);
       toast.error('Payment failed');
       setIsProcessing(false);
+      onStatusChange?.('idle');
     } finally {
       setIsLoading(false);
     }
   };
+
+  if (timedOut) {
+    return (
+      <div className="flex flex-col items-center justify-center space-y-3 py-8 text-center">
+        <p className="text-sm font-medium">Your payment went through.</p>
+        <p className="text-sm text-muted-foreground">
+          Your membership is taking longer than usual to activate. It should be ready in a few
+          minutes. Refresh the page to check, or write to hello@dance-hub.io if it doesn&apos;t appear.
+        </p>
+        <Button type="button" variant="outline" onClick={() => window.location.reload()}>
+          Refresh page
+        </Button>
+      </div>
+    );
+  }
 
   if (isProcessing) {
     return (
       <div className="flex flex-col items-center justify-center space-y-4 py-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="text-sm text-gray-500">Processing your membership...</p>
-        <p className="text-xs text-gray-400">This may take a few moments</p>
+        <p className="text-xs text-gray-400">This may take a few moments. Please keep this window open.</p>
       </div>
     );
   }
@@ -209,6 +251,12 @@ interface PaymentModalBodyProps {
   mode?: 'payment' | 'setup';
   plan?: 'monthly' | 'yearly';
   onSuccess: () => void;
+  /**
+   * Called with true while closing the checkout would be unsafe (a payment is
+   * being confirmed, or it is paid and the membership is activating). The
+   * dialog that hosts this body should ignore close requests until false.
+   */
+  onLockChange?: (locked: boolean) => void;
 }
 
 /**
@@ -226,6 +274,7 @@ export function PaymentModalBody({
   mode: initialMode = 'payment',
   plan,
   onSuccess,
+  onLockChange,
 }: PaymentModalBodyProps) {
   const { user } = useAuth();
 
@@ -238,6 +287,7 @@ export function PaymentModalBody({
   // Amount actually charged on the first invoice once a promo is applied (minor
   // units). Null means show the plain recurring price on the button.
   const [dueTodayCents, setDueTodayCents] = useState<number | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('idle');
 
   // Reset when the parent hands us a fresh join (new client secret).
   useEffect(() => {
@@ -245,7 +295,16 @@ export function PaymentModalBody({
     setActiveMode(initialMode);
     setApplied(null);
     setDueTodayCents(null);
+    setPaymentStatus('idle');
   }, [clientSecret, initialMode]);
+
+  // Applying a promo code replaces the subscription, and closing the dialog
+  // invites a second Join: neither is safe once the card is being charged.
+  const locked = paymentStatus === 'submitting' || paymentStatus === 'processing';
+  const notifyLock = useEffectEvent((value: boolean) => onLockChange?.(value));
+  useEffect(() => {
+    notifyLock(locked);
+  }, [locked]);
 
   const stripePromise = useMemo(
     () =>
@@ -280,6 +339,12 @@ export function PaymentModalBody({
         body: JSON.stringify({ promotionCodeId: v.promotionCodeId, plan }),
       });
       if (!jRes.ok) {
+        const jData = await jRes.json().catch(() => ({}));
+        // The earlier checkout turned out to be paid already.
+        if (jData.alreadyMember) {
+          onSuccess();
+          return;
+        }
         toast.error('Could not apply the code. Please try again.');
         return;
       }
@@ -322,9 +387,11 @@ export function PaymentModalBody({
         </div>
       ) : (
         <>
-          <div className="mb-4">
-            <PromoCodeEntry applied={applied} applying={applying} onApply={applyPromo} />
-          </div>
+          {paymentStatus === 'idle' && (
+            <div className="mb-4">
+              <PromoCodeEntry applied={applied} applying={applying} onApply={applyPromo} />
+            </div>
+          )}
 
           {/* key on the client secret so Elements re-mounts with the discounted
               amount after a promo is applied. */}
@@ -336,6 +403,7 @@ export function PaymentModalBody({
               plan={plan}
               dueTodayCents={dueTodayCents}
               onSuccess={onSuccess}
+              onStatusChange={setPaymentStatus}
             />
           </Elements>
         </>
@@ -350,10 +418,16 @@ interface PaymentModalProps extends PaymentModalBodyProps {
 }
 
 export default function PaymentModal({ isOpen, onClose, ...body }: PaymentModalProps) {
+  const [locked, setLocked] = useState(false);
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open && !locked) onClose();
+      }}
+    >
       <DialogContent className="sm:max-w-[425px]">
-        <PaymentModalBody {...body} />
+        <PaymentModalBody {...body} onLockChange={setLocked} />
       </DialogContent>
     </Dialog>
   );

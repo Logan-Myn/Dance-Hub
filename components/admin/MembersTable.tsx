@@ -43,7 +43,7 @@ export function MembersTable({ communitySlug, members }: MembersTableProps) {
       router.refresh();
     } catch (err) {
       console.error("Error removing member:", err);
-      toast.error("Failed to remove member");
+      toast.error(err instanceof Error ? err.message : "Failed to remove member");
     }
   }
 

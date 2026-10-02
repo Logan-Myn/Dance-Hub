@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { queryOne, sql } from "@/lib/db";
+import { query, queryOne, sql } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
+import { cancelMemberSubscriptions, cancelSubscriptionNow } from "@/lib/subscription-cancel";
 
 interface Profile {
   id: string;
@@ -31,6 +32,89 @@ export async function DELETE(request: Request, props: { params: Promise<{ commun
 
     if (!requesterProfile?.is_admin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Paid private lessons still to come would disappear with the community
+    // (and with them any way to refund them), so they must be dealt with first.
+    const upcoming = await queryOne<{ count: number }>`
+      SELECT COUNT(*)::int AS count
+      FROM lesson_bookings
+      WHERE community_id = ${communityId}
+        AND payment_status = 'succeeded'
+        AND lesson_status IN ('booked', 'scheduled')
+        AND scheduled_at > NOW()
+    `;
+    const upcomingCount = upcoming?.count ?? 0;
+    if (upcomingCount > 0) {
+      return NextResponse.json(
+        {
+          error: `This community has ${upcomingCount} paid private ${upcomingCount === 1 ? "lesson" : "lessons"} still to come. Cancel or refund ${upcomingCount === 1 ? "it" : "them"} before deleting the community.`,
+        },
+        { status: 409 }
+      );
+    }
+
+    const community = await queryOne<{ id: string; stripe_account_id: string | null; status: string | null }>`
+      SELECT id, stripe_account_id, status FROM communities WHERE id = ${communityId}
+    `;
+    if (!community) {
+      return NextResponse.json({ error: "Community not found" }, { status: 404 });
+    }
+
+    // Close the community to new members first (every join route refuses an
+    // inactive community), so nobody starts a subscription while we cancel
+    // the existing ones. Reopened below if the delete is abandoned.
+    await sql`UPDATE communities SET status = 'inactive' WHERE id = ${communityId}`;
+    const reopen = () => sql`
+      UPDATE communities SET status = ${community.status}
+      WHERE id = ${communityId} AND status = 'inactive'
+    `;
+
+    // Cancel every member subscription (on the community's connected account)
+    // and the community's broadcast subscription (on the platform account)
+    // first: after the delete nothing links them to anyone, and they would
+    // keep billing.
+    let notCancelled: string[];
+    try {
+      const memberSubscriptions = await query<{
+        stripe_subscription_id: string | null;
+        subscription_status: string | null;
+      }>`
+        SELECT stripe_subscription_id, subscription_status
+        FROM community_members
+        WHERE community_id = ${communityId}
+          AND stripe_subscription_id IS NOT NULL
+      `;
+      notCancelled = await cancelMemberSubscriptions(
+        memberSubscriptions.map((m) => ({ ...m, stripe_account_id: community.stripe_account_id }))
+      );
+
+      const broadcast = await queryOne<{ stripe_subscription_id: string; status: string }>`
+        SELECT stripe_subscription_id, status
+        FROM community_broadcast_subscriptions
+        WHERE community_id = ${communityId}
+      `;
+      if (broadcast && broadcast.status !== "canceled") {
+        try {
+          await cancelSubscriptionNow(broadcast.stripe_subscription_id, null);
+        } catch (cancelError) {
+          console.error("Error canceling broadcast subscription:", cancelError);
+          notCancelled.push(broadcast.stripe_subscription_id);
+        }
+      }
+    } catch (error) {
+      await reopen();
+      throw error;
+    }
+
+    if (notCancelled.length > 0) {
+      await reopen();
+      return NextResponse.json(
+        {
+          error: `We couldn't cancel ${notCancelled.length} ${notCancelled.length === 1 ? "subscription" : "subscriptions"}, so the community was not deleted. Please try again.`,
+        },
+        { status: 502 }
+      );
     }
 
     // Use the delete_community RPC function to delete everything in the correct order

@@ -57,39 +57,84 @@ export async function createPromoCode(args: {
 }): Promise<PromoCodeRecord> {
   const problem = validateCreateInput(args.input);
   if (problem) throw new Error(problem);
+  const code = args.input.code.trim();
+  const stripeAccount = { stripeAccount: args.stripeAccountId };
+  const duplicateName = () => new Error(`You already have a code called ${code}. Delete it to reuse the name.`);
+
+  // Codes are matched regardless of case (Stripe does the same), and our
+  // UNIQUE (community_id, code) also counts switched-off codes. Check before
+  // creating anything on Stripe, so we never make a live code we can't store.
+  const existing = await queryOne<{ id: string }>`
+    SELECT id FROM community_promo_codes
+    WHERE community_id = ${args.communityId}
+      AND lower(code) = lower(${code})
+    LIMIT 1
+  `;
+  if (existing) throw duplicateName();
 
   let currency: string | null = null;
   if (args.input.discountType === 'amount') {
-    const price = await stripe.prices.retrieve(args.stripePriceId, {
-      stripeAccount: args.stripeAccountId,
-    });
+    const price = await stripe.prices.retrieve(args.stripePriceId, stripeAccount);
     currency = price.currency;
   }
 
   const coupon = await stripe.coupons.create(
     buildCouponParams(args.input, currency),
-    { stripeAccount: args.stripeAccountId },
+    stripeAccount,
   );
 
-  const promo = await stripe.promotionCodes.create(
-    buildPromotionCodeParams(args.input, coupon.id),
-    { stripeAccount: args.stripeAccountId },
-  );
+  // From here on, undo what Stripe has if a later step fails, so no code is
+  // left redeemable without a row the owner can see and switch off.
+  const deleteCoupon = async () => {
+    try {
+      await stripe.coupons.del(coupon.id, stripeAccount);
+    } catch (err) {
+      console.error('[promo-codes] failed to delete coupon after a failed create', coupon.id, err);
+    }
+  };
 
-  const row = await queryOne<PromoCodeRow>`
-    INSERT INTO community_promo_codes (
-      community_id, code, stripe_coupon_id, stripe_promotion_code_id,
-      discount_type, discount_value, duration, duration_in_months,
-      max_redemptions, expires_at, active, created_by, applies_to_plan
-    ) VALUES (
-      ${args.communityId}, ${args.input.code.trim()}, ${coupon.id}, ${promo.id},
-      ${args.input.discountType}, ${args.input.discountValue}, ${args.input.duration},
-      ${args.input.durationInMonths}, ${args.input.maxRedemptions},
-      ${args.input.expiresAt}, true, ${args.createdBy}, ${args.input.appliesToPlan ?? 'both'}
-    )
-    RETURNING *
-  `;
-  if (!row) throw new Error('Failed to persist promo code');
+  let promo: Awaited<ReturnType<typeof stripe.promotionCodes.create>>;
+  try {
+    promo = await stripe.promotionCodes.create(
+      buildPromotionCodeParams(args.input, coupon.id),
+      stripeAccount,
+    );
+  } catch (err) {
+    await deleteCoupon();
+    throw err;
+  }
+
+  let row: PromoCodeRow | null = null;
+  let insertError: unknown = null;
+  try {
+    row = await queryOne<PromoCodeRow>`
+      INSERT INTO community_promo_codes (
+        community_id, code, stripe_coupon_id, stripe_promotion_code_id,
+        discount_type, discount_value, duration, duration_in_months,
+        max_redemptions, expires_at, active, created_by, applies_to_plan
+      ) VALUES (
+        ${args.communityId}, ${code}, ${coupon.id}, ${promo.id},
+        ${args.input.discountType}, ${args.input.discountValue}, ${args.input.duration},
+        ${args.input.durationInMonths}, ${args.input.maxRedemptions},
+        ${args.input.expiresAt}, true, ${args.createdBy}, ${args.input.appliesToPlan ?? 'both'}
+      )
+      RETURNING *
+    `;
+  } catch (err) {
+    insertError = err;
+  }
+
+  if (!row) {
+    try {
+      await stripe.promotionCodes.update(promo.id, { active: false }, stripeAccount);
+    } catch (err) {
+      console.error('[promo-codes] failed to switch off promotion code after a failed create', promo.id, err);
+    }
+    await deleteCoupon();
+    // A unique violation means the same name was created at the same moment.
+    if ((insertError as { code?: string } | null)?.code === '23505') throw duplicateName();
+    throw insertError ?? new Error('Failed to persist promo code');
+  }
   return rowToRecord(row);
 }
 
@@ -164,42 +209,46 @@ export async function deletePromoCode(args: {
 export async function validatePromoCode(args: {
   stripeAccountId: string;
   code: string;
-  communityId?: string;
+  communityId: string;
   plan?: 'monthly' | 'yearly';
 }): Promise<ValidateResult> {
   const invalid: ValidateResult = { valid: false, reason: 'That code is not valid.' };
   const trimmed = args.code.trim();
   if (!trimmed) return invalid;
 
-  const list = await stripe.promotionCodes.list(
-    { code: trimmed, active: true, limit: 1 },
-    { stripeAccount: args.stripeAccountId },
-  );
-  const promo = list.data[0];
+  // Look the code up in this community's mirror first, so unknown, switched
+  // off or deleted codes are refused without calling Stripe. Stripe matches
+  // codes regardless of case, so this does too.
+  const mirror = await queryOne<{ stripe_promotion_code_id: string; applies_to_plan: string }>`
+    SELECT stripe_promotion_code_id, applies_to_plan
+    FROM community_promo_codes
+    WHERE community_id = ${args.communityId}
+      AND lower(code) = lower(${trimmed})
+      AND active = true
+    LIMIT 1
+  `;
+  if (!mirror) return invalid;
+
+  // Per-plan scope (enforced in-app; monthly & yearly share one Stripe product).
+  const plan = args.plan ?? 'monthly';
+  const scope = mirror.applies_to_plan ?? 'both';
+  if (scope !== 'both' && scope !== plan) {
+    return {
+      valid: false,
+      reason: scope === 'yearly'
+        ? 'This code only applies to the yearly plan.'
+        : 'This code only applies to the monthly plan.',
+    };
+  }
+
+  // Stripe stays the source of truth for redemptions, expiry and limits.
+  const promo = await stripe.promotionCodes.retrieve(mirror.stripe_promotion_code_id, {
+    stripeAccount: args.stripeAccountId,
+  });
   if (!promo || !promo.active) return invalid;
 
   if (promo.expires_at && promo.expires_at * 1000 < Date.now()) return invalid;
   if (promo.max_redemptions != null && (promo.times_redeemed ?? 0) >= promo.max_redemptions) return invalid;
-
-  // Per-plan scope (enforced in-app; monthly & yearly share one Stripe product).
-  // A missing mirror row is treated as unrestricted ('both').
-  if (args.communityId) {
-    const plan = args.plan ?? 'monthly';
-    const mirror = await queryOne<{ applies_to_plan: string }>`
-      SELECT applies_to_plan FROM community_promo_codes
-      WHERE community_id = ${args.communityId} AND stripe_promotion_code_id = ${promo.id}
-      LIMIT 1
-    `;
-    const scope = mirror?.applies_to_plan ?? 'both';
-    if (scope !== 'both' && scope !== plan) {
-      return {
-        valid: false,
-        reason: scope === 'yearly'
-          ? 'This code only applies to the yearly plan.'
-          : 'This code only applies to the monthly plan.',
-      };
-    }
-  }
 
   // API 2025-12-15.clover no longer exposes an expanded `coupon` on the
   // promotion code; it carries the coupon id under `promotion.coupon`. Fetch

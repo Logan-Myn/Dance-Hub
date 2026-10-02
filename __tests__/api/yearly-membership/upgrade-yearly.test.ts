@@ -125,3 +125,86 @@ it.each([
   expect(mockInvoicePreview).not.toHaveBeenCalled();
   expect(mockSubUpdate).not.toHaveBeenCalled();
 });
+
+describe('a promo code scoped to the monthly plan', () => {
+  const subWithMonthlyPromo = {
+    ...subWithMonthlyItem,
+    discounts: [{ id: 'di_1', promotion_code: 'promo_monthly' }],
+  };
+
+  it('GET previews the yearly price without it and says so', async () => {
+    mockGetSession.mockResolvedValueOnce({ user: { id: 'u1' } });
+    mockQueryOne
+      .mockResolvedValueOnce(community)
+      .mockResolvedValueOnce(member)
+      .mockResolvedValueOnce({ applies_to_plan: 'monthly' });
+    mockSubRetrieve.mockResolvedValueOnce(subWithMonthlyPromo);
+    mockInvoicePreview.mockResolvedValueOnce({ amount_due: 18000, currency: 'eur' });
+
+    const res = await GET(new Request('http://x'), { params });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ discountRemoved: true });
+    // An empty string (not []) is what tells Stripe to drop the discount.
+    expect(mockInvoicePreview).toHaveBeenCalledWith(expect.objectContaining({ discounts: '' }), { stripeAccount: 'acct_1' });
+    expect(mockQueryOne.mock.calls[2].slice(1)).toEqual(expect.arrayContaining(['c1', 'promo_monthly']));
+  });
+
+  it('POST switches to yearly without it', async () => {
+    mockGetSession.mockResolvedValueOnce({ user: { id: 'u1' } });
+    mockQueryOne
+      .mockResolvedValueOnce(community)
+      .mockResolvedValueOnce(member)
+      .mockResolvedValueOnce({ applies_to_plan: 'monthly' });
+    mockSubRetrieve.mockResolvedValueOnce(subWithMonthlyPromo);
+    mockSubUpdate.mockResolvedValueOnce({ id: 'sub_1', latest_invoice: { status: 'paid' } });
+
+    const res = await POST(new Request('http://x', { method: 'POST' }), { params });
+
+    expect(res.status).toBe(200);
+    expect(mockSubUpdate).toHaveBeenCalledWith(
+      'sub_1',
+      expect.objectContaining({ discounts: '', payment_behavior: 'pending_if_incomplete' }),
+      { stripeAccount: 'acct_1' },
+    );
+  });
+
+  it.each(['both', 'yearly'])('keeps a code scoped to %s', async (scope) => {
+    mockGetSession.mockResolvedValueOnce({ user: { id: 'u1' } });
+    mockQueryOne
+      .mockResolvedValueOnce(community)
+      .mockResolvedValueOnce(member)
+      .mockResolvedValueOnce({ applies_to_plan: scope });
+    mockSubRetrieve.mockResolvedValueOnce(subWithMonthlyPromo);
+    mockSubUpdate.mockResolvedValueOnce({ id: 'sub_1', latest_invoice: { status: 'paid' } });
+
+    await POST(new Request('http://x', { method: 'POST' }), { params });
+
+    expect(mockSubUpdate.mock.calls[0][1]).not.toHaveProperty('discounts');
+  });
+
+  it('keeps other discounts when dropping the monthly-only one', async () => {
+    mockGetSession.mockResolvedValueOnce({ user: { id: 'u1' } });
+    mockQueryOne
+      .mockResolvedValueOnce(community)
+      .mockResolvedValueOnce(member)
+      .mockResolvedValueOnce({ applies_to_plan: 'monthly' })
+      .mockResolvedValueOnce(null); // no mirror row: unrestricted
+    mockSubRetrieve.mockResolvedValueOnce({
+      ...subWithMonthlyItem,
+      discounts: [
+        { id: 'di_1', promotion_code: 'promo_monthly' },
+        { id: 'di_2', promotion_code: 'promo_other' },
+      ],
+    });
+    mockSubUpdate.mockResolvedValueOnce({ id: 'sub_1', latest_invoice: { status: 'paid' } });
+
+    await POST(new Request('http://x', { method: 'POST' }), { params });
+
+    expect(mockSubUpdate).toHaveBeenCalledWith(
+      'sub_1',
+      expect.objectContaining({ discounts: [{ discount: 'di_2' }] }),
+      { stripeAccount: 'acct_1' },
+    );
+  });
+});

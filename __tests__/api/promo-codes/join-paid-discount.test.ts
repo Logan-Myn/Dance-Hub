@@ -43,7 +43,7 @@ it('attaches the promotion code to the subscription when provided', async () => 
     id: 'sub_1',
     latest_invoice: { id: 'in_1', amount_due: 1600, confirmation_secret: { client_secret: 'pi_secret' } },
   });
-  mockSql.mockResolvedValue([]);
+  mockSql.mockResolvedValue([{ id: 'm1' }]); // the claimed membership row
 
   const res = await POST(req({ userId: 'u1', email: 'u1@x.com', promotionCodeId: 'promo_1' }), { params });
 
@@ -63,7 +63,7 @@ it('returns requiresSetup with a SetupIntent secret when the first invoice is â‚
     latest_invoice: { id: 'in_1', amount_due: 0, confirmation_secret: null },
   });
   mockSetupIntentsCreate.mockResolvedValueOnce({ client_secret: 'seti_secret' });
-  mockSql.mockResolvedValue([]);
+  mockSql.mockResolvedValue([{ id: 'm1' }]); // the claimed membership row
 
   const res = await POST(req({ userId: 'u1', email: 'u1@x.com', promotionCodeId: 'promo_free' }), { params });
 
@@ -96,7 +96,7 @@ it('does not attach discounts when no promotion code is given', async () => {
   mockSubscriptionsCreate.mockResolvedValueOnce({
     id: 'sub_1', latest_invoice: { id: 'in_1', amount_due: 2000, confirmation_secret: { client_secret: 'pi_secret' } },
   });
-  mockSql.mockResolvedValue([]);
+  mockSql.mockResolvedValue([{ id: 'm1' }]); // the claimed membership row
 
   await POST(req({ userId: 'u1', email: 'u1@x.com' }), { params });
 
