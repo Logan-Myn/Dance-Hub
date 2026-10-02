@@ -211,6 +211,39 @@ describe('invoice.payment_succeeded', () => {
     expect(mockSendEmail).not.toHaveBeenCalled();
   });
 
+  it('asks Stripe to retry when the join has not stored the subscription id on its row yet', async () => {
+    // A 100%-off first invoice is paid as soon as the subscription exists,
+    // possibly before join-paid writes the id onto the pending row.
+    mockConstructEvent.mockReturnValue(invoiceEvent({ amount_paid: 0 }));
+    mockSubRetrieve.mockResolvedValue(subscription());
+    mockSql.mockImplementation((strings: string[]) => {
+      const text = strings.join('?');
+      if (/WITH prev AS/.test(text)) return Promise.resolve([]);
+      if (/stripe_subscription_id IS NULL/.test(text)) return Promise.resolve([{ id: 'm_new' }]);
+      return Promise.resolve([]);
+    });
+
+    const res = await post();
+
+    expect(res.status).toBe(503);
+    expect(mockFinish).toHaveBeenCalledWith('evt_1', false);
+    const lookup = sqlCalls().find((c) => /stripe_subscription_id IS NULL/.test(c.text));
+    expect(lookup?.text).toMatch(/status = 'pending'/);
+    expect(lookup?.values).toEqual(expect.arrayContaining(['c1', 'u1']));
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  it('answers 200 when no row holds the subscription and no join is in progress', async () => {
+    mockConstructEvent.mockReturnValue(invoiceEvent());
+    mockSubRetrieve.mockResolvedValue(subscription());
+    mockSql.mockResolvedValue([]);
+
+    const res = await post();
+
+    expect(res.status).toBe(200);
+    expect(mockFinish).toHaveBeenCalledWith('evt_1', true);
+  });
+
   it('logs the invoice by id only, never its customer details', async () => {
     mockConstructEvent.mockReturnValue(invoiceEvent());
     mockSubRetrieve.mockResolvedValue(subscription());

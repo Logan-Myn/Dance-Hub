@@ -119,6 +119,13 @@ async function handleBroadcastSubscriptionLifecycle(sub: Stripe.Subscription): P
 }
 
 /**
+ * What applyPaidMembership did. 'retry' means the member's row exists but
+ * join-paid hasn't written this subscription's id onto it yet; the caller
+ * answers 503 so Stripe delivers the event again.
+ */
+type PaidMembershipResult = 'applied' | 'retry';
+
+/**
  * Brings the member row in line with a paid membership subscription. Access
  * follows the subscription's live status, so a late or replayed invoice for a
  * subscription that has since ended can't re-grant it. Rows are matched on
@@ -129,7 +136,7 @@ async function handleBroadcastSubscriptionLifecycle(sub: Stripe.Subscription): P
 async function applyPaidMembership(
   connectedStripe: Stripe,
   subscription: Stripe.Subscription,
-): Promise<void> {
+): Promise<PaidMembershipResult> {
   const { user_id, community_id } = subscription.metadata;
   console.log('🔍 Processing invoice payment for:', { user_id, community_id });
 
@@ -139,7 +146,7 @@ async function applyPaidMembership(
     FROM communities
     WHERE id = ${community_id}
   `;
-  if (!community) return;
+  if (!community) return 'applied';
 
   const communityAge = Date.now() - new Date(community.created_at).getTime();
   const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
@@ -222,15 +229,31 @@ async function applyPaidMembership(
   `;
 
   if (!row) {
+    // join-paid inserts a pending row, creates the subscription, then writes
+    // its id onto the row. A fully-discounted first invoice is paid (and can
+    // be reported) in between. A pending row with no subscription id that is
+    // younger than join-paid's 2-minute abandon limit is that join: retry.
+    const [joining] = await sql<{ id: string }[]>`
+      SELECT id FROM community_members
+      WHERE community_id = ${community_id}
+        AND user_id = ${user_id}
+        AND status = 'pending'
+        AND stripe_subscription_id IS NULL
+        AND joined_at > NOW() - INTERVAL '2 minutes'
+    `;
+    if (joining) {
+      console.log('⏳ Member row not linked to the subscription yet, asking for a retry:', subscription.id);
+      return 'retry';
+    }
     console.warn('⚠️ No member row for this subscription:', { subscriptionId: subscription.id, community_id, user_id });
-    return;
+    return 'applied';
   }
 
   // Renewals, the upgrade proration and replays find the row already active.
   // The members_count column is kept by a trigger on community_members
   // (row insert/delete), so there is nothing to count here.
   const becameMember = row.previous_status !== 'active' && row.status === 'active';
-  if (!becameMember) return;
+  if (!becameMember) return 'applied';
 
   // Get user profile for email
   const userProfile = await queryOne<UserProfile>`
@@ -307,7 +330,11 @@ async function applyPaidMembership(
       // Don't fail the webhook for email errors
     }
   }
+  return 'applied';
 }
+
+const retryLater = () =>
+  NextResponse.json({ error: 'Member row not ready yet, retry later' }, { status: 503 });
 
 export async function POST(request: Request) {
   try {
@@ -679,9 +706,13 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
           console.log('🔍 Found metadata from subscription:', { user_id, community_id });
 
           try {
-            // Same path as invoice.payment_succeeded, so whichever of the two
-            // events arrives first activates the member and sends the email.
-            await applyPaidMembership(connectedStripe, subscription);
+            // Payment intents carry no invoice from API version
+            // 2025-03-31.basil on, so this branch only runs for older payload
+            // versions. It uses the same path as invoice.payment_succeeded,
+            // so it can't activate the member or email them a second time.
+            if ((await applyPaidMembership(connectedStripe, subscription)) === 'retry') {
+              return retryLater();
+            }
 
             console.log('✅ Successfully updated member status');
             return NextResponse.json({ received: true });
@@ -817,7 +848,9 @@ async function handleEvent(event: Stripe.Event): Promise<NextResponse> {
             return NextResponse.json({ error: 'Missing metadata' }, { status: 400 });
           }
 
-          await applyPaidMembership(connectedStripe, subscription);
+          if ((await applyPaidMembership(connectedStripe, subscription)) === 'retry') {
+            return retryLater();
+          }
 
           console.log('✅ Successfully updated member status');
           return NextResponse.json({ received: true });
