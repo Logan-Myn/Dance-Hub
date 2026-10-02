@@ -11,8 +11,8 @@ interface Props {
   currency: string;
 }
 
-// Sent when two students paid for the same time slot at once: the second
-// payment is refunded and no booking is created for it.
+// Sent when two payments for the same time slot raced: the one recorded
+// second is refunded and no booking is created for it.
 export const BookingSlotTakenEmail: React.FC<Props> = ({
   studentName,
   lessonTitle,
@@ -26,8 +26,8 @@ export const BookingSlotTakenEmail: React.FC<Props> = ({
       <Heading style={EMAIL_STYLES.heading}>That time was just booked</Heading>
       <Text style={EMAIL_STYLES.paragraph}>Hi {studentName},</Text>
       <Text style={EMAIL_STYLES.paragraph}>
-        Another student booked <strong>{lessonTitle}</strong> for {lessonDate} a moment before
-        your payment went through, so we could not reserve that time for you.
+        The time you picked for <strong>{lessonTitle}</strong> ({lessonDate}) was booked a
+        moment before your payment went through, so this payment could not reserve it.
       </Text>
       <Section style={{
         backgroundColor: EMAIL_COLORS.background,
