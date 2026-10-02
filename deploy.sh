@@ -39,6 +39,7 @@ require_nginx_real_ip() {
     echo "!! SKIP_NGINX_CHECK=1: not checking $NGINX_CONF for the Cloudflare real-IP include."
     return 0
   fi
+  # shellcheck disable=SC2016 # the second pattern matches a literal $variable
   if ! grep -qE "^[[:space:]]*include[[:space:]]+$CLOUDFLARE_SNIPPET;" "$NGINX_CONF" 2> /dev/null \
     || grep -qE '^[[:space:]]*proxy_set_header[[:space:]]+X-Forwarded-For[[:space:]]+\$proxy_add_x_forwarded_for' "$NGINX_CONF" 2> /dev/null; then
     echo "!! $NGINX_CONF does not have the Cloudflare real-IP setup yet"
