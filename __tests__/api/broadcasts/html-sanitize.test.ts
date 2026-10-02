@@ -48,7 +48,7 @@ beforeEach(() => {
     { userId: 'm1', email: 'm1@x.com', displayName: 'M', unsubscribeToken: 't' },
   ]);
   mockedSql.mockResolvedValue([]);
-  mockedRun.mockResolvedValue({ status: 'sent', resendBatchIds: [], successfulCount: 1, failedCount: 0 });
+  mockedRun.mockResolvedValue({ status: 'sent', resendBatchIds: [], successfulCount: 1, failedCount: 0, failedRecipients: [] });
 });
 
 describe('POST broadcasts', () => {

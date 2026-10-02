@@ -119,6 +119,7 @@ describe('POST broadcasts', () => {
       resendBatchIds: ['b1'],
       successfulCount: 1,
       failedCount: 0,
+      failedRecipients: [],
     });
 
     const res = await POST(makeReq(), { params: Promise.resolve({ communitySlug: 'salsa' }) });
