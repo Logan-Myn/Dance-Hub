@@ -3,6 +3,7 @@ import { queryOne } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { getSession } from "@/lib/auth-session";
 import { naiveToUtc } from "@/lib/timezone";
+import { privateLessonFeePercentage } from "@/lib/private-lesson-fee";
 import { CreateLessonBookingData } from "@/types/private-lessons";
 
 interface Community {
@@ -10,6 +11,8 @@ interface Community {
   name: string;
   stripe_account_id: string | null;
   created_by: string;
+  created_at: string;
+  active_member_count: number | null;
 }
 
 interface Lesson {
@@ -58,7 +61,7 @@ export async function POST(
 
     // Get community with Stripe account info
     const community = await queryOne<Community>`
-      SELECT id, name, stripe_account_id, created_by
+      SELECT id, name, stripe_account_id, created_by, created_at, active_member_count
       FROM communities
       WHERE slug = ${communitySlug}
     `;
@@ -172,14 +175,18 @@ export async function POST(
       );
     }
 
-    // Store booking data in PaymentIntent metadata for webhook processing
-    const privateLessonFeePercentage = 5.0; // 5% platform fee for private lessons
+    // Same advertised fee rules as memberships: 0% in the community's first
+    // 30 days, then a tier by member count.
+    const feePercentage = privateLessonFeePercentage(community);
+    const amountCents = Math.round(Number(price) * 100);
+    const feeCents = Math.round((amountCents * feePercentage) / 100);
 
+    // Store booking data in PaymentIntent metadata for webhook processing
     const paymentIntent = await stripe.paymentIntents.create(
       {
-        amount: Math.round(price * 100), // Convert to cents
+        amount: amountCents,
         currency: "eur",
-        application_fee_amount: Math.round((price * privateLessonFeePercentage / 100) * 100), // 5% platform fee in cents
+        ...(feeCents > 0 ? { application_fee_amount: feeCents } : {}),
         metadata: {
           type: "private_lesson",
           lesson_id: lessonId,
@@ -193,8 +200,8 @@ export async function POST(
           availability_slot_id: slot.id,
           is_member: isMember.toString(),
           price_paid: price.toString(),
-          platform_fee_percentage: privateLessonFeePercentage.toString(),
-          platform_fee_amount: (price * privateLessonFeePercentage / 100).toString(),
+          platform_fee_percentage: feePercentage.toString(),
+          platform_fee_amount: (feeCents / 100).toString(),
         },
         description: `Private Lesson: ${lesson.title} - ${community.name}`,
         receipt_email: bookingData.student_email,

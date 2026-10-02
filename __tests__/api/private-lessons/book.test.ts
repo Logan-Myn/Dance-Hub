@@ -178,3 +178,31 @@ describe('POST /private-lessons/[lessonId]/book: slot checks', () => {
     expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
   });
 });
+
+describe('POST /private-lessons/[lessonId]/book: platform fee', () => {
+  const pi = () => mockPaymentIntentsCreate.mock.calls[0][0];
+
+  it('charges no platform fee in the community\'s first 30 days', async () => {
+    routeQueries({ community: { ...community, created_at: '2026-10-20T00:00:00.000Z', active_member_count: 300 } });
+
+    await book(validBody);
+
+    expect(pi().application_fee_amount).toBeUndefined();
+    expect(pi().metadata.platform_fee_percentage).toBe('0');
+  });
+
+  it.each([
+    [10, 8, 400],
+    [50, 6, 300],
+    [101, 4, 200],
+  ])('with %i members charges %i%% of the lesson price', async (members, pct, cents) => {
+    routeQueries({ community: { ...community, active_member_count: members } });
+
+    await book(validBody);
+
+    expect(pi().amount).toBe(5000);
+    expect(pi().application_fee_amount).toBe(cents);
+    expect(pi().metadata.platform_fee_percentage).toBe(String(pct));
+  });
+});
+
