@@ -398,17 +398,32 @@ describe('broadcast subscription lifecycle', () => {
 
     expect(res.status).toBe(200);
     expect(recordBroadcastSubscription).not.toHaveBeenCalled();
+    expect(mockSubRetrieve).not.toHaveBeenCalled();
     expect(mockFinish).toHaveBeenCalledWith('evt_2', true);
   });
 
   it('still records the status while the community exists', async () => {
     mockConstructEvent.mockReturnValue({ ...subscriptionEvent('customer.subscription.updated', broadcastSub), account: undefined });
+    mockSubRetrieve.mockResolvedValue(broadcastSub);
 
     const res = await post();
 
     expect(res.status).toBe(200);
     expect(recordBroadcastSubscription).toHaveBeenCalledWith('c1', broadcastSub);
     expect(memberUpdates()).toHaveLength(0);
+  });
+
+  it("records the subscription's current state from Stripe, not the event's (events can arrive late)", async () => {
+    const stalePayload = { ...broadcastSub, status: 'past_due' };
+    const current = { ...broadcastSub, status: 'active' };
+    mockConstructEvent.mockReturnValue({ ...subscriptionEvent('customer.subscription.updated', stalePayload), account: undefined });
+    mockSubRetrieve.mockResolvedValue(current);
+
+    const res = await post();
+
+    expect(res.status).toBe(200);
+    expect(mockSubRetrieve).toHaveBeenCalledWith('sub_bc');
+    expect(recordBroadcastSubscription).toHaveBeenCalledWith('c1', current);
   });
 
   it.each(['invoice.payment_succeeded', 'invoice.payment_failed'])(

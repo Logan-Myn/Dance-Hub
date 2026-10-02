@@ -75,9 +75,9 @@ async function handleBroadcastCheckoutCompleted(session: Stripe.Checkout.Session
   await recordBroadcastSubscription(communityId, sub);
 }
 
-async function handleBroadcastSubscriptionLifecycle(sub: Stripe.Subscription): Promise<boolean> {
-  if (sub.metadata?.purpose !== 'broadcast_subscription') return false;
-  const communityId = sub.metadata?.communityId;
+async function handleBroadcastSubscriptionLifecycle(eventSub: Stripe.Subscription): Promise<boolean> {
+  if (eventSub.metadata?.purpose !== 'broadcast_subscription') return false;
+  const communityId = eventSub.metadata?.communityId;
   if (communityId) {
     // Deleting a community cancels its broadcast subscription, and the
     // resulting event arrives after the community row (and this row, by
@@ -87,10 +87,14 @@ async function handleBroadcastSubscriptionLifecycle(sub: Stripe.Subscription): P
       SELECT id FROM communities WHERE id = ${communityId}
     `;
     if (!community) {
-      console.log('⏭️ Broadcast subscription event for a deleted community, skipping:', sub.id);
+      console.log('⏭️ Broadcast subscription event for a deleted community, skipping:', eventSub.id);
       return true;
     }
   }
+  // Stripe doesn't deliver events in order, and retries a failed one later:
+  // a late past_due event must not overwrite an active subscription. Record
+  // the subscription as it is now (platform account), like the checkout path.
+  const sub = await stripe.subscriptions.retrieve(eventSub.id);
   // Status mapped onto the table's set; events for a subscription other than
   // the community's current one are ignored unless it becomes active.
   if ((await recordBroadcastSubscription(communityId, sub)) === 'ignored') {
