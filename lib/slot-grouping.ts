@@ -1,4 +1,5 @@
 import type { TeacherAvailabilitySlot } from '@/types/private-lessons';
+import { formatInTz, naiveToUtc } from '@/lib/timezone';
 
 /** Returns a new Date with `days` added. Does not mutate input. */
 export function addDays(date: Date, days: number): Date {
@@ -23,21 +24,42 @@ export function getWeekDays(start: Date): string[] {
   return Array.from({ length: 7 }, (_, i) => toDateString(addDays(start, i)));
 }
 
+/** The real start instant of a slot stored as a date and time in the teacher's timezone. */
+export function slotStartUtc(slot: TeacherAvailabilitySlot): Date {
+  return naiveToUtc(`${slot.availability_date}T${slot.start_time}`, slot.teacher_timezone ?? 'UTC');
+}
+
 /**
- * Groups slots by `availability_date`. Slots within a day are sorted ascending
- * by `start_time`.
+ * Midnight (browser-local Date) of today's calendar date in `tz`, so the
+ * week strip starts on the student's today rather than the browser's.
+ */
+export function todayInTz(tz: string): Date {
+  return new Date(`${formatInTz(new Date(), tz, 'yyyy-MM-dd')}T00:00:00`);
+}
+
+/**
+ * Groups slots by date. With `tz`, a slot goes under the date its start falls
+ * on in that timezone (the student's), and each day is sorted by start
+ * instant. Without it, slots are grouped by the teacher-local
+ * `availability_date` and sorted by `start_time`.
  */
 export function groupSlotsByDate(
-  slots: TeacherAvailabilitySlot[]
+  slots: TeacherAvailabilitySlot[],
+  tz?: string
 ): Map<string, TeacherAvailabilitySlot[]> {
   const map = new Map<string, TeacherAvailabilitySlot[]>();
   for (const slot of slots) {
-    const list = map.get(slot.availability_date) ?? [];
+    const key = tz ? formatInTz(slotStartUtc(slot), tz, 'yyyy-MM-dd') : slot.availability_date;
+    const list = map.get(key) ?? [];
     list.push(slot);
-    map.set(slot.availability_date, list);
+    map.set(key, list);
   }
   for (const list of map.values()) {
-    list.sort((a, b) => a.start_time.localeCompare(b.start_time));
+    if (tz) {
+      list.sort((a, b) => slotStartUtc(a).getTime() - slotStartUtc(b).getTime());
+    } else {
+      list.sort((a, b) => a.start_time.localeCompare(b.start_time));
+    }
   }
   return map;
 }
@@ -45,15 +67,16 @@ export function groupSlotsByDate(
 /**
  * Searches forward in 7-day windows for the first window containing at least
  * one slot. Returns the start Date of that window, or null if no slot exists
- * within `horizonDays` from `startFrom`.
+ * within `horizonDays` from `startFrom`. `tz` as for groupSlotsByDate.
  */
 export function findFirstWeekWithSlots(
   slots: TeacherAvailabilitySlot[],
   startFrom: Date,
-  horizonDays: number
+  horizonDays: number,
+  tz?: string
 ): Date | null {
   if (slots.length === 0) return null;
-  const grouped = groupSlotsByDate(slots);
+  const grouped = groupSlotsByDate(slots, tz);
   for (let offset = 0; offset < horizonDays; offset += 7) {
     const windowStart = addDays(startFrom, offset);
     for (const date of getWeekDays(windowStart)) {
@@ -61,4 +84,20 @@ export function findFirstWeekWithSlots(
     }
   }
   return null;
+}
+
+/**
+ * Teacher-local date range to request so that every slot starting within the
+ * student's next `horizonDays` days is included. Availability is stored by
+ * the teacher's date, which is at most one day off the student's date.
+ */
+export function availabilityFetchRange(
+  studentTz: string,
+  horizonDays: number
+): { startDate: string; endDate: string } {
+  const today = todayInTz(studentTz);
+  return {
+    startDate: toDateString(addDays(today, -1)),
+    endDate: toDateString(addDays(today, horizonDays + 1)),
+  };
 }

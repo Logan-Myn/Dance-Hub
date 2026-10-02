@@ -4,6 +4,7 @@ import {
   getWeekDays,
   groupSlotsByDate,
   findFirstWeekWithSlots,
+  availabilityFetchRange,
 } from '@/lib/slot-grouping';
 import type { TeacherAvailabilitySlot } from '@/types/private-lessons';
 
@@ -113,5 +114,57 @@ describe('findFirstWeekWithSlots', () => {
 
   it('returns null for empty slots', () => {
     expect(findFirstWeekWithSlots([], today, 30)).toBeNull();
+  });
+});
+
+describe('grouping by the slot instant in the student timezone', () => {
+  const nySlot = (date: string, start: string): TeacherAvailabilitySlot => ({
+    ...mkSlot(date, start),
+    teacher_timezone: 'America/New_York',
+  });
+
+  it('puts a New York Monday 20:00 slot on Tuesday for a Paris student', () => {
+    // 20:00 in New York on 9 Nov 2026 is 02:00 on 10 Nov in Paris.
+    const grouped = groupSlotsByDate([nySlot('2026-11-09', '20:00')], 'Europe/Paris');
+    expect([...grouped.keys()]).toEqual(['2026-11-10']);
+  });
+
+  it('keeps the teacher date when no timezone is given', () => {
+    const grouped = groupSlotsByDate([nySlot('2026-11-09', '20:00')]);
+    expect([...grouped.keys()]).toEqual(['2026-11-09']);
+  });
+
+  it('sorts a day by real start time across teacher-local dates', () => {
+    // For a Tokyo student both land on 10 Nov: 09:00 and 23:00 local.
+    const early = { ...nySlot('2026-11-09', '19:00'), id: 'early' };
+    const late = { ...mkSlot('2026-11-10', '14:00'), id: 'late' };
+    const grouped = groupSlotsByDate([late, early], 'Asia/Tokyo');
+    expect(grouped.get('2026-11-10')?.map((s) => s.id)).toEqual(['early', 'late']);
+  });
+
+  it('finds the first week using student-local dates', () => {
+    const result = findFirstWeekWithSlots(
+      [nySlot('2026-11-09', '20:00')],
+      new Date('2026-11-10T00:00:00'),
+      30,
+      'Europe/Paris',
+    );
+    expect(result && toDateString(result)).toBe('2026-11-10');
+  });
+});
+
+describe('availabilityFetchRange', () => {
+  it("pads the student's visible days by one day each side, in teacher-local dates", () => {
+    jest.useFakeTimers();
+    // 18:00 on Sunday 8 Nov in Los Angeles is already Monday 9 Nov in UTC.
+    jest.setSystemTime(new Date('2026-11-09T02:00:00Z'));
+    try {
+      expect(availabilityFetchRange('America/Los_Angeles', 30)).toEqual({
+        startDate: '2026-11-07',
+        endDate: '2026-12-09',
+      });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
