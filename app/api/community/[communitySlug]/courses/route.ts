@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { queryOne } from "@/lib/db";
-import { slugify } from "@/lib/utils";
+import { uniqueCourseSlug, isUniqueViolation } from "@/lib/course-slug";
 import { uploadFile, generateFileKey, deleteFile } from "@/lib/storage";
 import { requireCommunityManager } from "@/lib/community-auth";
 
@@ -35,9 +35,6 @@ export async function POST(request: Request, props: { params: Promise<{ communit
     const imageFile = formData.get("image") as File | null;
     const isPublic = formData.get("is_public") === "true";
 
-    // Generate the slug from the title
-    const slug = slugify(title);
-
     // Set default image URL to placeholder
     let imageUrl = `${process.env.NEXT_PUBLIC_APP_URL}/images/course-placeholder.svg`;
     let fileKey = '';
@@ -63,29 +60,40 @@ export async function POST(request: Request, props: { params: Promise<{ communit
       }
     }
 
-    // Create a new course
-    const newCourse = await queryOne<Course>`
-      INSERT INTO courses (
-        title,
-        description,
-        image_url,
-        slug,
-        community_id,
-        created_at,
-        updated_at,
-        is_public
-      ) VALUES (
-        ${title},
-        ${description},
-        ${imageUrl},
-        ${slug},
-        ${community.id},
-        NOW(),
-        NOW(),
-        ${isPublic}
-      )
-      RETURNING *
-    `;
+    // Create a new course, with a slug no other course in the community
+    // uses. If a concurrent create takes the same slug first, the unique
+    // index refuses this insert and we pick the next one.
+    let newCourse: Course | null = null;
+    for (let attempt = 1; ; attempt++) {
+      const slug = await uniqueCourseSlug(community.id, title);
+      try {
+        newCourse = await queryOne<Course>`
+          INSERT INTO courses (
+            title,
+            description,
+            image_url,
+            slug,
+            community_id,
+            created_at,
+            updated_at,
+            is_public
+          ) VALUES (
+            ${title},
+            ${description},
+            ${imageUrl},
+            ${slug},
+            ${community.id},
+            NOW(),
+            NOW(),
+            ${isPublic}
+          )
+          RETURNING *
+        `;
+        break;
+      } catch (insertError) {
+        if (!isUniqueViolation(insertError) || attempt >= 3) throw insertError;
+      }
+    }
 
     if (!newCourse) {
       console.error("Error creating course");
