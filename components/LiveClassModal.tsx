@@ -142,7 +142,7 @@ export default function LiveClassModal({
 
   return (
     <ResponsiveDialog open={true} onOpenChange={onClose}>
-      <ResponsiveDialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <ResponsiveDialogContent className="sm:max-w-md">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>
             {isEdit ? "Edit Live Class" : "Schedule Live Class"}

@@ -183,7 +183,7 @@ export default function CreatePrivateLessonModal({
 
   return (
     <ResponsiveDialog open={isOpen} onOpenChange={onClose}>
-      <ResponsiveDialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <ResponsiveDialogContent className="max-w-2xl">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>
             {editingLesson ? 'Edit Private Lesson' : 'Create Private Lesson'}
