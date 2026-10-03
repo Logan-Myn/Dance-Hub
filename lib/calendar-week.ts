@@ -78,6 +78,20 @@ export function zonedTimeToUtc(dayKey: string, hour: number, minute: number, tz:
 }
 
 /**
+ * Where a new class starts when the teacher didn't click a slot: the next
+ * half hour after `now` in `tz`, moved to `dayKey` when that day is later.
+ * An earlier day (or none) keeps the next half hour, so it's never in the past.
+ */
+export function defaultClassStart(dayKey: string | null, now: Date, tz: string): Date {
+  const [hour, minute] = formatInTimeZone(now, tz, 'H:m').split(':').map(Number);
+  const slot = Math.floor((hour * 60 + minute) / 30) * 30 + 30;
+  let key = dateKeyInTz(now, tz);
+  if (slot === 24 * 60) key = addDaysToKey(key, 1);
+  if (dayKey && dayKey > key) key = dayKey;
+  return zonedTimeToUtc(key, Math.floor(slot / 60) % 24, slot % 60, tz);
+}
+
+/**
  * The first instant of a calendar date in `tz`. Usually local midnight, but
  * where the clocks jump forward at midnight (e.g. America/Santiago,
  * Asia/Beirut) midnight doesn't exist and the day starts at 01:00.

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { parseISO } from "date-fns";
 import { formatInTz, naiveToUtc } from "@/lib/timezone";
+import { defaultClassStart } from "@/lib/calendar-week";
 import { useUserTimezone } from "@/hooks/useUserTimezone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,15 +75,15 @@ export default function LiveClassModal({
       });
       return;
     }
-    if (initialDateTime) {
-      const date = formatInTz(initialDateTime, userTimezone, 'yyyy-MM-dd');
-      const time = formatInTz(initialDateTime, userTimezone, 'HH:mm');
-      setFormData(prev => ({
-        ...prev,
-        scheduledDateTime: date,
-        scheduledTime: time,
-      }));
-    }
+    // Without a clicked slot, start from the next half hour. The fields need
+    // a real value: Safari draws today's date in an empty date field, so it
+    // looks filled in while the form still has no date.
+    const start = initialDateTime ?? defaultClassStart(null, new Date(), userTimezone);
+    setFormData(prev => ({
+      ...prev,
+      scheduledDateTime: formatInTz(start, userTimezone, 'yyyy-MM-dd'),
+      scheduledTime: formatInTz(start, userTimezone, 'HH:mm'),
+    }));
   }, [initialDateTime, existingClass, userTimezone]);
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -23,6 +22,10 @@ interface LiveClass {
 interface WeekCalendarDayProps {
   /** The week's seven dates ('yyyy-MM-dd', Sunday first) in `timezone`. */
   weekDays: string[];
+  /** The day shown, one of `weekDays`. The parent owns it so its Schedule
+   *  Class button can start on the same day. */
+  selectedDay: string;
+  onSelectDay: (day: string) => void;
   /** The viewer's timezone; same one the week grid uses. */
   timezone: string;
   liveClasses: LiveClass[];
@@ -37,6 +40,8 @@ const HALF_HOURS = [0, 30];
 
 export default function WeekCalendarDay({
   weekDays,
+  selectedDay,
+  onSelectDay,
   timezone,
   liveClasses,
   visibleHours,
@@ -46,12 +51,6 @@ export default function WeekCalendarDay({
 }: WeekCalendarDayProps) {
   const now = new Date();
   const todayKey = dateKeyInTz(now, timezone);
-
-  // Default selection: today if it lives in the current week, otherwise Sunday.
-  // The parent remounts this per week (key), which resets the selection.
-  const [selectedDay, setSelectedDay] = useState<string>(() =>
-    weekDays.includes(todayKey) ? todayKey : weekDays[0]
-  );
 
   const classesForDay = (day: string) =>
     liveClasses.filter((lc) => dateKeyInTz(lc.scheduled_start_time, timezone) === day);
@@ -70,7 +69,7 @@ export default function WeekCalendarDay({
             <button
               key={day}
               type="button"
-              onClick={() => setSelectedDay(day)}
+              onClick={() => onSelectDay(day)}
               className={cn(
                 "flex flex-col items-center py-2 rounded-lg transition-colors",
                 isSelected

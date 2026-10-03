@@ -14,6 +14,7 @@ import LiveClassDetailsModal from "./LiveClassDetailsModal";
 import WeekCalendarDay from "./WeekCalendarDay";
 import {
   dateKeyInTz,
+  defaultClassStart,
   formatDayKey,
   hourInTz,
   isInRange,
@@ -105,6 +106,13 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
   const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
   const [selectedClass, setSelectedClass] = useState<LiveClass | null>(null);
   const [editingClass, setEditingClass] = useState<LiveClass | null>(null);
+  // Day picked in the mobile day view. Otherwise the week's selected day is
+  // today when it's in the week, else its Sunday.
+  const [pickedDay, setPickedDay] = useState<string | null>(null);
+  const selectedDay =
+    pickedDay && weekDays.includes(pickedDay)
+      ? pickedDay
+      : weekDays.includes(todayKey) ? todayKey : weekDays[0];
 
   // The loaded data can span more than this week (the server pre-fetches a
   // wider window), so only keep classes that start inside it.
@@ -170,6 +178,7 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
 
   const navigateWeek = (direction: 'prev' | 'next') => {
     setWeekOffset(prev => prev + (direction === 'next' ? 1 : -1));
+    setPickedDay(null);
   };
 
   const handleTimeSlotClick = (day: string, hour: number, minutes: number = 0) => {
@@ -178,6 +187,12 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
     // The grid is drawn in the viewer's timezone, so the slot is that
     // wall-clock time there, whatever the browser's own timezone is.
     setSelectedDateTime(zonedTimeToUtc(day, hour, minutes, userTimezone));
+    setShowCreateModal(true);
+  };
+
+  // The header button has no slot, so start on the selected day.
+  const handleScheduleClick = () => {
+    setSelectedDateTime(defaultClassStart(selectedDay, new Date(), userTimezone));
     setShowCreateModal(true);
   };
 
@@ -262,7 +277,7 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
 
         {isTeacher && (
           <Button
-            onClick={() => setShowCreateModal(true)}
+            onClick={handleScheduleClick}
             className="flex items-center gap-2 shrink-0"
             aria-label="Schedule class"
           >
@@ -275,9 +290,9 @@ export default function WeekCalendar({ communityId, communitySlug, isTeacher, in
       {/* Mobile: day view (day-picker strip + selected-day timeline) */}
       {isMobile ? (
         <WeekCalendarDay
-          // Remount per week so the selected day resets to today / Sunday.
-          key={weekDays[0]}
           weekDays={weekDays}
+          selectedDay={selectedDay}
+          onSelectDay={setPickedDay}
           timezone={userTimezone}
           liveClasses={weekClasses}
           visibleHours={visibleHours}
