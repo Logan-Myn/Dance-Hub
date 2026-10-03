@@ -203,7 +203,7 @@ function Hero({ onCtaSignup }: { onCtaSignup: () => void }) {
         </button>
       </div>
       <div style={{ fontSize: 13, color: LT.muted }}>
-        0% platform fees for the first 30 days. Live in 5 minutes.
+        0% platform fees for the first 15 days. Live in 5 minutes.
       </div>
     </section>
   );
@@ -346,7 +346,7 @@ const FEATURES: FeatureCard[] = [
   {
     label: "Memberships & payouts",
     title: "Up to 96% goes to you",
-    body: "0% platform fees for the first 30 days. After that, fees that drop as you grow. Weekly or monthly payouts to your bank.",
+    body: "0% platform fees for the first 15 days. After that, fees that drop as you grow. Weekly or monthly payouts to your bank.",
     Icon: Wallet,
   },
 ];
@@ -590,7 +590,7 @@ function StackComparison() {
 // ── 7. Pricing (fee scale) ──
 function Pricing({ onCtaSignup }: { onCtaSignup: () => void }) {
   const stages: Array<{ when: string; fee: string; sub: string; launch?: boolean }> = [
-    { when: "First 30 days", fee: "0%", sub: "Keep 100% of revenue", launch: true },
+    { when: "First 15 days", fee: "0%", sub: "Keep 100% of revenue", launch: true },
     { when: "Under 50 members", fee: "8%", sub: "Once you start charging" },
     { when: "50 to 100 members", fee: "6%", sub: "Fee drops as you grow" },
     { when: "Over 100 members", fee: "4%", sub: "Lowest tier, forever" },
@@ -615,7 +615,7 @@ function Pricing({ onCtaSignup }: { onCtaSignup: () => void }) {
           Pay only when you charge.
         </h2>
         <p style={{ fontSize: 16, color: LT.fgSoft, maxWidth: 580, margin: "0 auto" }}>
-          No monthly fee. 0% for your first 30 days. After that, a small share of revenue that
+          No monthly fee. 0% for your first 15 days. After that, a small share of revenue that
           drops as you grow.
         </p>
       </div>
@@ -730,7 +730,7 @@ function Pricing({ onCtaSignup }: { onCtaSignup: () => void }) {
 const FAQS: Array<{ q: string; a: string }> = [
   {
     q: "What if my followers won't pay? They only follow me because it's free.",
-    a: "The question every teacher asks. Reality: a small fraction of any real audience will pay if the offer is right. One early teacher on Dance-Hub turned 23 of her followers into paying students at €25 per month. You don't need most of your audience to convert. You need a few. The first 30 days are 0% platform fees, so you can find out with no downside.",
+    a: "The question every teacher asks. Reality: a small fraction of any real audience will pay if the offer is right. One early teacher on Dance-Hub turned 23 of her followers into paying students at €25 per month. You don't need most of your audience to convert. You need a few. The first 15 days are 0% platform fees, so you can find out with no downside.",
   },
   {
     q: "How is Dance-Hub different from Skool, Patreon or Discord?",
@@ -738,7 +738,7 @@ const FAQS: Array<{ q: string; a: string }> = [
   },
   {
     q: "What does it cost to start?",
-    a: "Nothing. Run your community with 0% platform fees for the first 30 days. After that we take a share of revenue that drops as you grow: 8% under 50 members, 6% to 100, 4% above. No setup fee, no monthly seat fee.",
+    a: "Nothing. Run your community with 0% platform fees for the first 15 days. After that we take a share of revenue that drops as you grow: 8% under 50 members, 6% to 100, 4% above. No setup fee, no monthly seat fee.",
   },
   {
     q: "Can my international students pay?",

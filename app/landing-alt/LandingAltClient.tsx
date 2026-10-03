@@ -262,7 +262,7 @@ function Hero({ onCtaSignup }: { onCtaSignup: () => void }) {
             cursor: "pointer",
           }}
         >
-          Sign up. Free for 30 days.
+          Sign up. Free for 15 days.
         </button>
         <Link
           href="/discovery"
@@ -724,7 +724,7 @@ function MidCTA({ onCtaSignup }: { onCtaSignup: () => void }) {
         <PricingCard
           tier="Run your floor"
           price="Free"
-          priceSuffix="for 30 days"
+          priceSuffix="for 15 days"
           subtitle="Everything in. Threads, classroom, live, private lessons, payments."
           features={[
             "Unlimited threads, channels, replies",
@@ -891,7 +891,7 @@ const FAQS = [
   },
   {
     q: "What does it cost?",
-    a: "0% platform fees for the first 30 days. After that, 8% under 50 members, 6% to 100, 4% above. No setup fee, no monthly seat fee.",
+    a: "0% platform fees for the first 15 days. After that, 8% under 50 members, 6% to 100, 4% above. No setup fee, no monthly seat fee.",
   },
   {
     q: "Can I import my videos?",
@@ -1076,7 +1076,7 @@ function FinalCTA({ onCtaSignup }: { onCtaSignup: () => void }) {
             marginBottom: 50,
           }}
         >
-          Sign up. Free for 30 days.
+          Sign up. Free for 15 days.
         </button>
 
         <div

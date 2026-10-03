@@ -1,6 +1,6 @@
 // Platform fee on a private-lesson payment. It follows the same advertised
 // rule as membership payments (see lib/platform-fees.ts, the single source):
-// 0% for the community's first 30 days, then 8% under 50 members, 6% from 50
+// 0% for the community's first 15 days, then 8% under 50 members, 6% from 50
 // to 100 members and 4% above 100.
 
 import { membershipFeePercentage } from '@/lib/platform-fees';

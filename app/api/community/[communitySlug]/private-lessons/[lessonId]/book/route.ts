@@ -165,7 +165,7 @@ export async function POST(
     }
 
     // Same advertised fee rules as memberships: 0% in the community's first
-    // 30 days, then a tier by member count.
+    // 15 days, then a tier by member count.
     const feePercentage = privateLessonFeePercentage(community);
     const amountCents = Math.round(Number(price) * 100);
     const feeCents = Math.round((amountCents * feePercentage) / 100);

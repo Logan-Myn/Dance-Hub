@@ -77,7 +77,7 @@ export async function POST(request: Request, props: { params: Promise<{ communit
       );
     }
 
-    // Platform fee: 0% in the community's first 30 days, then by member tier.
+    // Platform fee: 0% in the community's first 15 days, then by member tier.
     const feePercentage = membershipFeePercentage(community);
 
     // Check if user is already a member

@@ -44,7 +44,7 @@ export default async function LandingPage() {
           LAUNCH
         </span>
         <span style={{ opacity: 0.95 }}>
-          Run your community with <b>0% platform fees</b> for your first 30 days.
+          Run your community with <b>0% platform fees</b> for your first 15 days.
         </span>{" "}
         <StartCommunityLink
           style={{ color: "white", fontWeight: 600, textDecoration: "underline", marginLeft: 8 }}

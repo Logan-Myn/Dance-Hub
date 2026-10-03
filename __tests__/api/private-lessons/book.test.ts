@@ -182,7 +182,7 @@ describe('POST /private-lessons/[lessonId]/book: slot checks', () => {
 describe('POST /private-lessons/[lessonId]/book: platform fee', () => {
   const pi = () => mockPaymentIntentsCreate.mock.calls[0][0];
 
-  it('charges no platform fee in the community\'s first 30 days', async () => {
+  it('charges no platform fee in the community\'s first 15 days', async () => {
     routeQueries({ community: { ...community, created_at: '2026-10-20T00:00:00.000Z', active_member_count: 300 } });
 
     await book(validBody);

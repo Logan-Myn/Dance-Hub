@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/AuthContext";
 import { PayoutScheduleForm } from "@/components/admin/PayoutScheduleForm";
 import { communityPath } from "@/lib/safe-redirect";
+import { LAUNCH_PROMO_DAYS } from "@/lib/platform-fees";
 
 // Ported from CommunitySettingsModal.tsx lines 92-120.
 interface StripeRequirement {
@@ -79,11 +80,9 @@ interface SubscriptionsEditorProps {
   communityCreatedAt: string;
 }
 
-const PROMO_DURATION_DAYS = 30;
-
 function daysLeftInPromo(createdAt: string): number {
   const created = new Date(createdAt).getTime();
-  const ends = created + PROMO_DURATION_DAYS * 24 * 60 * 60 * 1000;
+  const ends = created + LAUNCH_PROMO_DAYS * 24 * 60 * 60 * 1000;
   const remainingMs = ends - Date.now();
   return Math.max(0, Math.ceil(remainingMs / (24 * 60 * 60 * 1000)));
 }
@@ -680,7 +679,7 @@ export function SubscriptionsEditor({
         </Button>
       </div>
 
-      {/* Promotional Period Info - shown only during the first 30 days */}
+      {/* Promotional Period Info - shown only during the launch promo */}
       {isInPromoPeriod && (
         <div className="bg-secondary/10 border border-secondary/20 rounded-2xl p-5">
           <div className="flex gap-4">
@@ -691,7 +690,7 @@ export function SubscriptionsEditor({
             </div>
             <div className="flex-1">
               <h4 className="font-display text-base font-semibold text-foreground">
-                You have 0% platform fees for your first month
+                You have 0% platform fees for your first {LAUNCH_PROMO_DAYS} days
               </h4>
               <p className="text-sm text-muted-foreground mt-2">
                 {promoDaysLeft === 1
