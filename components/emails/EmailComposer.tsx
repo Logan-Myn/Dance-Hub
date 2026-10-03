@@ -98,6 +98,8 @@ export function EmailComposer(props: Props) {
         try {
           msg = JSON.parse(body).error || msg;
         } catch {}
+        // The owner isn't a recipient, so a community without members has nobody.
+        if (msg === 'no_recipients') msg = 'Your community has no members to email yet.';
         throw new Error(msg);
       }
       const data = await res.json();

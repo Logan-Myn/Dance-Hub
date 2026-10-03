@@ -103,3 +103,16 @@ it('reports a partial delivery when the missed count is unknown', async () => {
   await waitFor(() => expect(toast.error).toHaveBeenCalled());
   expect((toast.error as jest.Mock).mock.calls[0][0]).toBe("Some of your 600 members didn't receive it.");
 });
+
+it('explains a send with nobody to email instead of showing the error code', async () => {
+  // The owner is not a recipient, so a community without members has nobody.
+  global.fetch = jest.fn(async () => ({
+    ok: false,
+    status: 422,
+    text: async () => JSON.stringify({ error: 'no_recipients' }),
+  })) as unknown as typeof fetch;
+  await publish();
+  await waitFor(() => expect(toast.error).toHaveBeenCalled());
+  expect((toast.error as jest.Mock).mock.calls[0][0]).toBe('Your community has no members to email yet.');
+  expect(mockPush).not.toHaveBeenCalled();
+});
