@@ -6,13 +6,24 @@ import { Heart, MessageSquare, Pin } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CATEGORY_ICONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { htmlToPlainText } from "@/lib/html-to-text";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "react-hot-toast";
+
+// The whole card opens the thread, so links in the preview become plain
+// spans instead of separate click and tab targets.
+function toPreviewHtml(html: string): string {
+  return html
+    .replace(/<a\b[^>]*>/gi, '<span class="underline">')
+    .replace(/<\/a\s*>/gi, "</span>");
+}
 
 interface ThreadCardFluidProps {
   id: string;
   title: string;
+  /**
+   * Sanitized HTML from the server (lib/sanitize-html, applied by thread
+   * create/edit and by the feed loaders). Rendered as HTML in the preview.
+   */
   content: string;
   author: {
     name: string;
@@ -63,7 +74,12 @@ export default function ThreadCardFluid({
     setLocalLikesCount(likes_count || 0);
   }, [likes, likes_count]);
 
-  const preview = useMemo(() => htmlToPlainText(content), [content]);
+  // Same object across renders: React re-sets innerHTML whenever the
+  // dangerouslySetInnerHTML object changes, e.g. on every hover.
+  const previewHtml = useMemo(
+    () => ({ __html: toPreviewHtml(content ?? "") }),
+    [content]
+  );
 
   const iconConfig = CATEGORY_ICONS.find((i) => i.label === category_type);
   const IconComponent = iconConfig?.icon || null;
@@ -195,13 +211,19 @@ export default function ThreadCardFluid({
         {title}
       </h2>
 
-      {/* Content preview: plain text, never the stored HTML */}
-      <p
+      {/* Content preview: the post's formatting at body size, 3 lines max */}
+      <div
         data-testid="thread-preview"
-        className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line break-words line-clamp-3 mb-4"
-      >
-        {preview}
-      </p>
+        className={cn(
+          "text-sm leading-relaxed text-muted-foreground break-words line-clamp-3 mb-4",
+          "[&_:is(h1,h2,h3)]:font-semibold [&_:is(h1,h2,h3)]:text-foreground",
+          "[&_span]:![font-size:inherit]",
+          "[&_ul]:list-disc [&_ol]:list-decimal [&_:is(ul,ol)]:list-inside [&_li>*]:inline",
+          "[&_blockquote]:border-l-2 [&_blockquote]:pl-3",
+          "[&_pre]:whitespace-pre-wrap"
+        )}
+        dangerouslySetInnerHTML={previewHtml}
+      />
 
       {/* Interaction buttons */}
       <div className="flex items-center gap-4">

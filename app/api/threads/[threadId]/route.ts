@@ -54,7 +54,8 @@ export async function PATCH(request: Request, props: { params: Promise<{ threadI
       WHERE id = ${threadId}
     `;
 
-    return NextResponse.json({ success: true });
+    // The editor shows the stored body, not what it sent.
+    return NextResponse.json({ success: true, title, content });
   } catch (error) {
     console.error("Error updating thread:", error);
     return NextResponse.json(
