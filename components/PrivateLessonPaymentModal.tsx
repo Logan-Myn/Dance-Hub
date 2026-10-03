@@ -3,6 +3,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { loadStripe, StripeElementsOptions } from "@stripe/stripe-js";
+import { PAYMENT_ELEMENT_OPTIONS } from "@/lib/stripe-payment-element";
 import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
@@ -88,7 +89,7 @@ function PrivateLessonPaymentForm({
         </p>
       </div>
       
-      <PaymentElement />
+      <PaymentElement options={PAYMENT_ELEMENT_OPTIONS} />
       
       <Button 
         type="submit" 

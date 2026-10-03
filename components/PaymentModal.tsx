@@ -3,6 +3,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { loadStripe, StripeElementsOptions } from "@stripe/stripe-js";
+import { PAYMENT_ELEMENT_OPTIONS } from "@/lib/stripe-payment-element";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useEffectEvent, useMemo } from "react";
 import { toast } from "react-hot-toast";
@@ -160,7 +161,7 @@ function PaymentForm({ communitySlug, price, mode, plan, dueTodayCents, onSucces
             <p className="text-sm text-muted-foreground">Loading payment details...</p>
           </div>
         )}
-        <PaymentElement onReady={() => setIsFormReady(true)} />
+        <PaymentElement options={PAYMENT_ELEMENT_OPTIONS} onReady={() => setIsFormReady(true)} />
       </div>
       {isFormReady && (() => {
         const display = payButtonDisplay({ mode, dueTodayCents: dueTodayCents ?? null, price, plan });
