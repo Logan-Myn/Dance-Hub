@@ -9,6 +9,7 @@
 import {
   addDaysToKey,
   dateKeyInTz,
+  defaultClassStart,
   formatDayKey,
   hourInTz,
   initialCalendarRange,
@@ -104,6 +105,36 @@ describe('zonedTimeToUtc', () => {
   it('reads a grid slot as wall-clock time in the viewer timezone', () => {
     expect(zonedTimeToUtc('2026-10-03', 20, 30, NY).toISOString()).toBe('2026-10-04T00:30:00.000Z');
     expect(zonedTimeToUtc('2026-10-04', 1, 0, TALLINN).toISOString()).toBe('2026-10-03T22:00:00.000Z');
+  });
+});
+
+describe('defaultClassStart', () => {
+  // Thursday 1 Oct 2026, 12:10 in New York.
+  const NOW = new Date('2026-10-01T16:10:00Z');
+
+  it('is the next half hour today, in the viewer timezone', () => {
+    expect(defaultClassStart(null, NOW, NY).toISOString()).toBe('2026-10-01T16:30:00.000Z');
+    expect(defaultClassStart('2026-10-01', NOW, NY).toISOString()).toBe('2026-10-01T16:30:00.000Z');
+    // Exactly on a half hour: the next one, never now.
+    expect(defaultClassStart(null, new Date('2026-10-01T16:30:00Z'), NY).toISOString()).toBe('2026-10-01T17:00:00.000Z');
+  });
+
+  it('moves that time to a later day', () => {
+    expect(defaultClassStart('2026-10-03', NOW, NY).toISOString()).toBe('2026-10-03T16:30:00.000Z');
+  });
+
+  it('never starts in the past for an earlier day', () => {
+    expect(defaultClassStart('2026-09-27', NOW, NY).toISOString()).toBe('2026-10-01T16:30:00.000Z');
+  });
+
+  it('rolls over to tomorrow late at night', () => {
+    // Thursday 23:50 in Tallinn -> Friday 00:00.
+    expect(defaultClassStart(null, new Date('2026-10-01T20:50:00Z'), TALLINN).toISOString()).toBe('2026-10-01T21:00:00.000Z');
+  });
+
+  it('rounds wall-clock time where the offset is not whole hours', () => {
+    // 12:10 in Kathmandu (UTC+5:45) -> 12:30 there.
+    expect(defaultClassStart(null, new Date('2026-10-01T06:25:00Z'), 'Asia/Kathmandu').toISOString()).toBe('2026-10-01T06:45:00.000Z');
   });
 });
 

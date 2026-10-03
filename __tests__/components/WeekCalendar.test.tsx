@@ -164,3 +164,50 @@ it("pre-fills a clicked slot as that wall-clock time in the viewer timezone", as
 
   expect(screen.getByTestId("create-modal")).toHaveTextContent("2026-10-02T13:30:00.000Z");
 });
+
+describe("the Schedule Class button", () => {
+  const renderTeacher = () =>
+    render(
+      <WeekCalendar
+        communityId="c1"
+        communitySlug="salsa"
+        isTeacher
+        userTimezone={NY}
+        initialClasses={[]}
+        initialRange={iso(initialCalendarRange(NOW))}
+      />
+    );
+
+  it("opens the modal on the next half hour today", async () => {
+    const user = userEvent.setup();
+    renderTeacher();
+
+    await user.click(screen.getByRole("button", { name: "Schedule class" }));
+
+    // Thursday 1 Oct, 12:30 PM New York.
+    expect(screen.getByTestId("create-modal")).toHaveTextContent("2026-10-01T16:30:00.000Z");
+  });
+
+  it("uses the first day of a later week the teacher moved to", async () => {
+    const user = userEvent.setup();
+    renderTeacher();
+
+    await user.click(screen.getByRole("button", { name: "Next week" }));
+    await user.click(screen.getByRole("button", { name: "Schedule class" }));
+
+    // Sunday 4 Oct, 12:30 PM New York.
+    expect(screen.getByTestId("create-modal")).toHaveTextContent("2026-10-04T16:30:00.000Z");
+  });
+
+  it("uses the day picked in the mobile day view", async () => {
+    mockIsMobile = true;
+    const user = userEvent.setup();
+    renderTeacher();
+
+    await user.click(screen.getByRole("button", { name: /^S\s*3$/ }));
+    await user.click(screen.getByRole("button", { name: "Schedule class" }));
+
+    // Saturday 3 Oct, 12:30 PM New York.
+    expect(screen.getByTestId("create-modal")).toHaveTextContent("2026-10-03T16:30:00.000Z");
+  });
+});
