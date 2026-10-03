@@ -115,6 +115,12 @@ describe('PATCH /api/threads/[threadId]', () => {
     expect(update.slice(1).some((v: unknown) => typeof v === 'string' && v.includes('onerror'))).toBe(false);
   });
 
+  it('returns the stored body, so the feed shows what was saved', async () => {
+    const res = await threadPATCH(json({ title: 'T', content: PAYLOAD }), { params });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, title: 'T', content: '<p>Hi</p>' });
+  });
+
   it('rejects an edit whose body is not a string', async () => {
     const res = await threadPATCH(json({ title: 'T', content: 42 }), { params });
     expect(res.status).toBe(400);

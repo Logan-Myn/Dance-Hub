@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import ThreadView from '@/components/ThreadView';
 
 jest.mock('next/navigation', () => ({
@@ -224,5 +225,44 @@ describe('ThreadView comment loading', () => {
     );
     await settle();
     expect(commentFetches).toBe(0);
+  });
+});
+
+describe('ThreadView edit', () => {
+  it('hands the parent the body the server stored, not the editor HTML', async () => {
+    global.fetch = jest.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'PATCH') {
+        return {
+          ok: true,
+          json: async () => ({ success: true, title: 'Hello world', content: '<p>Stored body</p>' }),
+        } as Response;
+      }
+      return { ok: true, json: async () => [] } as Response;
+    }) as unknown as typeof fetch;
+    const onThreadUpdate = jest.fn();
+
+    render(
+      <ThreadView
+        thread={{ ...baseThread, content: '<p>Editor body</p>' } as never}
+        onClose={() => {}}
+        onLikeUpdate={() => {}}
+        onThreadUpdate={onThreadUpdate}
+      />,
+    );
+
+    const user = userEvent.setup();
+    const menuButton = screen
+      .getAllByRole('button')
+      .find((b) => b.getAttribute('aria-haspopup') === 'menu')!;
+    await user.click(menuButton);
+    await user.click(await screen.findByRole('menuitem', { name: /Edit/ }));
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() =>
+      expect(onThreadUpdate).toHaveBeenCalledWith('t1', {
+        title: 'Hello world',
+        content: '<p>Stored body</p>',
+      }),
+    );
   });
 });

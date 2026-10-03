@@ -27,8 +27,8 @@ describe('ResponsiveDialog', () => {
     );
     const dialog = screen.getByRole('dialog');
     expect(screen.getByText('Desktop modal')).toBeInTheDocument();
-    // Shadcn Dialog content is centered via top-[50%] / left-[50%] translates.
-    expect(dialog.className).toMatch(/top-\[50%\]/);
+    // The Dialog is centered inside its scrolling overlay.
+    expect(dialog.parentElement).toHaveClass('place-items-center', 'overflow-y-auto');
     // And does NOT carry the Sheet bottom-0 anchor class.
     expect(dialog.className).not.toMatch(/bottom-0/);
   });

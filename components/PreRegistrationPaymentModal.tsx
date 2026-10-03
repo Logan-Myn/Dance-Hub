@@ -194,7 +194,7 @@ export function PreRegistrationPaymentModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Pre-Register for {communityName}</DialogTitle>
           <DialogDescription>

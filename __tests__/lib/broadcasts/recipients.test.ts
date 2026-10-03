@@ -48,6 +48,15 @@ describe('getActiveRecipientsForCommunity', () => {
     expect(result[0].unsubscribeToken).toBeNull();
   });
 
+  it('leaves out the community owner and admin members', async () => {
+    mockedQuery.mockResolvedValueOnce([]);
+    await getActiveRecipientsForCommunity('community-123');
+    const sqlText = mockedQuery.mock.calls[0][0].join('?');
+    expect(sqlText).toMatch(/JOIN communities c ON c\.id = m\.community_id/);
+    expect(sqlText).toMatch(/m\.user_id IS DISTINCT FROM c\.created_by/);
+    expect(sqlText).toMatch(/m\.role IS DISTINCT FROM 'admin'/);
+  });
+
   it('SQL filters out members with broadcasts_enabled=false in this community', async () => {
     mockedQuery.mockResolvedValueOnce([]);
     await getActiveRecipientsForCommunity('community-123');

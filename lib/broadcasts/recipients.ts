@@ -40,12 +40,17 @@ export async function getActiveRecipientsForCommunity(
       p.full_name,
       ep.unsubscribe_token
     FROM community_members m
+    JOIN communities c ON c.id = m.community_id
     JOIN profiles p ON p.auth_user_id = m.user_id
     LEFT JOIN email_preferences ep ON ep.email = p.email
     LEFT JOIN community_email_preferences cep
       ON cep.user_id = p.id AND cep.community_id = ${communityId}
     WHERE m.community_id = ${communityId}
       AND m.status = 'active'
+      -- The owner (and any admin row) is the sender, not a reader. Same rule
+      -- as the member list and members_count.
+      AND m.user_id IS DISTINCT FROM c.created_by
+      AND m.role IS DISTINCT FROM 'admin'
       AND (
         m.subscription_status IS NULL
         OR m.subscription_status NOT IN ('canceled', 'unpaid', 'past_due', 'incomplete', 'incomplete_expired')

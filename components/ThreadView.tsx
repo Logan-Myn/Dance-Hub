@@ -342,9 +342,11 @@ export default function ThreadView({
         throw new Error(error || "Failed to update thread");
       }
 
+      // Show what the server stored (sanitized), not the editor's HTML.
+      const saved: { title: string; content: string } = await response.json();
       onThreadUpdate?.(thread.id, {
-        title: editedTitle.trim(),
-        content: editedContent.trim(),
+        title: saved.title,
+        content: saved.content,
       });
 
       setIsEditing(false);

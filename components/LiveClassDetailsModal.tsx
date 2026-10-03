@@ -134,7 +134,7 @@ export default function LiveClassDetailsModal({
   return (
     <>
       <ResponsiveDialog open={true} onOpenChange={onClose}>
-        <ResponsiveDialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <ResponsiveDialogContent className="sm:max-w-md">
           <ResponsiveDialogHeader>
             <ResponsiveDialogTitle>Live Class Details</ResponsiveDialogTitle>
           </ResponsiveDialogHeader>
