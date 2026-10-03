@@ -8,7 +8,6 @@ import {
   VideoCameraIcon,
   PhoneXMarkIcon,
   ArrowUpOnSquareIcon,
-  Cog6ToothIcon,
   ChatBubbleLeftIcon,
   HandRaisedIcon,
   UserMinusIcon,
@@ -19,6 +18,7 @@ import {
   VideoCameraSlashIcon,
 } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
+import LiveKitDeviceSettings from "./LiveKitDeviceSettings";
 import type { RoomMessage } from "@/lib/live-class-messages";
 
 interface LiveKitControlBarProps {
@@ -211,14 +211,7 @@ export default function LiveKitControlBar({
         )}
 
         <ControlBtn label="Settings">
-          <Button
-            size="lg"
-            variant="default"
-            className="rounded-full w-11 h-11 sm:w-14 sm:h-14 bg-gray-700 hover:bg-gray-600"
-            title="Settings"
-          >
-            <Cog6ToothIcon className="h-5 w-5 sm:h-6 sm:w-6" />
-          </Button>
+          <LiveKitDeviceSettings canPublish={canSend} />
         </ControlBtn>
 
         {isTeacher && onEndClass && (
