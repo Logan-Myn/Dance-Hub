@@ -77,6 +77,10 @@ export async function GET(request: NextRequest, props: { params: Promise<{ class
       }
     }
 
+    if (liveClass.status === "cancelled") {
+      return NextResponse.json({ error: "This class was canceled" }, { status: 403 });
+    }
+
     // Check join window (15 min before to end time)
     const now = new Date();
     const classStartTime = new Date(liveClass.scheduled_start_time);

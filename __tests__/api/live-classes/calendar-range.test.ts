@@ -14,6 +14,9 @@ jest.mock('@/lib/db', () => ({
 }));
 jest.mock('@/lib/auth-session', () => ({ getSession: jest.fn() }));
 jest.mock('@/lib/stream-hub', () => ({ createRoom: jest.fn() }));
+jest.mock('@/lib/community-auth', () => ({
+  requireCommunityViewer: jest.fn().mockResolvedValue({ ok: true, session: { user: { id: 'u1' } }, community: { id: 'c1' } }),
+}));
 
 const params = Promise.resolve({ communitySlug: 'salsa' });
 const get = (qs: string) => GET(new Request(`http://x/api/community/salsa/live-classes${qs}`) as never, { params });

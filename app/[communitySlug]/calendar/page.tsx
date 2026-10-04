@@ -3,16 +3,29 @@ import { communityPath } from '@/lib/safe-redirect';
 import { getOfferings, offeringAccess } from '@/lib/offerings';
 import { OfferingOffBanner } from '@/components/community-shell/offering-off-banner';
 import { getSession } from '@/lib/auth-session';
+import { queryOne } from '@/lib/db';
 import {
   getCommunityBySlug,
-  getLiveClassesInRange,
+  getCommunityMembership,
+  getPublicProfile,
   getUserIsAdmin,
 } from '@/lib/community-data';
-import { initialCalendarRange } from '@/lib/calendar-week';
-import WeekCalendar from '@/components/WeekCalendar';
+import { getCalendarItems } from '@/lib/calendar/data';
+import { REPLAYS_COURSE_SLUG } from '@/lib/classroom/replays';
+import CalendarClient from './CalendarClient';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
+
+const DAY = 86_400_000;
+
+// The moment this request renders; the calendar's clock starts here.
+function requestTime(): number {
+  return Date.now();
+}
+
+/** A saved zone of 'UTC' is the column default, so it usually means "not chosen". */
+const chosenZone = (tz: string | null | undefined) => (tz && tz !== 'UTC' ? tz : null);
 
 export default async function CommunityCalendarPage(
   props: {
@@ -23,42 +36,54 @@ export default async function CommunityCalendarPage(
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) notFound();
 
+  // Members, the owner and site admins (same rule as the Calendar tab).
   const session = await getSession();
-  const isCreator = !!session && community.created_by === session.user.id;
-  const isAdmin = !!session && (await getUserIsAdmin(session.user.id));
+  if (!session) redirect(communityPath(params.communitySlug, '/about'));
+  const [isMember, isAdmin] = await Promise.all([
+    getCommunityMembership(community.id, session.user.id),
+    getUserIsAdmin(session.user.id),
+  ]);
+  const isCreator = community.created_by === session.user.id;
+  if (!isMember && !isCreator && !isAdmin) redirect(communityPath(params.communitySlug, '/about'));
 
-  const access = offeringAccess(getOfferings(community), 'liveClasses', isCreator || isAdmin);
+  const offerings = getOfferings(community);
+  const access = offeringAccess(offerings, 'liveClasses', isCreator || isAdmin);
   if (access === 'redirect') redirect(communityPath(params.communitySlug));
 
-  // The server doesn't know the viewer's timezone, so pre-fetch a window
-  // that holds the current week in every timezone; the calendar trims it.
-  const range = initialCalendarRange(new Date());
-  const initialRange = { start: range.start.toISOString(), end: range.end.toISOString() };
-  const initialClasses = await getLiveClassesInRange(
-    community.id,
-    initialRange.start,
-    initialRange.end,
-  );
+  // Two weeks back (past classes and replays) to two months ahead: covers the
+  // current week in every time zone and the whole list view.
+  const now = requestTime();
+  const range = { start: new Date(now - 15 * DAY).toISOString(), end: new Date(now + 60 * DAY).toISOString() };
+  const replays = await queryOne<{ is_public: boolean | null }>`
+    SELECT is_public FROM courses WHERE community_id = ${community.id} AND slug = ${REPLAYS_COURSE_SLUG}
+  `;
+  const [items, owner, viewer] = await Promise.all([
+    getCalendarItems({
+      communityId: community.id,
+      viewerId: session.user.id,
+      start: range.start,
+      end: range.end,
+      includeReplays: offerings.courses && !!replays && (isCreator || isAdmin || replays.is_public !== false),
+      includeLessons: offerings.privateLessons,
+    }),
+    getPublicProfile(community.created_by),
+    getPublicProfile(session.user.id),
+  ]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {access === 'banner' && <OfferingOffBanner contained={false} />}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">
-          {community.name} Calendar
-        </h1>
-        <p className="mt-2 text-gray-600">
-          View and join scheduled live dance classes
-        </p>
-      </div>
-
-      <WeekCalendar
-        communityId={community.id}
-        communitySlug={params.communitySlug}
-        isTeacher={isCreator || isAdmin}
-        initialClasses={initialClasses}
-        initialRange={initialRange}
+    <>
+      {access === 'banner' && <OfferingOffBanner />}
+      <CalendarClient
+        slug={params.communitySlug}
+        teacherName={owner?.name ?? 'the teacher'}
+        isOwner={isCreator}
+        lessonsOn={offerings.privateLessons}
+        initialItems={items}
+        initialRange={range}
+        serverNow={now}
+        viewerZone={chosenZone(viewer?.timezone)}
+        classZone={chosenZone(owner?.timezone)}
       />
-    </div>
+    </>
   );
 }

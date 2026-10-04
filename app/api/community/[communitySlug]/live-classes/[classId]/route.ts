@@ -146,13 +146,18 @@ export async function PUT(
 
     const body = await request.json();
     const { title, description, scheduled_start_time, duration_minutes, status, enable_recording } = body;
+    if (status != null && !['scheduled', 'live', 'ended', 'cancelled'].includes(status)) {
+      return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    }
+    // Restoring a canceled class takes its slot back, so check it like a move.
+    const restoring = status === 'scheduled' && liveClass.status === 'cancelled';
 
     // If time or duration is changing, re-check for overlap with this teacher's
     // other scheduled/live classes. Exclude this class from the check, and treat
     // a transition to 'cancelled'/'ended' as harmless (those free up a slot).
     const nextStatus = status ?? liveClass.status;
     if (
-      (scheduled_start_time || duration_minutes) &&
+      (scheduled_start_time || duration_minutes || restoring) &&
       nextStatus !== 'cancelled' &&
       nextStatus !== 'ended'
     ) {
@@ -175,7 +180,8 @@ export async function PUT(
       if (conflict) {
         return NextResponse.json(
           {
-            error: `This time overlaps with "${conflict.title}" scheduled at ${new Date(conflict.scheduled_start_time).toLocaleString()}. Pick a different time.`,
+            error: `This time overlaps with "${conflict.title}". Pick a different time.`,
+            conflict_at: new Date(conflict.scheduled_start_time).toISOString(),
           },
           { status: 409 }
         );
@@ -192,6 +198,12 @@ export async function PUT(
         duration_minutes = COALESCE(${duration_minutes ? parseInt(duration_minutes) : null}, duration_minutes),
         status = COALESCE(${status ?? null}, status),
         enable_recording = COALESCE(${enable_recording ?? null}, enable_recording),
+        -- A moved class gets a fresh reminder.
+        reminder_sent_at = CASE
+          WHEN ${scheduled_start_time ?? null}::timestamptz IS NOT NULL
+               AND ${scheduled_start_time ?? null}::timestamptz <> scheduled_start_time THEN NULL
+          ELSE reminder_sent_at
+        END,
         updated_at = NOW()
       WHERE id = ${params.classId}
       RETURNING *
