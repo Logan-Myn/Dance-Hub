@@ -25,7 +25,14 @@ export const Composer = forwardRef<ComposerHandle, {
   ownerName: string;
   onPosted: (thread: Record<string, unknown>, categoryName: string | null) => void;
 }>(function Composer({ communityId, categories, viewer, isOwner, ownerName, onPosted }, ref) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
+  // The rich-text editor mounts on first open (it can't render on the server)
+  // and stays mounted, so later opens animate with it in place.
+  const [editorReady, setEditorReady] = useState(false);
+  const setOpen = (next: boolean) => {
+    if (next) setEditorReady(true);
+    setOpenState(next);
+  };
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -35,7 +42,7 @@ export const Composer = forwardRef<ComposerHandle, {
   const [errors, setErrors] = useState<{ title?: string; body?: string; topic?: string }>({});
   const titleRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const ids = { topic: useId(), title: useId(), titleErr: useId(), bodyErr: useId(), topicErr: useId() };
+  const ids = { form: useId(), topic: useId(), title: useId(), titleErr: useId(), bodyErr: useId(), topicErr: useId() };
 
   const reset = () => {
     setTitle("");
@@ -59,13 +66,14 @@ export const Composer = forwardRef<ComposerHandle, {
   }));
 
   useEffect(() => {
-    if (open) titleRef.current?.focus({ preventScroll: false });
+    if (open) titleRef.current?.focus({ preventScroll: true });
   }, [open]);
 
   const close = () => {
     setOpen(false);
     reset();
-    triggerRef.current?.focus();
+    // The bar is display:none until this render commits.
+    requestAnimationFrame(() => triggerRef.current?.focus());
   };
 
   const pickTopic = (c: ThreadCategory) => {
@@ -115,14 +123,15 @@ export const Composer = forwardRef<ComposerHandle, {
         open ? "border-brand-line shadow-[0_0_0_4px_rgb(var(--ds-brand)/0.12),0_10px_28px_-12px_rgba(30,23,48,.22)]" : "border-line"
       )}
     >
-      {!open ? (
-        <div className="flex items-center gap-3 px-3.5 py-3">
+      {/* Collapsed bar: gone as soon as the composer opens (like the prototype). */}
+      <div className={cn("items-center gap-3 px-3.5 py-3", open ? "hidden" : "flex")}>
           <InitialsAvatar id={viewer.id} name={viewer.name} imageUrl={viewer.avatarUrl} size={36} />
           <button
             ref={triggerRef}
             type="button"
             onClick={() => setOpen(true)}
-            aria-expanded={false}
+            aria-expanded={open}
+            aria-controls={ids.form}
             aria-keyshortcuts="n"
             className="h-10 min-w-0 flex-1 truncate rounded-[10px] bg-surface-2 px-3.5 text-left text-[14.5px] text-ink-3 transition-colors hover:bg-surface-3 hover:text-ink-2 sm:text-[15px]"
           >
@@ -131,9 +140,21 @@ export const Composer = forwardRef<ComposerHandle, {
           <kbd className="hidden rounded-[5px] border border-b-2 border-line-strong bg-surface px-1.5 py-[3px] text-[11px] font-semibold leading-none text-ink-3 sm:inline-block" title="Keyboard shortcut">
             N
           </kbd>
-        </div>
-      ) : (
+      </div>
+
+      {/* The form grows open: grid rows animate from 0fr to 1fr. It stays
+          mounted (so it can animate) and is inert while closed. */}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-[280ms] ease-[cubic-bezier(.2,.7,.2,1)] motion-reduce:transition-none",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+      >
+        <div className="min-h-0 overflow-hidden">
         <form
+          id={ids.form}
+          inert={!open}
+          aria-hidden={!open}
           noValidate
           className="flex flex-col gap-3 px-[18px] pb-3.5 pt-4"
           onSubmit={(e) => {
@@ -214,6 +235,7 @@ export const Composer = forwardRef<ComposerHandle, {
           </div>
 
           <div aria-describedby={errors.body ? ids.bodyErr : undefined}>
+            {editorReady ? (
             <Editor
               key={editorKey}
               content={body}
@@ -227,6 +249,9 @@ export const Composer = forwardRef<ComposerHandle, {
               placeholder="Add details. Ask your question, or tell people what you'd like feedback on."
               minHeight="96px"
             />
+            ) : (
+              <div className="h-[150px]" aria-hidden="true" />
+            )}
             {errors.body && <p id={ids.bodyErr} className="mt-1.5 text-[13px] font-medium text-live">{errors.body}</p>}
           </div>
 
@@ -257,7 +282,8 @@ export const Composer = forwardRef<ComposerHandle, {
             </button>
           </div>
         </form>
-      )}
+        </div>
+      </div>
     </div>
   );
 });

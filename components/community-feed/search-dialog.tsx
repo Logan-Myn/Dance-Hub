@@ -67,10 +67,10 @@ export function SearchDialog({
       }}
     >
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgba(24,16,36,.52)] backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 flex justify-center bg-[rgba(24,16,36,.52)] px-4 pt-4 backdrop-blur-[2px] motion-safe:animate-scrim-in sm:pt-[12vh]">
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed left-1/2 top-4 z-50 w-[min(600px,calc(100%-32px))] -translate-x-1/2 overflow-hidden rounded-2xl border border-line bg-surface shadow-overlay data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-2 sm:top-[12vh]"
+          className="h-fit w-full max-w-[600px] overflow-hidden rounded-2xl border border-line bg-surface shadow-overlay motion-safe:animate-dlg-in"
         >
           <DialogPrimitive.Title className="sr-only">Search posts</DialogPrimitive.Title>
           <div className="flex items-center gap-2.5 border-b border-line px-4">
@@ -149,6 +149,7 @@ export function SearchDialog({
             <span><kbd className={KBD}>Enter</kbd> to open</span>
           </div>
         </DialogPrimitive.Content>
+        </DialogPrimitive.Overlay>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );

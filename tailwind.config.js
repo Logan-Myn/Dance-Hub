@@ -153,6 +153,15 @@ module.exports = {
         "pop-in": {
           from: { opacity: "0", transform: "translateY(-4px) scale(.98)" },
         },
+        "dlg-in": {
+          from: { opacity: "0", transform: "translateY(12px) scale(.985)" },
+        },
+        "sheet-in": {
+          from: { opacity: "0", transform: "translateY(24px)" },
+        },
+        "scrim-in": {
+          from: { opacity: "0" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -165,6 +174,9 @@ module.exports = {
         "heart-pop": "heart-pop .4s cubic-bezier(.2,.7,.2,1)",
         "just-posted": "just-posted 2.2s cubic-bezier(.2,.7,.2,1)",
         "pop-in": "pop-in .16s cubic-bezier(.2,.7,.2,1)",
+        "dlg-in": "dlg-in .24s cubic-bezier(.2,.7,.2,1)",
+        "sheet-in": "sheet-in .28s cubic-bezier(.2,.7,.2,1)",
+        "scrim-in": "scrim-in .2s ease-out",
       },
     },
   },
