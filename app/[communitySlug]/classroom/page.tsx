@@ -7,6 +7,8 @@ import {
   getCoursesForCommunity,
 } from '@/lib/community-data';
 import ClassroomPageClient from './ClassroomPageClient';
+import { getOfferings, offeringAccess } from '@/lib/offerings';
+import { OfferingOffBanner } from '@/components/community-shell/offering-off-banner';
 import { communityPath } from '@/lib/safe-redirect';
 
 export const dynamic = 'force-dynamic';
@@ -36,15 +38,21 @@ export default async function ClassroomPage(
     redirect(communityPath(params.communitySlug, '/about'));
   }
 
+  const access = offeringAccess(getOfferings(community), 'courses', isCreator || isAdmin);
+  if (access === 'redirect') redirect(communityPath(params.communitySlug));
+
   const initialCourses = await getCoursesForCommunity(community.id, isCreator || isAdmin);
 
   return (
-    <ClassroomPageClient
-      communitySlug={params.communitySlug}
-      communityId={community.id}
-      isCreator={isCreator}
-      isAdmin={isAdmin}
-      initialCourses={initialCourses}
-    />
+    <>
+      {access === 'banner' && <OfferingOffBanner />}
+      <ClassroomPageClient
+        communitySlug={params.communitySlug}
+        communityId={community.id}
+        isCreator={isCreator}
+        isAdmin={isAdmin}
+        initialCourses={initialCourses}
+      />
+    </>
   );
 }

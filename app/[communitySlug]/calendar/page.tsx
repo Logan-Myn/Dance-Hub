@@ -1,4 +1,7 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { communityPath } from '@/lib/safe-redirect';
+import { getOfferings, offeringAccess } from '@/lib/offerings';
+import { OfferingOffBanner } from '@/components/community-shell/offering-off-banner';
 import { getSession } from '@/lib/auth-session';
 import {
   getCommunityBySlug,
@@ -24,6 +27,9 @@ export default async function CommunityCalendarPage(
   const isCreator = !!session && community.created_by === session.user.id;
   const isAdmin = !!session && (await getUserIsAdmin(session.user.id));
 
+  const access = offeringAccess(getOfferings(community), 'liveClasses', isCreator || isAdmin);
+  if (access === 'redirect') redirect(communityPath(params.communitySlug));
+
   // The server doesn't know the viewer's timezone, so pre-fetch a window
   // that holds the current week in every timezone; the calendar trims it.
   const range = initialCalendarRange(new Date());
@@ -36,6 +42,7 @@ export default async function CommunityCalendarPage(
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {access === 'banner' && <OfferingOffBanner />}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">
           {community.name} Calendar

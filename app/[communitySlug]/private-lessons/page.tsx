@@ -1,9 +1,13 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { communityPath } from '@/lib/safe-redirect';
+import { getOfferings, offeringAccess } from '@/lib/offerings';
+import { OfferingOffBanner } from '@/components/community-shell/offering-off-banner';
 import { getSession } from '@/lib/auth-session';
 import {
   getCommunityBySlug,
   getCommunityMembership,
   getActivePrivateLessons,
+  getUserIsAdmin,
 } from '@/lib/community-data';
 import PrivateLessonsPage from '@/components/PrivateLessonsPage';
 
@@ -23,6 +27,10 @@ export default async function CommunityPrivateLessonsPage(
   const isCreator = !!session && community.created_by === session.user.id;
   const isMember =
     !!session && (await getCommunityMembership(community.id, session.user.id));
+  const isAdmin = !!session && (await getUserIsAdmin(session.user.id));
+
+  const access = offeringAccess(getOfferings(community), 'privateLessons', isCreator || isAdmin);
+  if (access === 'redirect') redirect(communityPath(params.communitySlug));
 
   // Owners see inactive lessons too (with a "Hidden" badge) — same pattern
   // as classroom showing private courses to the teacher.
@@ -30,6 +38,7 @@ export default async function CommunityPrivateLessonsPage(
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {access === 'banner' && <OfferingOffBanner />}
       <PrivateLessonsPage
         communitySlug={params.communitySlug}
         communityId={community.id}

@@ -7,6 +7,8 @@ import {
   getCourseWithChapters,
 } from '@/lib/community-data';
 import CourseDetailClient from './CourseDetailClient';
+import { getOfferings, offeringAccess } from '@/lib/offerings';
+import { OfferingOffBanner } from '@/components/community-shell/offering-off-banner';
 import { communityPath } from '@/lib/safe-redirect';
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +36,9 @@ export default async function CourseDetailPage(
     redirect(communityPath(params.communitySlug, '/about'));
   }
 
+  const access = offeringAccess(getOfferings(community), 'courses', isCreator || isAdmin);
+  if (access === 'redirect') redirect(communityPath(params.communitySlug));
+
   const initialCourse = await getCourseWithChapters(
     community.id,
     params.courseSlug,
@@ -44,13 +49,16 @@ export default async function CourseDetailPage(
   if (!initialCourse.is_public && !isCreator && !isAdmin) notFound();
 
   return (
-    <CourseDetailClient
-      communitySlug={params.communitySlug}
-      courseSlug={params.courseSlug}
-      community={community as never}
-      initialCourse={initialCourse as never}
-      isCreator={isCreator}
-      isAdmin={isAdmin}
-    />
+    <>
+      {access === 'banner' && <OfferingOffBanner />}
+      <CourseDetailClient
+        communitySlug={params.communitySlug}
+        courseSlug={params.courseSlug}
+        community={community as never}
+        initialCourse={initialCourse as never}
+        isCreator={isCreator}
+        isAdmin={isAdmin}
+      />
+    </>
   );
 }
