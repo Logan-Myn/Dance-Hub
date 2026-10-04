@@ -38,7 +38,7 @@ export default async function CommunityPrivateLessonsPage(
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {access === 'banner' && <OfferingOffBanner />}
+      {access === 'banner' && <OfferingOffBanner contained={false} />}
       <PrivateLessonsPage
         communitySlug={params.communitySlug}
         communityId={community.id}
