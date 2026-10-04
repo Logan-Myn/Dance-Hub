@@ -83,13 +83,13 @@ describe('MobileNav', () => {
     process.env.NEXT_PUBLIC_BROADCASTS_ENABLED = originalEnv;
   });
 
-  it('hides Admin even for owners when broadcasts are disabled', () => {
+  it('shows Admin for owners even when the broadcasts kill-switch is off', () => {
     const originalEnv = process.env.NEXT_PUBLIC_BROADCASTS_ENABLED;
     process.env.NEXT_PUBLIC_BROADCASTS_ENABLED = 'false';
 
     render(<MobileNav {...baseProps} isOwner={true} />);
     fireEvent.click(screen.getByRole('button', { name: /more/i }));
-    expect(screen.queryByText(/^admin$/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/^admin$/i)).toBeInTheDocument();
 
     process.env.NEXT_PUBLIC_BROADCASTS_ENABLED = originalEnv;
   });

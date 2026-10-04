@@ -31,14 +31,12 @@ export default function CommunityNavbar({
     { label: "Admin", href: `/${communitySlug}/admin`, ownerOnly: true },
   ];
 
-  const broadcastsEnabled = process.env.NEXT_PUBLIC_BROADCASTS_ENABLED === "true";
 
   // Site admins (profiles.is_admin) get the same nav surface as owners and
   // members for any community they visit, so they can actually moderate.
   const visibleItems = navItems.filter(item => {
     if (item.memberOnly && !isMember && !isOwner && !isAdmin) return false;
     if (item.ownerOnly && !isOwner && !isAdmin) return false;
-    if (item.label === "Admin" && !broadcastsEnabled) return false;
     return true;
   });
 

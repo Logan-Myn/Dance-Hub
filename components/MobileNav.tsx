@@ -53,11 +53,12 @@ export default function MobileNav({
   const { showAuthModal } = useAuthModal();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const broadcastsEnabled = process.env.NEXT_PUBLIC_BROADCASTS_ENABLED === 'true';
-  // Site admins (profiles.is_admin) get full chrome on every community —
-  // same tabs as a member/owner — so they can actually moderate.
+  // Site admins (profiles.is_admin) get full chrome on every community, the
+  // same tabs as a member or owner, so they can actually moderate.
   const hasFullAccess = isMember || isOwner || isAdmin;
-  const showAdmin = (isOwner || isAdmin) && broadcastsEnabled;
+  // The broadcasts kill-switch only gates broadcasts (lib/broadcasts/auth.ts),
+  // never the whole admin.
+  const showAdmin = isOwner || isAdmin;
 
   const rootHref = `/${communitySlug}`;
   const allTabs: Tab[] = [
