@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     // allowlisted markup. Non-strings and markup-only payloads end up empty.
     const content = sanitizeRichText(rawContent);
 
-    if (!title || !content || !communityId || !categoryId) {
+    if (!title || !content || !communityId) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -71,15 +71,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const category = community.thread_categories?.find((cat: any) => cat.id === categoryId);
-    if (!category) {
+    // A community without topics takes posts without one; otherwise a topic
+    // is required.
+    const categories: any[] = Array.isArray(community.thread_categories) ? community.thread_categories : [];
+    const category = categoryId ? categories.find((cat: any) => cat.id === categoryId) : null;
+    if (categories.length > 0 && !category) {
       return NextResponse.json(
-        { error: 'Category not found' },
-        { status: 404 }
+        { error: categoryId ? 'Category not found' : 'Missing required fields' },
+        { status: categoryId ? 404 : 400 }
       );
     }
 
-    if (category.creatorOnly && userId !== community.created_by) {
+    if (category?.creatorOnly && userId !== community.created_by) {
       return NextResponse.json(
         { error: 'Only the community creator can post in this category' },
         { status: 403 }
@@ -95,7 +98,7 @@ export async function POST(request: Request) {
     const authorName = profile?.display_name || profile?.full_name || 'Anonymous';
     const authorImage = profile?.avatar_url || null;
     // Take the category name from the stored category, not the request body.
-    const categoryName: string | null = typeof category.name === 'string' ? category.name : null;
+    const categoryName: string | null = typeof category?.name === 'string' ? category.name : null;
 
     const thread = await queryOne<Thread>`
       INSERT INTO threads (
@@ -121,7 +124,7 @@ export async function POST(request: Request) {
         NOW(),
         ${authorName},
         ${authorImage},
-        ${categoryId},
+        ${category ? categoryId : null},
         ${categoryName},
         ${pinned && userId === community.created_by ? pinned : false}
       )

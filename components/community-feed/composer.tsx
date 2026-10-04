@@ -1,0 +1,263 @@
+"use client";
+
+import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState } from "react";
+import { Lock, Pin } from "lucide-react";
+import toast from "react-hot-toast";
+import Editor from "@/components/Editor";
+import { InitialsAvatar } from "@/components/ds/initials-avatar";
+import { htmlToText } from "@/lib/feed/posts";
+import { cn } from "@/lib/utils";
+import { BTN_GHOST, BTN_PRIMARY } from "./feed-header";
+import type { FeedViewer, ThreadCategory } from "./types";
+
+export interface ComposerHandle {
+  /** Opens the composer, optionally on a topic and with starter text. */
+  open: (opts?: { categoryId?: string; title?: string; body?: string }) => void;
+}
+
+const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+
+export const Composer = forwardRef<ComposerHandle, {
+  communityId: string;
+  categories: ThreadCategory[];
+  viewer: FeedViewer;
+  isOwner: boolean;
+  ownerName: string;
+  onPosted: (thread: Record<string, unknown>, categoryName: string | null) => void;
+}>(function Composer({ communityId, categories, viewer, isOwner, ownerName, onPosted }, ref) {
+  const [open, setOpen] = useState(false);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [editorKey, setEditorKey] = useState(0);
+  const [pinned, setPinned] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [errors, setErrors] = useState<{ title?: string; body?: string; topic?: string }>({});
+  const titleRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const ids = { topic: useId(), title: useId(), titleErr: useId(), bodyErr: useId(), topicErr: useId() };
+
+  const reset = () => {
+    setTitle("");
+    setBody("");
+    setEditorKey((k) => k + 1);
+    setCategoryId(null);
+    setPinned(false);
+    setErrors({});
+  };
+
+  useImperativeHandle(ref, () => ({
+    open: (opts) => {
+      setOpen(true);
+      if (opts?.categoryId) setCategoryId(opts.categoryId);
+      if (opts?.title) setTitle(opts.title);
+      if (opts?.body) {
+        setBody(opts.body);
+        setEditorKey((k) => k + 1);
+      }
+    },
+  }));
+
+  useEffect(() => {
+    if (open) titleRef.current?.focus({ preventScroll: false });
+  }, [open]);
+
+  const close = () => {
+    setOpen(false);
+    reset();
+    triggerRef.current?.focus();
+  };
+
+  const pickTopic = (c: ThreadCategory) => {
+    if (c.creatorOnly && !isOwner) {
+      toast(`Only ${ownerName} can post in ${c.name}`);
+      return;
+    }
+    setCategoryId(c.id);
+    setErrors((e) => ({ ...e, topic: undefined }));
+  };
+
+  const submit = async () => {
+    if (busy) return;
+    const next: typeof errors = {};
+    if (!title.trim()) next.title = "Add a title so people know what your post is about.";
+    if (!htmlToText(body)) next.body = "Add a few words before posting.";
+    if (categories.length > 0 && !categoryId) next.topic = "Pick a topic.";
+    setErrors(next);
+    if (next.title) return titleRef.current?.focus();
+    if (next.body || next.topic) return;
+
+    setBusy(true);
+    try {
+      const response = await fetch("/api/threads/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), content: body, communityId, categoryId, pinned: isOwner && pinned }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || "Couldn't post. Try again.");
+      const name = categories.find((c) => c.id === categoryId)?.name ?? null;
+      onPosted(data, name);
+      setOpen(false);
+      reset();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't post. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      id="write-post"
+      className={cn(
+        "rounded-2xl border bg-surface shadow-card transition-[border-color,box-shadow] duration-200",
+        open ? "border-brand-line shadow-[0_0_0_4px_rgb(var(--ds-brand)/0.12),0_10px_28px_-12px_rgba(30,23,48,.22)]" : "border-line"
+      )}
+    >
+      {!open ? (
+        <div className="flex items-center gap-3 px-3.5 py-3">
+          <InitialsAvatar id={viewer.id} name={viewer.name} imageUrl={viewer.avatarUrl} size={36} />
+          <button
+            ref={triggerRef}
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-expanded={false}
+            aria-keyshortcuts="n"
+            className="h-10 min-w-0 flex-1 truncate rounded-[10px] bg-surface-2 px-3.5 text-left text-[14.5px] text-ink-3 transition-colors hover:bg-surface-3 hover:text-ink-2 sm:text-[15px]"
+          >
+            Share a question or a win…
+          </button>
+          <kbd className="hidden rounded-[5px] border border-b-2 border-line-strong bg-surface px-1.5 py-[3px] text-[11px] font-semibold leading-none text-ink-3 sm:inline-block" title="Keyboard shortcut">
+            N
+          </kbd>
+        </div>
+      ) : (
+        <form
+          noValidate
+          className="flex flex-col gap-3 px-[18px] pb-3.5 pt-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              submit();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              close();
+            }
+          }}
+        >
+          <div className="flex items-center gap-2.5 text-[14px] text-ink-2">
+            <InitialsAvatar id={viewer.id} name={viewer.name} imageUrl={viewer.avatarUrl} size={28} />
+            <span>
+              Posting as <strong className="text-ink">{viewer.name}</strong>
+            </span>
+          </div>
+
+          {categories.length > 0 && (
+            <div>
+              <div id={ids.topic} className="text-[13px] font-semibold text-ink-2">Topic</div>
+              <div role="radiogroup" aria-labelledby={ids.topic} aria-describedby={errors.topic ? ids.topicErr : undefined} className="mt-1.5 flex flex-wrap gap-1.5">
+                {categories.map((c) => {
+                  const locked = !!c.creatorOnly && !isOwner;
+                  const checked = categoryId === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={checked}
+                      aria-disabled={locked || undefined}
+                      title={locked ? `Only ${ownerName} can post here` : undefined}
+                      onClick={() => pickTopic(c)}
+                      className={cn(
+                        "inline-flex h-8 items-center gap-[7px] rounded-full border px-[11px] text-[13.5px] font-medium transition-colors",
+                        checked ? "border-brand-line bg-brand-soft text-brand-ink" : "border-line text-ink-2 hover:border-line-strong hover:text-ink",
+                        locked && "cursor-not-allowed opacity-55"
+                      )}
+                    >
+                      {locked ? (
+                        <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+                      ) : (
+                        <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} />
+                      )}
+                      {c.name}
+                    </button>
+                  );
+                })}
+              </div>
+              {errors.topic && <p id={ids.topicErr} className="mt-1.5 text-[13px] font-medium text-live">{errors.topic}</p>}
+            </div>
+          )}
+
+          <div>
+            <label htmlFor={ids.title} className="sr-only">Title</label>
+            <input
+              ref={titleRef}
+              id={ids.title}
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (errors.title) setErrors((x) => ({ ...x, title: undefined }));
+              }}
+              placeholder="Title"
+              maxLength={120}
+              autoComplete="off"
+              aria-invalid={!!errors.title}
+              aria-describedby={errors.title ? ids.titleErr : undefined}
+              className="w-full rounded-[10px] border border-line bg-surface px-3 py-2.5 font-display text-[17px] font-semibold leading-[1.35] text-ink outline-none transition-[border-color,box-shadow] placeholder:text-ink-3 focus:border-brand focus:shadow-[0_0_0_3px_rgb(var(--ds-brand)/0.18)] aria-[invalid=true]:border-live"
+            />
+            {errors.title && <p id={ids.titleErr} className="mt-1.5 text-[13px] font-medium text-live">{errors.title}</p>}
+          </div>
+
+          <div aria-describedby={errors.body ? ids.bodyErr : undefined}>
+            <Editor
+              key={editorKey}
+              content={body}
+              onChange={(html) => {
+                setBody(html);
+                if (errors.body) setErrors((x) => ({ ...x, body: undefined }));
+              }}
+              showHeadings={false}
+              showParagraphStyle={false}
+              showAlignment={false}
+              placeholder="Add details. Ask your question, or tell people what you'd like feedback on."
+              minHeight="96px"
+            />
+            {errors.body && <p id={ids.bodyErr} className="mt-1.5 text-[13px] font-medium text-live">{errors.body}</p>}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {isOwner && (
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg px-1 py-1 text-[13.5px] font-medium text-ink-2">
+                <input
+                  type="checkbox"
+                  checked={pinned}
+                  onChange={(e) => setPinned(e.target.checked)}
+                  className="h-4 w-4 rounded border-line-strong accent-[rgb(var(--ds-brand))]"
+                />
+                <Pin className="h-4 w-4" aria-hidden="true" />
+                Pin to the top
+              </label>
+            )}
+            <span className="flex-1" />
+            <span className="hidden items-center gap-1 text-[12.5px] text-ink-3 sm:inline-flex">
+              <kbd className="rounded-[5px] border border-b-2 border-line-strong bg-surface px-1.5 py-[3px] text-[11px] font-semibold leading-none">{isMac() ? "⌘" : "Ctrl"}</kbd>+
+              <kbd className="rounded-[5px] border border-b-2 border-line-strong bg-surface px-1.5 py-[3px] text-[11px] font-semibold leading-none">Enter</kbd>
+              to post
+            </span>
+            <button type="button" className={BTN_GHOST} onClick={close}>
+              Cancel
+            </button>
+            <button type="submit" className={BTN_PRIMARY} disabled={busy}>
+              {busy ? "Posting…" : "Post"}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+});

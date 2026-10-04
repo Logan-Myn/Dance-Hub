@@ -1,130 +1,63 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/AuthContext";
-import toast from "react-hot-toast";
-import PaymentModal from "@/components/PaymentModal";
-import { PreRegistrationPaymentModal } from "@/components/PreRegistrationPaymentModal";
-import { PreRegistrationComingSoon } from "@/components/PreRegistrationComingSoon";
-import Thread from "@/components/Thread";
-import ThreadModal from "@/components/ThreadModal";
-import CommunityHeader from "@/components/community/CommunityHeader";
-import ComposerBox from "@/components/community/ComposerBox";
-import CategoryPills from "@/components/community/CategoryPills";
-import ThreadCardFluid from "@/components/community/ThreadCardFluid";
-import CommunitySidebar from "@/components/community/CommunitySidebar";
-import { ManageSubscriptionModal } from "@/components/community/ManageSubscriptionModal";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { ThreadCategory } from "@/types/community";
 import useSWR from "swr";
-import { fetcher } from "@/lib/fetcher";
+import toast from "react-hot-toast";
 import { useNextStep } from "nextstepjs";
-import { useIsMobile } from "@/hooks/use-is-mobile";
-import { LocalDate } from "@/components/ui/local-date";
+import ThreadModal from "@/components/ThreadModal";
+import { PreRegistrationComingSoon } from "@/components/PreRegistrationComingSoon";
+import { ManageSubscriptionModal } from "@/components/community/ManageSubscriptionModal";
+import { Composer, type ComposerHandle } from "@/components/community-feed/composer";
+import { FeedHeader } from "@/components/community-feed/feed-header";
+import { FilterBar } from "@/components/community-feed/filter-bar";
+import { FeedEmpty, FeedError } from "@/components/community-feed/feed-states";
+import { PinnedBox } from "@/components/community-feed/pinned-box";
+import { PostCard } from "@/components/community-feed/post-card";
+import { SearchDialog } from "@/components/community-feed/search-dialog";
+import { CourseCard } from "@/components/community-feed/rail/course-card";
+import { LessonsCard } from "@/components/community-feed/rail/lessons-card";
+import { LinksCard } from "@/components/community-feed/rail/links-card";
+import { AdminJoinCard, MembershipCard } from "@/components/community-feed/rail/membership-card";
+import { NextClassCard } from "@/components/community-feed/rail/next-class-card";
+import { OwnerTools } from "@/components/community-feed/rail/owner-tools";
+import type {
+  CourseProgress,
+  FeedCommunity,
+  FeedLesson,
+  FeedPerson,
+  FeedPost,
+  FeedViewer,
+  RosterMember,
+  UpcomingClass,
+} from "@/components/community-feed/types";
+import { useNow } from "@/hooks/use-now";
+import { useViewerTimeZone } from "@/hooks/use-viewer-time-zone";
+import { fetcher } from "@/lib/fetcher";
 import { formatDate } from "@/lib/format-date";
+import { isNewPost } from "@/lib/feed/visits";
+import { sortPosts, type FeedSort } from "@/lib/feed/posts";
+import { registerPageSearch } from "@/lib/feed/search-slot";
+import type { Offerings } from "@/lib/offerings";
 import type { MembershipStatus } from "@/lib/community-data";
 import { communityPath } from "@/lib/safe-redirect";
 
 // Membership routes answer failures with { error } (a reason the member can
 // act on) and, when the failure changed the membership, the new membership.
-async function failureBody(
-  response: Response
-): Promise<{ error?: string; membership?: MembershipStatus } | null> {
+async function failureBody(response: Response): Promise<{ error?: string; membership?: MembershipStatus } | null> {
   return response.json().catch(() => null);
 }
 
-interface CustomLink {
-  title: string;
-  url: string;
-}
+const WELCOME_TITLE = "Welcome! Start here";
+const WELCOME_BODY =
+  "<p>Welcome to the community. A few things to know:</p><ul><li><p>When and where classes happen.</p></li><li><p>Where to find replays and courses.</p></li><li><p>How to ask for feedback on your dancing.</p></li></ul><p>Say hello below and tell us where you dance.</p>";
 
-interface Thread {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  userId: string;
-  likesCount: number;
-  commentsCount: number;
-  category?: string;
-  categoryId?: string;
-  category_type?: string;
-  author: {
-    name: string;
-    image: string;
-  };
-  likes?: string[];
-  comments?: any[];
-  pinned?: boolean;
-}
-
-interface Member {
-  id: string;
-  user_id: string;
-  community_id: string;
-  role: string;
-  created_at: string;
-  status?: string | null;
-  subscription_status?: string | null;
-  current_period_end?: string | null;
-  profile?: {
-    id: string;
-    full_name: string | null;
-    avatar_url: string | null;
-    display_name: string | null;
-  };
-}
-
-interface Community {
-  id: string;
-  name: string;
-  slug: string;
-  description: string;
-  image_url: string;
-  created_by: string;
-  created_at: string;
-  membersCount: number;
-  createdBy: string;
-  imageUrl: string;
-  imageFocalX?: number;
-  imageFocalY?: number;
-  imageZoom?: number;
-  customLinks?: CustomLink[];
-  membershipEnabled?: boolean;
-  membershipPrice?: number;
-  membership_price?: number;
-  yearlyEnabled?: boolean;
-  yearlyPrice?: number;
-  yearly_price?: number;
-  yearlyBenefits?: string;
-  threadCategories?: ThreadCategory[];
-  stripeAccountId?: string | null;
-  status?: 'active' | 'pre_registration' | 'inactive';
-  opening_date?: string | null;
-}
-
-interface FeedClientProps {
-  communitySlug: string;
-  initialCommunity: Community;
-  initialThreads: Thread[];
+export interface FeedClientProps {
+  community: FeedCommunity;
+  initialThreads: FeedPost[];
+  viewer: FeedViewer;
+  owner: FeedPerson;
+  offerings: Offerings;
   isCreator: boolean;
   isAdmin: boolean;
   isMember: boolean;
@@ -134,859 +67,504 @@ interface FeedClientProps {
   accessEndDate: string | null;
   /** Roster size counted on the server; shown until the roster loads. */
   initialMemberCount?: number;
+  /** "New" dots go on others' posts after this moment (lib/feed/visits.ts). */
+  newSince: string | null;
+  serverNow: number;
+  upcomingClasses: UpcomingClass[];
+  courseProgress: CourseProgress | null;
+  lessons: FeedLesson[];
 }
 
 export default function FeedClient({
-  communitySlug,
-  initialCommunity,
+  community,
   initialThreads,
+  viewer,
+  owner,
+  offerings,
   isCreator,
   isAdmin,
   isMember: initialIsMember,
-  isPreRegistered: initialIsPreRegistered,
+  isPreRegistered,
   memberStatus: initialMemberStatus,
   subscriptionStatus: initialSubscriptionStatus,
   accessEndDate: initialAccessEndDate,
   initialMemberCount = 0,
+  newSince,
+  serverNow,
+  upcomingClasses,
+  courseProgress,
+  lessons,
 }: FeedClientProps) {
+  const slug = community.slug;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const isMobile = useIsMobile();
-  const { user: currentUser } = useAuth();
+  const now = useNow(30_000, serverNow) ?? new Date(serverNow);
+  const timeZone = useViewerTimeZone(viewer.timezone);
 
-  // SWR keeps community / members / threads fresh in the background. We seed
-  // it with initialCommunity / initialThreads so the first paint never
-  // duplicates the server fetch — and skip a redundant /community for members
-  // since SSR didn't provide them.
-  const {
-    data: communityData,
-    error: communityError,
-  } = useSWR<Community>(
-    communitySlug ? `community:${communitySlug}` : null,
-    fetcher,
-    { fallbackData: initialCommunity }
-  );
-
-  const {
-    data: membersData,
-    error: membersError,
-  } = useSWR<Member[]>(
-    communitySlug ? `community-members:${communitySlug}` : null,
-    fetcher
-  );
-
+  // Posts and roster stay fresh in the background; posts start from the server.
   const {
     data: threadsData,
     error: threadsError,
-  } = useSWR<Thread[]>(
-    communitySlug ? `community-threads:${communitySlug}` : null,
-    fetcher,
-    { fallbackData: initialThreads }
-  );
+    mutate: mutateThreads,
+  } = useSWR<FeedPost[]>(`community-threads:${slug}`, fetcher, { fallbackData: initialThreads });
+  const posts = useMemo(() => (Array.isArray(threadsData) ? threadsData : []), [threadsData]);
+  const { data: roster } = useSWR<RosterMember[]>(`community-members:${slug}`, fetcher);
 
-  const [community, setCommunity] = useState<Community | null>(initialCommunity);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [threads, setThreads] = useState<Thread[]>(initialThreads);
+  // The viewer's own membership comes from the props, then from the leave /
+  // reactivate responses. The roster leaves out canceling members and its
+  // cache can predate a leave, so it is never the source.
   const [isMember, setIsMember] = useState(initialIsMember);
-  const [isPreRegistered, setIsPreRegistered] = useState(initialIsPreRegistered);
-  const [error, setError] = useState<Error | null>(null);
-  const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(
-    null
-  );
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  // Join in flight: the state disables the button, the ref also stops a
-  // second click that lands before the re-render.
-  const [isJoining, setIsJoining] = useState(false);
-  const joinInFlight = useRef(false);
-  const [paymentMode, setPaymentMode] = useState<'payment' | 'setup'>('payment');
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('monthly');
-  const [showPlanChooser, setShowPlanChooser] = useState(false);
-  const [showPreRegistrationModal, setShowPreRegistrationModal] = useState(false);
-  const [preRegistrationClientSecret, setPreRegistrationClientSecret] = useState<string | null>(null);
-  const [preRegistrationOpeningDate, setPreRegistrationOpeningDate] = useState<string | null>(null);
-  const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
-  const [isWriting, setIsWriting] = useState(false);
-  const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-
-  // Open a thread automatically when the URL carries ?thread=<id> (used by the
-  // admin activity-feed link). On mobile we route to the dedicated page since
-  // that's the existing pattern for thread navigation on small screens.
-  useEffect(() => {
-    const threadId = searchParams.get('thread');
-    if (!threadId) return;
-    if (selectedThread?.id === threadId) return;
-    const thread = threads.find((t) => t.id === threadId);
-    if (!thread) return;
-    if (isMobile) {
-      router.replace(communityPath(communitySlug, `/threads/${thread.id}`));
-    } else {
-      setSelectedThread(thread);
-    }
-  }, [searchParams, threads, selectedThread, isMobile, router, communitySlug]);
-
-  // Once the modal is closed by the user, drop ?thread=<id> from the URL so
-  // a refresh / back-button doesn't immediately reopen it.
-  useEffect(() => {
-    if (selectedThread !== null) return;
-    if (!searchParams.get('thread')) return;
-    router.replace(pathname);
-  }, [selectedThread, searchParams, router, pathname]);
-  const [totalMembers, setTotalMembers] = useState(initialMemberCount);
-  const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState(initialSubscriptionStatus);
+  const [accessEndDate, setAccessEndDate] = useState(initialAccessEndDate);
+  const [, setMemberStatus] = useState(initialMemberStatus);
   const [showManageModal, setShowManageModal] = useState(false);
-  const [accessEndDate, setAccessEndDate] = useState<string | null>(initialAccessEndDate);
-  const [memberStatus, setMemberStatus] = useState<string | null>(initialMemberStatus);
-  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(initialSubscriptionStatus);
 
+  const [category, setCategory] = useState<string | null>(null);
+  const [sort, setSort] = useState<FeedSort>("latest");
+  const [selected, setSelected] = useState<FeedPost | null>(null);
+  const [freshId, setFreshId] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const composer = useRef<ComposerHandle>(null);
+
+  const categoriesById = useMemo(() => new Map(community.categories.map((c) => [c.id, c])), [community.categories]);
+
+  // Record this visit once the feed is on screen ("New" markers next time).
+  useEffect(() => {
+    if (!initialIsMember && !isCreator) return;
+    fetch(`/api/community/${encodeURIComponent(slug)}/feed-visit`, { method: "POST" }).catch(() => {});
+  }, [slug, initialIsMember, isCreator]);
+
+  // Top bar search, "/" for search and "N" for a new post.
+  useEffect(() => registerPageSearch(() => setSearchOpen(true), "Search posts"), []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      if (e.key === "/") {
+        e.preventDefault();
+        setSearchOpen(true);
+      } else if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        composer.current?.open();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Onboarding tour for owners, once per community and browser.
   const { startNextStep, currentTour } = useNextStep();
-
-  // Schedule the onboarding tour for creators once per mount. Ref-guard so a
-  // FeedClient remount doesn't restart the tour mid-flight (the tour can route
-  // the user back through this page).
-  const tourScheduledRef = useRef(false);
+  const tourScheduled = useRef(false);
   useEffect(() => {
-    if (!isCreator) return;
-    if (tourScheduledRef.current) return;
-    if (currentTour === 'onboarding') return;
-
-    const tourKey = `onboarding-tour-completed-${communitySlug}`;
-    if (localStorage.getItem(tourKey)) return;
-
-    tourScheduledRef.current = true;
-    const timer = setTimeout(() => {
-      startNextStep('onboarding');
-    }, 1500);
+    if (!isCreator || tourScheduled.current || currentTour === "onboarding") return;
+    try {
+      if (localStorage.getItem(`onboarding-tour-completed-${slug}`)) return;
+    } catch {
+      return;
+    }
+    tourScheduled.current = true;
+    const timer = setTimeout(() => startNextStep("onboarding"), 1500);
     return () => clearTimeout(timer);
-  }, [isCreator, communitySlug, startNextStep, currentTour]);
+  }, [isCreator, slug, startNextStep, currentTour]);
 
-  // Update community state when SWR data changes
-  useEffect(() => {
-    if (communityData) {
-      setCommunity(communityData);
-      setStripeAccountId(communityData.stripeAccountId || null);
+  // ?thread=<id> opens that post (links from notifications and the admin)
+  // until it is closed.
+  const threadParam = searchParams.get("thread");
+  const [dismissedParam, setDismissedParam] = useState<string | null>(null);
+  const current =
+    selected ??
+    (threadParam && threadParam !== dismissedParam ? posts.find((p) => p.id === threadParam) ?? null : null);
+
+  const closePost = useCallback(() => {
+    setSelected(null);
+    if (threadParam) {
+      setDismissedParam(threadParam);
+      router.replace(pathname, { scroll: false });
     }
-  }, [communityData]);
+  }, [threadParam, router, pathname]);
 
-  // Update error state when SWR error occurs
-  useEffect(() => {
-    if (communityError) {
-      setError(
-        communityError instanceof Error
-          ? communityError
-          : new Error("Failed to fetch community")
+  const updatePost = useCallback(
+    (id: string, patch: Partial<FeedPost> | ((p: FeedPost) => Partial<FeedPost>)) => {
+      mutateThreads(
+        (list) => (list ?? []).map((p) => (p.id === id ? { ...p, ...(typeof patch === "function" ? patch(p) : patch) } : p)),
+        { revalidate: false }
       );
-    }
-  }, [communityError]);
+      setSelected((s) => (s && s.id === id ? { ...s, ...(typeof patch === "function" ? patch(s) : patch) } : s));
+    },
+    [mutateThreads]
+  );
 
-  // Update members state when SWR data changes
-  useEffect(() => {
-    if (membersData) {
-      setMembers(membersData);
-      setTotalMembers(membersData.length);
-    }
-  }, [membersData]);
+  const onLike = useCallback(
+    (id: string, likesCount: number, liked: boolean) => {
+      updatePost(id, (p) => {
+        const others = (p.likes ?? []).filter((u) => u !== viewer.id);
+        return { likesCount, likes: liked ? [...others, viewer.id] : others };
+      });
+    },
+    [updatePost, viewer.id]
+  );
 
-  // Update error state when SWR error occurs
-  useEffect(() => {
-    if (membersError) {
-      setError(
-        membersError instanceof Error
-          ? membersError
-          : new Error("Failed to fetch members")
-      );
-    }
-  }, [membersError]);
+  const onPosted = (raw: Record<string, unknown>, categoryName: string | null) => {
+    const id = String(raw.id);
+    const categoryId = (raw.category_id as string | null) ?? null;
+    const post: FeedPost = {
+      id,
+      title: String(raw.title ?? ""),
+      content: String(raw.content ?? ""),
+      createdAt: String(raw.created_at ?? new Date().toISOString()),
+      userId: viewer.id,
+      category: categoryName ?? "General",
+      categoryId,
+      likesCount: 0,
+      commentsCount: 0,
+      likes: [],
+      comments: [],
+      pinned: !!raw.pinned,
+      author: { name: viewer.name, image: viewer.avatarUrl ?? "" },
+      lastReplyAt: null,
+      repliers: [],
+    };
+    mutateThreads((list) => [post, ...(list ?? [])], { revalidate: false });
+    setCategory(null);
+    setSort("latest");
+    setFreshId(id);
+    toast.success(categoryName ? `Posted to ${categoryName}` : "Posted");
+    requestAnimationFrame(() => document.getElementById(`post-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  };
 
-  // Update threads state when SWR data changes
-  useEffect(() => {
-    if (threadsData) {
-      setThreads(threadsData);
-    }
-  }, [threadsData]);
-
-  // Update error state when SWR error occurs
-  useEffect(() => {
-    if (threadsError) {
-      setError(
-        threadsError instanceof Error
-          ? threadsError
-          : new Error("Failed to fetch threads")
-      );
-    }
-  }, [threadsError]);
-
-  // Membership / creator / admin / pre-registered checks happen server-side in
-  // page.tsx and arrive as initial props. SWR refreshes community / members /
-  // threads above; the manual mirror useEffects sync those caches into local
-  // state so existing code keeps working.
-  //
-  // The viewer's own membership is NOT read from the members list: that list
-  // leaves out canceling members and its cache can predate a leave. It comes
-  // from the props and then from the leave / reactivate responses.
   const applyMembership = (membership: MembershipStatus) => {
     setIsMember(membership.isMember);
     setMemberStatus(membership.status);
     setSubscriptionStatus(membership.subscriptionStatus);
     setAccessEndDate(membership.currentPeriodEnd);
-    // Drop the cached copy of this page so going back to it doesn't show the
-    // old membership.
+    // Drop the cached copy of this page so going back doesn't show the old state.
     router.refresh();
   };
 
-  const onPaidJoinSuccess = () => {
-    setIsMember(true);
-    setShowPaymentModal(false);
-    toast.success("Successfully joined the community!");
-    window.location.reload();
-  };
-
-  const startPaidJoin = async (plan: 'monthly' | 'yearly' = 'monthly') => {
-    if (!currentUser || joinInFlight.current) return;
-    joinInFlight.current = true;
-    setIsJoining(true);
+  const leave = async () => {
     try {
-      const response = await fetch(`/api/community/${communitySlug}/join-paid`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        // An earlier checkout of theirs was already paid.
-        if (errorData.alreadyMember) {
-          onPaidJoinSuccess();
-          return;
-        }
-        throw new Error("Failed to create payment");
-      }
-      const { clientSecret, requiresSetup, stripeAccountId } = await response.json();
-      setPaymentClientSecret(clientSecret);
-      setStripeAccountId(stripeAccountId);
-      setPaymentMode(requiresSetup ? 'setup' : 'payment');
-      setSelectedPlan(plan);
-      setShowPaymentModal(true);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to start checkout");
-    } finally {
-      setIsJoining(false);
-      joinInFlight.current = false;
-    }
-  };
-
-  const handleJoinCommunity = async () => {
-    if (!currentUser) {
-      toast.error("Please sign in to join the community");
-      return;
-    }
-    if (joinInFlight.current) return;
-
-    // Set when this call holds the in-flight guard (the paid path takes it
-    // inside startPaidJoin instead).
-    let holdsJoin = false;
-    try {
-      // Check if community is in pre-registration mode
-      if (community?.status === 'pre_registration') {
-        joinInFlight.current = holdsJoin = true;
-        setIsJoining(true);
-        // Handle pre-registration
-        const response = await fetch(
-          `/api/community/${communitySlug}/join-pre-registration`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to create pre-registration");
-        }
-
-        const { clientSecret, stripeAccountId, openingDate } = await response.json();
-        setPreRegistrationClientSecret(clientSecret);
-        setStripeAccountId(stripeAccountId);
-        setPreRegistrationOpeningDate(openingDate);
-        setShowPreRegistrationModal(true);
-      } else if (
-        community?.membershipEnabled &&
-        community?.membershipPrice &&
-        community.membershipPrice > 0
-      ) {
-        // Handle paid membership. The promo-code entry lives in the payment modal.
-        if (community?.yearlyEnabled && (community?.yearlyPrice ?? 0) > 0) {
-          setShowPlanChooser(true); // let the member pick monthly vs yearly
-          return;
-        }
-        await startPaidJoin('monthly');
-      } else {
-        joinInFlight.current = holdsJoin = true;
-        setIsJoining(true);
-        // Handle free membership
-        const response = await fetch(`/api/community/${communitySlug}/join`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error("Join community error:", errorData);
-          throw new Error(errorData.error || "Failed to join community");
-        }
-
-        const data = await response.json();
-        setIsMember(true);
-        setTotalMembers((prev) => prev + 1);
-        toast.success("Successfully joined the community!");
-      }
-    } catch (error) {
-      console.error("Error joining community:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to join community"
-      );
-    } finally {
-      if (holdsJoin) {
-        joinInFlight.current = false;
-        setIsJoining(false);
-      }
-    }
-  };
-
-  const handleLeaveCommunity = async () => {
-    if (!currentUser) return;
-
-    try {
-      const response = await fetch(`/api/community/${communitySlug}/leave`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
+      const response = await fetch(`/api/community/${encodeURIComponent(slug)}/leave`, { method: "POST" });
       if (!response.ok) {
         const body = await failureBody(response);
-        toast.error(body?.error || "Failed to leave community");
+        toast.error(body?.error || "Couldn't leave the community. Try again.");
         return;
       }
-
       const data = await response.json();
-
-      // Update local state
       if (data.gracePeriod && data.membership?.currentPeriodEnd) {
         applyMembership(data.membership);
-        toast.success(
-          `Your membership will end on ${formatDate(data.membership.currentPeriodEnd)}. You'll maintain access until then.`
-        );
+        toast.success(`Your membership ends on ${formatDate(data.membership.currentPeriodEnd)}. You keep access until then.`);
       } else {
         setIsMember(false);
-        setMembers((prev) =>
-          prev.filter((member) => member.user_id !== currentUser.id)
-        );
-        toast.success("Successfully left the community");
-        setShowLeaveDialog(false);
-        router.push(communityPath(communitySlug, '/about'));
-        return;
+        toast.success("You left the community");
+        router.push(communityPath(slug, "/about"));
       }
-
-      setShowLeaveDialog(false);
-    } catch (error) {
-      console.error("Error leaving community:", error);
-      toast.error("Failed to leave community");
+    } catch {
+      toast.error("Couldn't leave the community. Try again.");
     }
   };
 
-  const handleReactivateMembership = async () => {
-    if (!currentUser) return;
-
+  const rejoin = async () => {
     try {
-      const response = await fetch(
-        `/api/community/${communitySlug}/reactivate`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
+      const response = await fetch(`/api/community/${encodeURIComponent(slug)}/reactivate`, { method: "POST" });
       if (!response.ok) {
         const body = await failureBody(response);
-        toast.error(body?.error || "Failed to reactivate membership");
+        toast.error(body?.error || "Couldn't rejoin. Try again.");
         if (body?.membership && !body.membership.isMember) {
           // It already ended, so there is nothing to rejoin: join from scratch.
           setIsMember(false);
-          router.push(communityPath(communitySlug, '/about'));
+          router.push(communityPath(slug, "/about"));
         }
         return;
       }
-
       const data = await response.json();
       applyMembership(data.membership);
-      toast.success("Your membership has been reactivated!");
-    } catch (error) {
-      console.error("Error reactivating membership:", error);
-      toast.error("Failed to reactivate membership");
+      toast.success("Welcome back. Your membership continues.");
+    } catch {
+      toast.error("Couldn't rejoin. Try again.");
     }
   };
 
-  const handleNewThread = async (newThread: any) => {
-    // /api/threads/create returns DB-shaped fields (category_id), so accept
-    // both casings here.
-    const categoryId = newThread.categoryId ?? newThread.category_id;
-    const selectedCategory = community?.threadCategories?.find(
-      (cat) => cat.id === categoryId
-    );
-
-    const threadWithAuthor = {
-      ...newThread,
-      author: newThread.author || {
-        name: currentUser?.name || "Anonymous",
-        image: currentUser?.image || "",
-      },
-      categoryId,
-      category: selectedCategory?.name || "General",
-      category_type: selectedCategory?.iconType,
-      createdAt: newThread.createdAt || new Date().toISOString(),
-      likesCount: 0,
-      commentsCount: 0,
-      likes: [],
-      comments: [],
-    };
-
-    setThreads((prevThreads) => [threadWithAuthor, ...prevThreads]);
-    setIsWriting(false);
-  };
-
-  const handleLikeUpdate = (
-    threadId: string,
-    newLikesCount: number,
-    liked: boolean
-  ) => {
-    setThreads((prevThreads) =>
-      prevThreads.map((thread) =>
-        thread.id === threadId
-          ? {
-              ...thread,
-              likesCount: newLikesCount,
-              likes: liked
-                ? [...(thread.likes || []), currentUser!.id]
-                : (thread.likes || []).filter((id) => id !== currentUser!.id),
-            }
-          : thread
-      )
-    );
-
-    if (selectedThread?.id === threadId) {
-      setSelectedThread((prev) =>
-        prev
-          ? {
-              ...prev,
-              likesCount: newLikesCount,
-              likes: liked
-                ? [...(prev.likes || []), currentUser!.id]
-                : (prev.likes || []).filter((id) => id !== currentUser!.id),
-            }
-          : null
-      );
-    }
-  };
-
-  const handleCommentUpdate = (threadId: string, newComment: any) => {
-    setThreads((prevThreads) =>
-      prevThreads.map((thread) =>
-        thread.id === threadId
-          ? {
-              ...thread,
-              commentsCount: thread.commentsCount + 1,
-              comments: [...(thread.comments || []), newComment],
-            }
-          : thread
-      )
-    );
-
-    if (selectedThread?.id === threadId) {
-      setSelectedThread((prev) =>
-        prev
-          ? {
-              ...prev,
-              commentsCount: prev.commentsCount + 1,
-              comments: [...(prev.comments || []), newComment],
-            }
-          : null
-      );
-    }
-  };
-
-  const filteredThreads = useMemo(() => {
-    let filtered = [...threads];
-
-    // Apply category filter
-    if (selectedCategory) {
-      filtered = filtered.filter(
-        (thread) => thread.categoryId === selectedCategory
-      );
-    }
-
-    // Sort pinned threads first, then by creation date
-    return filtered.sort((a, b) => {
-      // First sort by pinned status
-      if (a.pinned && !b.pinned) return -1;
-      if (!a.pinned && b.pinned) return 1;
-      // Then sort by creation date (newest first)
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-  }, [threads, selectedCategory]);
-
-  const categoriesById = useMemo(() => {
-    const map = new Map<string, ThreadCategory>();
-    for (const cat of community?.threadCategories ?? []) {
-      map.set(cat.id, cat);
-    }
-    return map;
-  }, [community?.threadCategories]);
-
-  const handleCancelPreRegistration = async () => {
-    if (!currentUser || !community) return;
-
+  const cancelPreRegistration = async () => {
     try {
-      const response = await fetch(`/api/community/${communitySlug}/cancel-pre-registration`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to cancel pre-registration');
-      }
-
-      toast.success('Pre-registration cancelled successfully');
-      router.push(communityPath(communitySlug, '/about'));
-    } catch (error) {
-      console.error('Error cancelling pre-registration:', error);
-      toast.error('Failed to cancel pre-registration');
+      const response = await fetch(`/api/community/${encodeURIComponent(slug)}/cancel-pre-registration`, { method: "POST" });
+      if (!response.ok) throw new Error();
+      toast.success("Pre-registration canceled");
+      router.push(communityPath(slug, "/about"));
+    } catch {
+      toast.error("Couldn't cancel the pre-registration. Try again.");
     }
   };
 
-  if (error) {
-    return <div>Error loading community: {error.message}</div>;
-  }
+  // People: the teacher first, then the roster.
+  const people = useMemo<FeedPerson[]>(() => {
+    const list: FeedPerson[] = [owner];
+    for (const m of roster ?? []) {
+      if (m.user_id === owner.id) continue;
+      list.push({ id: m.user_id, name: m.profile?.full_name || "Member", avatarUrl: m.profile?.avatar_url || null });
+    }
+    return list;
+  }, [owner, roster]);
+  const memberCount = roster ? roster.length : initialMemberCount;
 
-  if (!community) {
-    return (
-      <div className="flex justify-center items-center py-16">
-        <div>Community not found</div>
-      </div>
-    );
-  }
+  const counts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const p of posts) if (p.categoryId) out[p.categoryId] = (out[p.categoryId] ?? 0) + 1;
+    return out;
+  }, [posts]);
 
-  // Show coming soon page for pre-registered members, also when the community
-  // opened without a date (their first charge is still to come); otherwise
-  // they fall through to the members-only check below and see a blank page.
+  const pinned = useMemo(
+    () =>
+      category
+        ? []
+        : posts.filter((p) => p.pinned).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [posts, category]
+  );
+  const visible = useMemo(() => {
+    const list = posts.filter((p) => (category ? p.categoryId === category : !p.pinned));
+    return sortPosts(list, sort);
+  }, [posts, category, sort]);
+
   if (isPreRegistered && !isMember) {
     return (
       <PreRegistrationComingSoon
         communityName={community.name}
-        communitySlug={communitySlug}
-        openingDate={community.opening_date ?? null}
-        membershipPrice={community.membership_price || 0}
-        onCancel={handleCancelPreRegistration}
+        communitySlug={slug}
+        openingDate={community.openingDate}
+        membershipPrice={community.membershipPrice}
+        onCancel={cancelPreRegistration}
       />
     );
   }
+  if (!isMember && !isCreator && !isAdmin) return null;
 
-  // Only show main content for active members. Creators and site admins
-  // also have access (server-side gate already let them through; mirror that
-  // here so they don't see a blank page).
-  if (!isMember && !isCreator && !isAdmin) {
-    return null;
+  const openPost = (post: FeedPost) => setSelected(post);
+  const postHref = (p: FeedPost) => communityPath(slug, `/threads/${p.id}`);
+  const card = (p: FeedPost, embedded = false) => (
+    <div id={`post-${p.id}`}>
+      <PostCard
+        post={p}
+        href={postHref(p)}
+        category={p.categoryId ? categoriesById.get(p.categoryId) : undefined}
+        isTeacher={p.userId === community.createdBy}
+        isNew={isNewPost(p, newSince, viewer.id)}
+        fresh={p.id === freshId}
+        viewerId={viewer.id}
+        now={now}
+        timeZone={timeZone}
+        onOpen={openPost}
+        onLike={onLike}
+        embedded={embedded}
+      />
+    </div>
+  );
+
+  const activeCategory = category ? categoriesById.get(category) : undefined;
+  const lockedCategory = !!activeCategory?.creatorOnly && !isCreator;
+  const announceCategory = community.categories.find((c) => c.creatorOnly);
+  const paid = community.membershipEnabled && community.membershipPrice > 0;
+
+  const nextClass = offerings.liveClasses ? (
+    <NextClassCard slug={slug} classes={upcomingClasses} now={now} timeZone={timeZone} isOwner={isCreator} />
+  ) : null;
+  const course = offerings.courses && courseProgress ? <CourseCard slug={slug} progress={courseProgress} /> : null;
+  const secondary = (
+    <>
+      {offerings.privateLessons && lessons.length > 0 && (
+        <LessonsCard slug={slug} lessons={lessons} teacherName={owner.name} isMember={isMember} />
+      )}
+      {isCreator ? (
+        <OwnerTools
+          slug={slug}
+          showSchedule={offerings.liveClasses}
+          onAnnounce={() => composer.current?.open({ categoryId: announceCategory?.id })}
+        />
+      ) : isMember ? (
+        <MembershipCard
+          communityName={community.name}
+          paid={paid}
+          monthlyPrice={community.membershipPrice}
+          yearlyEnabled={community.yearlyEnabled}
+          subscriptionStatus={subscriptionStatus}
+          accessEndDate={accessEndDate}
+          canManageBilling={!!community.stripeAccountId}
+          timeZone={timeZone}
+          onManageBilling={() => setShowManageModal(true)}
+          onLeave={leave}
+          onRejoin={rejoin}
+        />
+      ) : (
+        <AdminJoinCard slug={slug} />
+      )}
+      {community.customLinks.length > 0 && <LinksCard links={community.customLinks} />}
+    </>
+  );
+
+  let feed: React.ReactNode;
+  if (posts.length === 0 && threadsError) {
+    feed = (
+      <FeedError
+        title="Posts didn't load"
+        text="The connection dropped while loading the feed. Your classes and membership are fine."
+        onRetry={() => mutateThreads()}
+      />
+    );
+  } else if (posts.length === 0) {
+    feed = isCreator ? (
+      <FeedEmpty
+        icon="megaphone"
+        title="Say hello to your first members"
+        text="A welcome post tells new members where to start: when classes happen, where replays live, and how to ask for feedback."
+        primary={{
+          label: "Write a welcome post",
+          onClick: () => composer.current?.open({ title: WELCOME_TITLE, body: WELCOME_BODY, categoryId: announceCategory?.id }),
+        }}
+      />
+    ) : (
+      <FeedEmpty
+        title="No posts yet"
+        text="Introduce yourself, ask a question about a class, or share what you're working on."
+        primary={{ label: "Write the first post", onClick: () => composer.current?.open() }}
+      />
+    );
+  } else {
+    feed = (
+      <>
+        {pinned.length > 0 && (
+          <PinnedBox slug={slug} posts={pinned} ownerName={owner.name} onOpen={openPost} renderPost={(p) => card(p, true)} />
+        )}
+        {visible.length === 0 ? (
+          <FeedEmpty
+            title={`No posts in ${activeCategory?.name ?? "this topic"} yet`}
+            text={lockedCategory ? `${owner.name} posts here. Check back soon.` : "Start the first one. It shows up at the top for everyone following this topic."}
+            primary={lockedCategory ? undefined : { label: "Start a post", onClick: () => composer.current?.open({ categoryId: category ?? undefined }) }}
+            secondary={{ label: "See all posts", onClick: () => setCategory(null) }}
+          />
+        ) : (
+          <div className="flex flex-col gap-3" aria-live="polite">
+            {visible.map((p) => (
+              <div key={p.id}>{card(p)}</div>
+            ))}
+          </div>
+        )}
+      </>
+    );
   }
-
-  // Get current user info for composer
-  const currentUserMember = members.find((m) => m.user_id === currentUser?.id);
-  const currentUserAvatar = currentUserMember?.profile?.avatar_url || currentUser?.image || "";
-  const currentUserName = currentUserMember?.profile?.display_name || currentUserMember?.profile?.full_name || currentUser?.name || "User";
-
-  const handleThreadClick = (thread: Thread) => {
-    if (isMobile) {
-      router.push(communityPath(communitySlug, `/threads/${thread.id}`));
-    } else {
-      setSelectedThread(thread);
-    }
-  };
 
   return (
     <>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {/* Curved Community Header */}
-          <CommunityHeader
-            name={community.name}
-            description={community.description}
-            imageUrl={community.imageUrl}
-            imageFocalX={community.imageFocalX}
-            imageFocalY={community.imageFocalY}
-            imageZoom={community.imageZoom}
-            membersCount={totalMembers}
-            members={members}
-            isCreator={isCreator}
-            onManageClick={() => router.push(communityPath(communitySlug, '/admin'))}
-          />
+      <div className="mx-auto max-w-[1160px] px-4 pb-12 pt-3 sm:px-6 sm:pb-[72px] sm:pt-5">
+        <FeedHeader
+          community={community}
+          people={people}
+          memberCount={memberCount}
+          rosterLoaded={!!roster}
+          viewerId={viewer.id}
+          isOwner={isCreator}
+        />
 
-          <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
-            {/* Main Content Area */}
-            <div className="flex-1 min-w-0">
-              {/* Composer Box */}
-              <div id="write-post" className="mb-6">
-                {isWriting ? (
-                  <div className="bg-card rounded-2xl p-4 shadow-sm border border-border/50">
-                    <Thread
-                      communityId={community.id}
-                      userId={currentUser?.id || ""}
-                      communityName={community.name}
-                      community={community}
-                      onSave={handleNewThread}
-                      onCancel={() => setIsWriting(false)}
-                    />
-                  </div>
-                ) : (
-                  <ComposerBox
-                    userAvatar={currentUserAvatar}
-                    userName={currentUserName}
-                    onClick={() =>
-                      currentUser
-                        ? setIsWriting(true)
-                        : toast.error("Please sign in to post")
-                    }
-                    disabled={!currentUser}
-                  />
-                )}
-              </div>
-
-              {/* Categories filter */}
-              {community.threadCategories &&
-                community.threadCategories.length > 0 && (
-                  <div id="thread-categories">
-                    <CategoryPills
-                      categories={community.threadCategories}
-                      selectedCategory={selectedCategory}
-                      onSelectCategory={setSelectedCategory}
-                    />
-                  </div>
-                )}
-
-              {/* Threads list */}
-              <div className="space-y-4">
-                {filteredThreads.map((thread) => {
-                  const cat = thread.categoryId
-                    ? categoriesById.get(thread.categoryId)
-                    : undefined;
-                  return (
-                    <ThreadCardFluid
-                      key={thread.id}
-                      id={thread.id}
-                      title={thread.title}
-                      content={thread.content}
-                      author={thread.author}
-                      created_at={thread.createdAt}
-                      likes_count={thread.likesCount}
-                      comments_count={thread.commentsCount}
-                      category={cat?.name || "General"}
-                      category_type={cat?.iconType}
-                      likes={thread.likes}
-                      pinned={thread.pinned}
-                      onClick={() => handleThreadClick(thread)}
-                      onLikeUpdate={handleLikeUpdate}
-                    />
-                  );
-                })}
-                {filteredThreads.length === 0 && (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <p className="text-lg font-medium mb-2">No threads yet</p>
-                    <p className="text-sm">Be the first to start a conversation!</p>
+        <div className="mt-4 grid grid-cols-1 items-start gap-8 min-[1080px]:mt-6 min-[1080px]:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="flex min-w-0 flex-col gap-4">
+            {(nextClass || course) && (
+              <div
+                aria-label="Up next"
+                className="scrollbar-hide -m-1 grid snap-x snap-mandatory auto-cols-[86%] grid-flow-col gap-3 overflow-x-auto p-1 pb-1 sm:auto-cols-[minmax(280px,1fr)] min-[1080px]:hidden"
+              >
+                {nextClass && <div className="snap-start">{nextClass}</div>}
+                {course && (
+                  <div className="snap-start">
+                    <CourseCard slug={slug} progress={courseProgress!} card />
                   </div>
                 )}
               </div>
-            </div>
+            )}
 
-            {/* Right Sidebar */}
-            <div className="w-full lg:w-72 flex-shrink-0">
-              <CommunitySidebar
-                customLinks={community.customLinks || []}
-                communitySlug={communitySlug}
-                creatorId={community.created_by}
-                isMember={isMember}
-                isCreator={isCreator}
-                memberStatus={memberStatus}
-                subscriptionStatus={subscriptionStatus}
-                accessEndDate={accessEndDate}
-                membershipPrice={community.membershipPrice}
-                membershipEnabled={community.membershipEnabled}
-                stripeAccountId={community.stripeAccountId}
-                onLeaveClick={() => setShowLeaveDialog(true)}
-                onManageClick={() => setShowManageModal(true)}
-                onReactivateClick={handleReactivateMembership}
-                onJoinClick={handleJoinCommunity}
-                isJoining={isJoining}
-              />
+            <Composer
+              ref={composer}
+              communityId={community.id}
+              categories={community.categories}
+              viewer={viewer}
+              isOwner={isCreator}
+              ownerName={owner.name}
+              onPosted={onPosted}
+            />
+
+            <FilterBar
+              categories={community.categories}
+              counts={counts}
+              total={posts.length}
+              selected={category}
+              onSelect={setCategory}
+              sort={sort}
+              onSort={setSort}
+            />
+
+            {feed}
+
+            <div className="mt-6 grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-7 border-t border-line pt-6 min-[1080px]:hidden">
+              {secondary}
             </div>
           </div>
-        </div>
 
-      {/* Modals */}
-      {selectedThread && (() => {
-        const cat = selectedThread.categoryId
-          ? categoriesById.get(selectedThread.categoryId)
-          : undefined;
-        return (
+          <aside aria-label="Classes, learning and membership" className="hidden flex-col gap-7 min-[1080px]:flex">
+            {nextClass}
+            {course}
+            {secondary}
+          </aside>
+        </div>
+      </div>
+
+      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} posts={posts} onPick={openPost} />
+
+      {current && (
         <ThreadModal
           thread={{
-            id: selectedThread.id,
-            user_id: selectedThread.userId,
-            title: selectedThread.title,
-            content: selectedThread.content,
-            author: selectedThread.author,
-            created_at: selectedThread.createdAt,
-            likes_count: selectedThread.likesCount,
-            comments_count: selectedThread.commentsCount,
-            category: cat?.name || "General",
-            category_type: cat?.iconType,
-            likes: selectedThread.likes,
-            comments: selectedThread.comments,
-            pinned: selectedThread.pinned,
+            id: current.id,
+            user_id: current.userId,
+            title: current.title,
+            content: current.content,
+            author: current.author,
+            created_at: current.createdAt,
+            likes_count: current.likesCount,
+            comments_count: current.commentsCount,
+            category: (current.categoryId && categoriesById.get(current.categoryId)?.name) || "General",
+            category_type: current.categoryId ? categoriesById.get(current.categoryId)?.iconType : undefined,
+            likes: current.likes,
+            comments: [],
+            pinned: current.pinned,
           }}
-          isOpen={!!selectedThread}
-          onClose={() => setSelectedThread(null)}
-          onLikeUpdate={handleLikeUpdate}
-          onCommentUpdate={handleCommentUpdate}
-          onThreadUpdate={(threadId, updates) => {
-            setThreads((prevThreads) =>
-              prevThreads.map((thread) =>
-                thread.id === threadId ? { ...thread, ...updates } : thread
-              )
-            );
-            setSelectedThread((prev) =>
-              prev && prev.id === threadId ? { ...prev, ...updates } : prev
-            );
+          isOpen
+          onClose={closePost}
+          onLikeUpdate={onLike}
+          onCommentUpdate={(id) =>
+            updatePost(id, (p) => ({
+              commentsCount: p.commentsCount + 1,
+              lastReplyAt: new Date().toISOString(),
+              repliers: [
+                { id: viewer.id, name: viewer.name, image: viewer.avatarUrl ?? "" },
+                ...(p.repliers ?? []).filter((r) => r.id !== viewer.id),
+              ].slice(0, 3),
+            }))
+          }
+          onThreadUpdate={(id, updates) => updatePost(id, updates as Partial<FeedPost>)}
+          onDelete={(id) => {
+            mutateThreads((list) => (list ?? []).filter((p) => p.id !== id), { revalidate: false });
+            setSelected(null);
           }}
-          onDelete={(threadId) => {
-            setThreads((prevThreads) =>
-              prevThreads.filter((thread) => thread.id !== threadId)
-            );
-            setSelectedThread(null);
-          }}
-          isCreator={currentUser?.id === community.created_by}
-        />
-        );
-      })()}
-
-      <Dialog open={showPlanChooser} onOpenChange={setShowPlanChooser}>
-        <DialogContent className="sm:max-w-[440px]">
-          <DialogHeader>
-            <DialogTitle>Choose your plan</DialogTitle>
-            <DialogDescription>Pick how you want to pay.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3">
-            <button
-              type="button"
-              onClick={() => { setShowPlanChooser(false); startPaidJoin('monthly'); }}
-              className="rounded-xl border border-border/60 p-4 text-left hover:border-primary transition-colors"
-            >
-              <div className="font-semibold">€{community.membershipPrice}/month</div>
-              <div className="text-sm text-muted-foreground">Billed monthly. Cancel anytime.</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setShowPlanChooser(false); startPaidJoin('yearly'); }}
-              className="rounded-xl border border-primary/60 bg-primary/5 p-4 text-left hover:border-primary transition-colors"
-            >
-              <div className="font-semibold">€{community.yearlyPrice}/year</div>
-              {community.yearlyBenefits && (
-                <div className="text-sm text-muted-foreground whitespace-pre-line mt-1">
-                  {community.yearlyBenefits}
-                </div>
-              )}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <PaymentModal
-        isOpen={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        clientSecret={paymentClientSecret}
-        stripeAccountId={stripeAccountId}
-        price={selectedPlan === 'yearly' ? (community.yearlyPrice || 0) : (community.membershipPrice || 0)}
-        plan={selectedPlan}
-        mode={paymentMode}
-        onSuccess={onPaidJoinSuccess}
-        communitySlug={communitySlug}
-      />
-
-      <PreRegistrationPaymentModal
-        isOpen={showPreRegistrationModal}
-        onClose={() => setShowPreRegistrationModal(false)}
-        clientSecret={preRegistrationClientSecret || ''}
-        stripeAccountId={stripeAccountId || ''}
-        communitySlug={communitySlug}
-        communityName={community.name}
-        price={community.membershipPrice || 0}
-        openingDate={preRegistrationOpeningDate || ''}
-        onSuccess={() => {
-          setIsPreRegistered(true);
-          setShowPreRegistrationModal(false);
-          toast.success("Pre-registration successful! You'll be charged on the opening date.");
-          window.location.reload();
-        }}
-      />
-
-      {community?.stripeAccountId && (
-        <ManageSubscriptionModal
-          isOpen={showManageModal}
-          onClose={() => setShowManageModal(false)}
-          communitySlug={communitySlug}
-          stripeAccountId={community.stripeAccountId}
+          isCreator={isCreator}
         />
       )}
 
-      <AlertDialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Leave Community</AlertDialogTitle>
-            <AlertDialogDescription>
-              {community?.membershipEnabled &&
-              community?.membershipPrice &&
-              community?.membershipPrice > 0 ? (
-                <>
-                  Your subscription will be canceled, but you'll maintain access
-                  until the end of your current billing period.
-                  {accessEndDate && (
-                    <span className="mt-2 block text-sm font-medium text-yellow-600">
-                      You will have access until <LocalDate value={accessEndDate} />
-                    </span>
-                  )}
-                </>
-              ) : (
-                "Are you sure you want to leave this community? You'll lose access to all content and need to rejoin to access it again."
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleLeaveCommunity}
-              className="bg-red-500 hover:bg-red-600"
-            >
-              Leave Community
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {community.stripeAccountId && (
+        <ManageSubscriptionModal
+          isOpen={showManageModal}
+          onClose={() => setShowManageModal(false)}
+          communitySlug={slug}
+          stripeAccountId={community.stripeAccountId}
+        />
+      )}
     </>
   );
 }

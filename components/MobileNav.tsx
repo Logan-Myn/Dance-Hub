@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Home, BookOpen, GraduationCap, Calendar, MoreHorizontal, Info, Settings, Users, User, LogOut, Repeat } from 'lucide-react';
+import { Home, BookOpen, GraduationCap, Calendar, MoreHorizontal, Info, Settings, Users, User, LogOut, Repeat, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import {
@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import NotificationsMenu from '@/components/community-shell/notifications-menu';
+import { usePageSearch } from '@/lib/feed/search-slot';
 import { signOut } from '@/lib/auth';
 import { useAuthModal } from '@/contexts/AuthModalContext';
 import { getCommunityTabs, isTabActive, type CommunityTabKey } from '@/lib/community-nav';
@@ -49,6 +50,7 @@ export default function MobileNav({
   const router = useRouter();
   const { showAuthModal } = useAuthModal();
   const [moreOpen, setMoreOpen] = useState(false);
+  const pageSearch = usePageSearch();
 
   // Same rules as the desktop top bar (lib/community-nav.ts): site admins get
   // full chrome, Admin shows for owners and site admins, switched-off
@@ -105,7 +107,19 @@ export default function MobileNav({
             </Avatar>
             <span className="font-semibold text-sm truncate max-w-[180px]">{communityName}</span>
           </Link>
-          {user ? <NotificationsMenu /> : null}
+          <div className="flex items-center gap-1">
+            {pageSearch ? (
+              <button
+                type="button"
+                onClick={pageSearch.open}
+                aria-label={pageSearch.label}
+                className="grid h-[38px] w-[38px] place-items-center rounded-[10px] text-ink-2 hover:bg-surface-2 hover:text-ink"
+              >
+                <Search className="h-5 w-5" aria-hidden="true" />
+              </button>
+            ) : null}
+            {user ? <NotificationsMenu /> : null}
+          </div>
         </div>
       </header>
 

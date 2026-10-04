@@ -98,6 +98,7 @@ module.exports = {
           DEFAULT: "rgb(var(--ds-live) / <alpha-value>)",
           soft: "rgb(var(--ds-live-soft) / <alpha-value>)",
         },
+        heart: "rgb(var(--ds-heart) / <alpha-value>)",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -139,6 +140,19 @@ module.exports = {
           "0%": { transform: "translateX(-10px)", opacity: "0" },
           "100%": { transform: "translateX(0)", opacity: "1" },
         },
+        "heart-pop": {
+          "0%": { transform: "scale(1)" },
+          "35%": { transform: "scale(1.38)" },
+          "70%": { transform: "scale(.92)" },
+          "100%": { transform: "scale(1)" },
+        },
+        "just-posted": {
+          "0%, 30%": { backgroundColor: "rgb(var(--ds-brand-soft))", borderColor: "rgb(var(--ds-brand-line))" },
+          "100%": { backgroundColor: "rgb(var(--ds-surface))" },
+        },
+        "pop-in": {
+          from: { opacity: "0", transform: "translateY(-4px) scale(.98)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -148,6 +162,9 @@ module.exports = {
         "glow-pulse": "glow-pulse 2s ease-in-out infinite",
         "bounce-subtle": "bounce-subtle 0.3s ease-out",
         "slide-in-left": "slide-in-left 0.2s ease-out",
+        "heart-pop": "heart-pop .4s cubic-bezier(.2,.7,.2,1)",
+        "just-posted": "just-posted 2.2s cubic-bezier(.2,.7,.2,1)",
+        "pop-in": "pop-in .16s cubic-bezier(.2,.7,.2,1)",
       },
     },
   },

@@ -4,10 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
+import { Search } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAuthModal } from "@/contexts/AuthModalContext";
 import { fetcher } from "@/lib/fetcher";
 import { getCommunityTabs, isTabActive } from "@/lib/community-nav";
+import { usePageSearch } from "@/lib/feed/search-slot";
 import type { Offerings } from "@/lib/offerings";
 import { cn } from "@/lib/utils";
 import AccountMenu from "./account-menu";
@@ -58,6 +60,7 @@ export default function TopBar({
     fallbackData: profile ?? undefined,
   });
 
+  const pageSearch = usePageSearch();
   const tabs = getCommunityTabs({ slug: communitySlug, isMember, isOwner, isAdmin, offerings });
   const activeKey = tabs.find((t) => isTabActive(t, pathname, communitySlug))?.key;
 
@@ -142,6 +145,21 @@ export default function TopBar({
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
+          {pageSearch && (
+            <button
+              type="button"
+              onClick={pageSearch.open}
+              aria-label={pageSearch.label}
+              aria-keyshortcuts="/"
+              className="mr-1.5 flex h-[38px] items-center justify-center gap-2.5 rounded-[10px] text-[14px] text-ink-3 transition-colors hover:bg-surface-3 hover:text-ink-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand max-xl:w-[38px] max-xl:hover:bg-surface-2 xl:min-w-[180px] xl:bg-surface-2 xl:pl-3 xl:pr-2"
+            >
+              <Search className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <span className="hidden xl:inline">{pageSearch.label}</span>
+              <kbd className="ml-auto hidden rounded-[5px] border border-b-2 border-line-strong bg-surface px-1.5 py-[3px] text-[11px] font-semibold leading-none text-ink-3 xl:inline-block">
+                /
+              </kbd>
+            </button>
+          )}
           {user ? (
             <>
               <NotificationsMenu />
