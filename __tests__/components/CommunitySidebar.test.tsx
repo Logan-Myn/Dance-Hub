@@ -100,7 +100,9 @@ it("keeps rendering when the upcoming-classes request fails", async () => {
     await new Promise((r) => setTimeout(r, 20));
   });
 
-  expect(screen.getByText("No upcoming classes")).toBeInTheDocument();
+  // A failed request is not "no classes".
+  expect(screen.getByText(/Classes didn't load/)).toBeInTheDocument();
+  expect(screen.queryByText("No upcoming classes")).not.toBeInTheDocument();
 });
 
 it("ignores a successful response that is not a list", async () => {
