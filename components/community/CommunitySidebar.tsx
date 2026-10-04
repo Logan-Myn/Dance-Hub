@@ -124,12 +124,15 @@ export default function CommunitySidebar({
   const [linksExpanded, setLinksExpanded] = useState(true);
   const [, setTick] = useState(0);
 
-  const { data } = useSWR<UpcomingClass[]>(
+  const { data, error } = useSWR<UpcomingClass[]>(
     `/api/community/${communitySlug}/upcoming-classes`,
     fetcher,
     { refreshInterval: 30000 }
   );
   const upcomingClasses = Array.isArray(data) ? data : [];
+  // No answer yet is not the same as "no classes".
+  const classesLoading = data === undefined && !error;
+  const classesFailed = data === undefined && !!error;
 
   // Re-render every minute to update relative times
   useEffect(() => {
@@ -187,7 +190,17 @@ export default function CommunitySidebar({
           </span>
         </div>
 
-        {upcomingClasses.length === 0 ? (
+        {classesLoading ? (
+          <div aria-busy="true" className="space-y-3">
+            <span className="sr-only">Loading classes</span>
+            <div aria-hidden="true" className="h-16 rounded-xl bg-muted/50 animate-pulse motion-reduce:animate-none" />
+            <div aria-hidden="true" className="h-16 rounded-xl bg-muted/50 animate-pulse motion-reduce:animate-none" />
+          </div>
+        ) : classesFailed ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Classes didn&apos;t load. They&apos;ll show up when the connection is back.
+          </p>
+        ) : upcomingClasses.length === 0 ? (
           <div className="flex flex-col items-center py-6 text-muted-foreground">
             <Clock className="h-8 w-8 mb-2 opacity-50" />
             <p className="text-sm">No upcoming classes</p>
