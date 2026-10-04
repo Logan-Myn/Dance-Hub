@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import MobileNav from '@/components/MobileNav';
+import { ALL_OFFERINGS } from '@/lib/offerings';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/bachataflow',
@@ -29,6 +30,7 @@ const baseProps = {
   communityImageUrl: null,
   isMember: true,
   isOwner: false,
+  offerings: ALL_OFFERINGS,
   user: { id: 'u1', email: 'u@example.com' },
   profile: { full_name: 'User One', avatar_url: null },
 };

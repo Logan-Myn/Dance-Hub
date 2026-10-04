@@ -7,9 +7,9 @@ import {
   getProfileForUser,
   getUserIsAdmin,
 } from '@/lib/community-data';
-import Navbar from '@/app/components/Navbar';
-import CommunityNavbar from '@/components/CommunityNavbar';
+import TopBar from '@/components/community-shell/top-bar';
 import MobileNav from '@/components/MobileNav';
+import { getOfferings } from '@/lib/offerings';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -37,24 +37,25 @@ export default async function CommunityLayout(
     session ? getUserIsAdmin(session.user.id) : Promise.resolve(false),
   ]);
 
-  return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <Script src="https://js.stripe.com/v3/" strategy="afterInteractive" />
-      {/* Desktop nav — hidden below md */}
-      <div className="hidden md:block">
-        <Navbar
-          initialUser={session?.user ?? null}
-          initialProfile={navProfile}
-        />
-        <CommunityNavbar
-          communitySlug={params.communitySlug}
-          isMember={isMember}
-          isOwner={isOwner}
-          isAdmin={isAdmin}
-        />
-      </div>
+  const offerings = getOfferings(community);
 
-      {/* Mobile nav — hidden at md+ */}
+  return (
+    <div className="flex min-h-screen flex-col bg-canvas">
+      <Script src="https://js.stripe.com/v3/" strategy="afterInteractive" />
+      {/* Desktop: one merged bar (hidden below md inside the component) */}
+      <TopBar
+        communitySlug={params.communitySlug}
+        communityName={community.name}
+        communityImageUrl={community.image_url}
+        isMember={isMember}
+        isOwner={isOwner}
+        isAdmin={isAdmin}
+        offerings={offerings}
+        initialUser={session?.user ?? null}
+        profile={navProfile}
+      />
+
+      {/* Phone: top header + bottom tab bar (hidden at md+) */}
       <MobileNav
         communitySlug={params.communitySlug}
         communityName={community.name}
@@ -62,11 +63,12 @@ export default async function CommunityLayout(
         isMember={isMember}
         isOwner={isOwner}
         isAdmin={isAdmin}
+        offerings={offerings}
         user={session?.user ?? null}
         profile={navProfile}
       />
 
-      {/* Clear the mobile bottom tab bar (~5rem) plus any iOS safe-area inset; md:pb-0 removes it on desktop */}
+      {/* Clear the phone tab bar (~5rem) plus any iOS safe-area inset; md:pb-0 removes it on desktop */}
       <main className="flex-grow pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
     </div>
   );

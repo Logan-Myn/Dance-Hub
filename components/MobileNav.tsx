@@ -18,6 +18,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import NotificationsButton from '@/components/NotificationsButton';
 import { signOut } from '@/lib/auth';
 import { useAuthModal } from '@/contexts/AuthModalContext';
+import { getCommunityTabs, isTabActive, type CommunityTabKey } from '@/lib/community-nav';
+import type { Offerings } from '@/lib/offerings';
 
 type MobileNavProps = {
   communitySlug: string;
@@ -26,17 +28,11 @@ type MobileNavProps = {
   isMember: boolean;
   isOwner: boolean;
   isAdmin?: boolean;
+  offerings: Offerings;
   user: { id: string; email?: string | null } | null;
   profile: { full_name?: string | null; avatar_url?: string | null } | null;
 };
 
-type Tab = {
-  key: string;
-  label: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  memberOnly?: boolean;
-};
 
 export default function MobileNav({
   communitySlug,
@@ -45,6 +41,7 @@ export default function MobileNav({
   isMember,
   isOwner,
   isAdmin = false,
+  offerings,
   user,
   profile,
 }: MobileNavProps) {
@@ -53,24 +50,24 @@ export default function MobileNav({
   const { showAuthModal } = useAuthModal();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  // Site admins (profiles.is_admin) get full chrome on every community, the
-  // same tabs as a member or owner, so they can actually moderate.
-  const hasFullAccess = isMember || isOwner || isAdmin;
-  // The broadcasts kill-switch only gates broadcasts (lib/broadcasts/auth.ts),
-  // never the whole admin.
-  const showAdmin = isOwner || isAdmin;
-
-  const rootHref = `/${communitySlug}`;
-  const allTabs: Tab[] = [
-    { key: 'community', label: 'Community', href: rootHref, icon: Home },
-    { key: 'classroom', label: 'Classroom', href: `/${communitySlug}/classroom`, icon: BookOpen, memberOnly: true },
-    { key: 'lessons', label: 'Lessons', href: `/${communitySlug}/private-lessons`, icon: GraduationCap },
-    { key: 'calendar', label: 'Calendar', href: `/${communitySlug}/calendar`, icon: Calendar, memberOnly: true },
-  ];
-  const tabs = allTabs.filter((t) => !t.memberOnly || hasFullAccess);
-
-  const isActive = (href: string) =>
-    href === rootHref ? pathname === rootHref : pathname?.startsWith(href) ?? false;
+  // Same rules as the desktop top bar (lib/community-nav.ts): site admins get
+  // full chrome, Admin shows for owners and site admins, switched-off
+  // offerings lose their tab.
+  const allTabs = getCommunityTabs({ slug: communitySlug, isMember, isOwner, isAdmin, offerings });
+  const rootHref = allTabs[0].href;
+  const BAR_KEYS: CommunityTabKey[] = ['community', 'classroom', 'private-lessons', 'calendar'];
+  const ICONS: Partial<Record<CommunityTabKey, React.ComponentType<{ className?: string }>>> = {
+    community: Home,
+    classroom: BookOpen,
+    'private-lessons': GraduationCap,
+    calendar: Calendar,
+  };
+  const tabs = allTabs.filter((t) => BAR_KEYS.includes(t.key));
+  const showAdmin = allTabs.some((t) => t.key === 'admin');
+  const isActive = (href: string) => {
+    const tab = allTabs.find((t) => t.href === href);
+    return tab ? isTabActive(tab, pathname, communitySlug) : false;
+  };
 
   const communityInitial = communityName.trim()[0]?.toUpperCase() ?? '?';
   const userInitial = (profile?.full_name ?? user?.email ?? '?').trim()[0]?.toUpperCase() ?? '?';
@@ -98,7 +95,7 @@ export default function MobileNav({
   return (
     <>
       {/* Top header */}
-      <header className="bg-card border-b border-border/50 sticky top-0 z-30 backdrop-blur-sm bg-card/95 md:hidden">
+      <header className="sticky top-[env(safe-area-inset-top)] z-30 border-b border-line bg-surface/90 backdrop-blur-md md:hidden">
         <div className="flex items-center justify-between px-4 h-14">
           <Link href={rootHref} className="flex items-center gap-2">
             <Avatar className="h-7 w-7">
@@ -113,25 +110,27 @@ export default function MobileNav({
 
       {/* Bottom tab bar */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border/50 pb-safe"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-line bg-surface/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]"
         aria-label="Primary"
       >
         <ul className="flex justify-around items-stretch">
           {tabs.map((tab) => {
             const active = isActive(tab.href);
-            const Icon = tab.icon;
+            const Icon = ICONS[tab.key] ?? Home;
             return (
               <li key={tab.key} className="flex-1">
                 <Link
+                  id={`mobile-${tab.id}`}
                   href={tab.href}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'flex flex-col items-center justify-center gap-0.5 py-2 min-h-[44px]',
-                    active ? 'text-primary' : 'text-muted-foreground'
+                    'relative flex min-h-[56px] flex-col items-center justify-center gap-0.5 py-2',
+                    active ? 'text-brand-ink' : 'text-ink-3'
                   )}
                 >
+                  {active && <span aria-hidden="true" className="absolute top-0 h-[3px] w-7 rounded-b bg-brand" />}
                   <Icon className="h-5 w-5" />
-                  <span className={cn('text-[10px]', active && 'font-semibold')}>{tab.label}</span>
+                  <span className={cn('text-[11px]', active ? 'font-bold' : 'font-medium')}>{tab.shortLabel}</span>
                 </Link>
               </li>
             );
