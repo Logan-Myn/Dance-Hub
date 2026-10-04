@@ -63,11 +63,51 @@ module.exports = {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
+        // Redesign tokens (see docs/superpowers/specs/2026-10-04-community-redesign-program-design.md)
+        canvas: "rgb(var(--ds-canvas) / <alpha-value>)",
+        surface: {
+          DEFAULT: "rgb(var(--ds-surface) / <alpha-value>)",
+          2: "rgb(var(--ds-surface-2) / <alpha-value>)",
+          3: "rgb(var(--ds-surface-3) / <alpha-value>)",
+        },
+        ink: {
+          DEFAULT: "rgb(var(--ds-ink) / <alpha-value>)",
+          2: "rgb(var(--ds-ink-2) / <alpha-value>)",
+          3: "rgb(var(--ds-ink-3) / <alpha-value>)",
+        },
+        line: {
+          DEFAULT: "rgb(var(--ds-line) / <alpha-value>)",
+          strong: "rgb(var(--ds-line-strong) / <alpha-value>)",
+        },
+        brand: {
+          DEFAULT: "rgb(var(--ds-brand) / <alpha-value>)",
+          hover: "rgb(var(--ds-brand-hover) / <alpha-value>)",
+          ink: "rgb(var(--ds-brand-ink) / <alpha-value>)",
+          soft: "rgb(var(--ds-brand-soft) / <alpha-value>)",
+          line: "rgb(var(--ds-brand-line) / <alpha-value>)",
+        },
+        ok: {
+          DEFAULT: "rgb(var(--ds-ok) / <alpha-value>)",
+          soft: "rgb(var(--ds-ok-soft) / <alpha-value>)",
+        },
+        warn: {
+          DEFAULT: "rgb(var(--ds-warn) / <alpha-value>)",
+          soft: "rgb(var(--ds-warn-soft) / <alpha-value>)",
+        },
+        live: {
+          DEFAULT: "rgb(var(--ds-live) / <alpha-value>)",
+          soft: "rgb(var(--ds-live-soft) / <alpha-value>)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      boxShadow: {
+        card: "0 1px 2px rgba(30, 23, 48, .06), 0 1px 1px rgba(30, 23, 48, .03)",
+        raised: "0 10px 28px -12px rgba(30, 23, 48, .22), 0 2px 6px rgba(30, 23, 48, .05)",
+        overlay: "0 24px 60px -20px rgba(30, 23, 48, .35), 0 4px 12px rgba(30, 23, 48, .08)",
       },
       keyframes: {
         "accordion-down": {

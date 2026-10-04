@@ -33,6 +33,28 @@
     --ring: 265 65% 60%; /* Primary color for ring */
 
     --radius: 0.5rem;
+
+    /* Redesign tokens (light only). RGB channels so Tailwind opacity works. */
+    --ds-canvas: 246 244 250;
+    --ds-surface: 255 255 255;
+    --ds-surface-2: 241 237 248;
+    --ds-surface-3: 231 225 241;
+    --ds-ink: 30 23 48;
+    --ds-ink-2: 93 85 113;
+    --ds-ink-3: 115 107 136;
+    --ds-line: 228 222 238;
+    --ds-line-strong: 207 197 224;
+    --ds-brand: 142 87 219;
+    --ds-brand-hover: 122 69 200;
+    --ds-brand-ink: 104 52 178;
+    --ds-brand-soft: 241 234 253;
+    --ds-brand-line: 216 199 246;
+    --ds-ok: 29 116 71;
+    --ds-ok-soft: 227 244 234;
+    --ds-warn: 138 75 0;
+    --ds-warn-soft: 255 242 222;
+    --ds-live: 207 38 55;
+    --ds-live-soft: 253 236 238;
   }
 
   .dark {
