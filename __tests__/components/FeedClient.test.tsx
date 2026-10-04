@@ -3,7 +3,8 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SWRConfig } from "swr";
 import toast from "react-hot-toast";
-import FeedClient from "@/app/[communitySlug]/FeedClient";
+import FeedClient, { type FeedClientProps } from "@/app/[communitySlug]/FeedClient";
+import { ALL_OFFERINGS } from "@/lib/offerings";
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), refresh: jest.fn() };
 jest.mock("next/navigation", () => ({
@@ -16,7 +17,7 @@ jest.mock("@/contexts/AuthContext", () => ({
 }));
 jest.mock("react-hot-toast", () => ({
   __esModule: true,
-  default: { success: jest.fn(), error: jest.fn() },
+  default: Object.assign(jest.fn(), { success: jest.fn(), error: jest.fn() }),
 }));
 // ESM-only package Jest can't resolve; virtual so the mock stands in for it.
 jest.mock(
@@ -24,24 +25,20 @@ jest.mock(
   () => ({ useNextStep: () => ({ startNextStep: jest.fn(), currentTour: null }) }),
   { virtual: true }
 );
-jest.mock("@/hooks/use-is-mobile", () => ({ useIsMobile: () => false }));
 
 // The feed itself isn't under test here, only the membership controls.
-jest.mock("@/components/community/CommunityHeader", () => ({
-  __esModule: true,
-  default: ({ membersCount }: { membersCount: number }) => (
-    <div data-testid="members-count">{membersCount}</div>
-  ),
-}));
-jest.mock("@/components/community/ComposerBox", () => () => null);
-jest.mock("@/components/community/CategoryPills", () => () => null);
-jest.mock("@/components/community/ThreadCardFluid", () => () => null);
-jest.mock("@/components/Thread", () => () => null);
+jest.mock("@/components/community-feed/feed-header", () => {
+  const actual = jest.requireActual("@/components/community-feed/feed-header");
+  return {
+    ...actual,
+    FeedHeader: ({ memberCount }: { memberCount: number }) => <div data-testid="members-count">{memberCount}</div>,
+  };
+});
+jest.mock("@/components/community-feed/composer", () => ({ Composer: () => null }));
+jest.mock("@/components/community-feed/filter-bar", () => ({ FilterBar: () => null }));
+jest.mock("@/components/community-feed/search-dialog", () => ({ SearchDialog: () => null }));
+jest.mock("@/components/community-feed/rail/next-class-card", () => ({ NextClassCard: () => null }));
 jest.mock("@/components/ThreadModal", () => () => null);
-jest.mock("@/components/PaymentModal", () => () => null);
-jest.mock("@/components/PreRegistrationPaymentModal", () => ({
-  PreRegistrationPaymentModal: () => null,
-}));
 jest.mock("@/components/PreRegistrationComingSoon", () => ({
   PreRegistrationComingSoon: ({ openingDate }: { openingDate: string | null }) => (
     <div data-testid="coming-soon">{String(openingDate)}</div>
@@ -51,22 +48,53 @@ jest.mock("@/components/community/ManageSubscriptionModal", () => ({
   ManageSubscriptionModal: () => null,
 }));
 
+// Radix menus need these in jsdom.
+beforeAll(() => {
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.releasePointerCapture ??= () => {};
+  Element.prototype.scrollIntoView ??= () => {};
+});
+
 const PERIOD_END = "2099-10-31T12:00:00.000Z";
 
-const community = {
+const community: FeedClientProps["community"] = {
   id: "c1",
-  name: "Salsa",
   slug: "salsa",
+  name: "Salsa",
   description: "",
-  image_url: "",
-  created_by: "owner",
-  created_at: "2026-01-01T00:00:00.000Z",
-  membersCount: 1,
   createdBy: "owner",
-  imageUrl: "",
+  imageUrl: null,
+  imageFocalX: 50,
+  imageFocalY: 50,
+  imageZoom: 1,
+  categories: [],
+  customLinks: [],
   membershipEnabled: true,
   membershipPrice: 25,
+  yearlyEnabled: false,
   stripeAccountId: "acct_1",
+  status: "active",
+  openingDate: null,
+};
+
+const baseProps: FeedClientProps = {
+  community,
+  initialThreads: [],
+  viewer: { id: "u1", name: "Ana", avatarUrl: null, timezone: "UTC" },
+  owner: { id: "owner", name: "Owner", avatarUrl: null },
+  offerings: ALL_OFFERINGS,
+  isCreator: false,
+  isAdmin: false,
+  isMember: true,
+  isPreRegistered: false,
+  memberStatus: "active",
+  subscriptionStatus: "active",
+  accessEndDate: null,
+  newSince: null,
+  serverNow: Date.parse("2099-10-01T12:00:00.000Z"),
+  upcomingClasses: [],
+  courseProgress: null,
+  lessons: [],
 };
 
 type Reply = { status?: number; body: unknown };
@@ -78,7 +106,7 @@ function mockFetch(routes: Record<string, Reply>) {
     const match = Object.keys(routes).find((suffix) => path.endsWith(suffix));
     const reply: Reply = match
       ? routes[match]
-      : { body: path.endsWith("/salsa") ? { ...community, membership_enabled: true, membership_price: 25, stripe_account_id: "acct_1" } : [] };
+      : { body: [] };
     const status = reply.status ?? 200;
     return Promise.resolve({
       ok: status < 400,
@@ -88,27 +116,22 @@ function mockFetch(routes: Record<string, Reply>) {
   }) as jest.Mock;
 }
 
-function renderFeed(membership: {
-  memberStatus: string | null;
-  subscriptionStatus: string | null;
-  accessEndDate: string | null;
-  isMember?: boolean;
-  isAdmin?: boolean;
-}) {
+function renderFeed(overrides: Partial<FeedClientProps>) {
   return render(
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
-      <FeedClient
-        communitySlug="salsa"
-        initialCommunity={community as never}
-        initialThreads={[]}
-        isCreator={false}
-        isAdmin={false}
-        isMember
-        isPreRegistered={false}
-        {...membership}
-      />
+      <FeedClient {...baseProps} {...overrides} />
     </SWRConfig>
   );
+}
+
+/** The rail renders twice (wide rail and the narrow layout); use the first. */
+const first = (els: HTMLElement[]) => els[0];
+
+async function leaveViaMenu() {
+  await userEvent.click(first(screen.getAllByRole("button", { name: /Manage/ })));
+  await userEvent.click(await screen.findByRole("menuitem", { name: "Leave community" }));
+  const confirm = first(screen.getAllByRole("alertdialog"));
+  await userEvent.click(within(confirm).getByRole("button", { name: "Leave community" }));
 }
 
 const CANCELING = { memberStatus: "active", subscriptionStatus: "canceling", accessEndDate: PERIOD_END };
@@ -133,11 +156,11 @@ it("keeps the canceling state when the cached member list still has the viewer a
   renderFeed(CANCELING);
 
   await waitFor(() => expect(screen.getByTestId("members-count")).toHaveTextContent("1"));
-  expect(screen.getByRole("button", { name: "Rejoin Community" })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Leave Community" })).not.toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "Rejoin" }).length).toBeGreaterThan(0);
+  expect(screen.queryByRole("button", { name: /Manage/ })).not.toBeInTheDocument();
 });
 
-it("switches to the rejoin button with the server's end date right after leaving", async () => {
+it("switches to Rejoin with the server's end date right after leaving", async () => {
   mockFetch({
     "/members": { body: { members: [] } },
     "/leave": {
@@ -152,11 +175,10 @@ it("switches to the rejoin button with the server's end date right after leaving
   });
   renderFeed({ ...ACTIVE, accessEndDate: null });
 
-  await userEvent.click(screen.getByRole("button", { name: "Leave Community" }));
-  await userEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Leave Community" }));
+  await leaveViaMenu();
 
-  expect(await screen.findByRole("button", { name: "Rejoin Community" })).toBeInTheDocument();
-  expect(screen.getByText(/Your membership ends on/)).toHaveTextContent("October 31, 2099");
+  expect((await screen.findAllByRole("button", { name: "Rejoin" })).length).toBeGreaterThan(0);
+  expect(first(screen.getAllByText(/^Ends /))).toHaveTextContent("Ends 31 Oct");
   expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("October 31, 2099"));
   // Drops the cached copy of this page, so going back to it doesn't show the old state.
   expect(mockRouter.refresh).toHaveBeenCalled();
@@ -169,8 +191,7 @@ it("shows the server's reason when leaving fails", async () => {
   });
   renderFeed(ACTIVE);
 
-  await userEvent.click(screen.getByRole("button", { name: "Leave Community" }));
-  await userEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Leave Community" }));
+  await leaveViaMenu();
 
   await waitFor(() =>
     expect(toast.error).toHaveBeenCalledWith("Failed to cancel subscription. Please try again.")
@@ -185,10 +206,10 @@ it("shows the server's reason when rejoining is refused", async () => {
   });
   renderFeed(CANCELING);
 
-  await userEvent.click(screen.getByRole("button", { name: "Rejoin Community" }));
+  await userEvent.click(first(screen.getAllByRole("button", { name: "Rejoin" })));
 
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith(reason));
-  expect(screen.getByRole("button", { name: "Rejoin Community" })).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "Rejoin" }).length).toBeGreaterThan(0);
 });
 
 it("still shows the access end date when leaving again after rejoining", async () => {
@@ -203,12 +224,11 @@ it("still shows the access end date when leaving again after rejoining", async (
   });
   renderFeed(CANCELING);
 
-  await userEvent.click(screen.getByRole("button", { name: "Rejoin Community" }));
-  await userEvent.click(await screen.findByRole("button", { name: "Leave Community" }));
+  await userEvent.click(first(screen.getAllByRole("button", { name: "Rejoin" })));
+  await userEvent.click(first(await screen.findAllByRole("button", { name: /Manage/ })));
+  await userEvent.click(await screen.findByRole("menuitem", { name: "Leave community" }));
 
-  expect(within(screen.getByRole("alertdialog")).getByText(/You will have access until/)).toHaveTextContent(
-    "October 31, 2099"
-  );
+  expect(first(screen.getAllByRole("alertdialog"))).toHaveTextContent("keep access until 31 Oct");
 });
 
 it("sends a member whose membership already ended to join again", async () => {
@@ -224,71 +244,34 @@ it("sends a member whose membership already ended to join again", async () => {
   });
   renderFeed(CANCELING);
 
-  await userEvent.click(screen.getByRole("button", { name: "Rejoin Community" }));
+  await userEvent.click(first(screen.getAllByRole("button", { name: "Rejoin" })));
 
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Your membership has ended. Join again to continue."));
   expect(mockRouter.push).toHaveBeenCalledWith("/salsa/about");
 });
 
-it("shows member controls after an admin with an ended membership joins again", async () => {
-  mockFetch({
-    "/members": { body: { members: [] } },
-    "/reactivate": {
-      body: {
-        success: true,
-        membership: { isMember: true, status: "active", subscriptionStatus: "active", currentPeriodEnd: PERIOD_END },
-      },
-    },
-  });
-  // Site admins get into the feed without a live membership.
+it("sends a site admin who isn't a member to the About page to join", () => {
   renderFeed({ memberStatus: "inactive", subscriptionStatus: "canceled", accessEndDate: null, isMember: false, isAdmin: true });
 
-  await userEvent.click(screen.getByRole("button", { name: "Join Again" }));
-
-  expect(await screen.findByRole("button", { name: "Leave Community" })).toBeInTheDocument();
+  expect(first(screen.getAllByRole("link", { name: "Join from the About page" }))).toHaveAttribute("href", "/salsa/about");
+  expect(screen.queryByRole("button", { name: /Manage/ })).not.toBeInTheDocument();
 });
 
-it("disables Join while the join request is in flight, so a double click starts one checkout", async () => {
-  let release: (value: Response) => void = () => {};
-  mockFetch({ "/members": { body: { members: [] } } });
-  const baseFetch = global.fetch;
-  global.fetch = jest.fn((url: RequestInfo | URL) => {
-    if (String(url).endsWith("/join-paid")) {
-      return new Promise<Response>((resolve) => { release = resolve; });
-    }
-    return baseFetch(url);
-  }) as jest.Mock;
-  // Non-members only reach the feed's Join button as site admins (others get the About page).
-  renderFeed({ memberStatus: null, subscriptionStatus: null, accessEndDate: null, isMember: false, isAdmin: true });
-
-  const join = await screen.findByRole("button", { name: "Join for €25/month" });
-  await userEvent.dblClick(join);
-
-  await waitFor(() => expect(join).toBeDisabled());
-  const joinPaidCalls = (global.fetch as jest.Mock).mock.calls.filter(([url]) => String(url).endsWith("/join-paid"));
-  expect(joinPaidCalls).toHaveLength(1);
-
-  release({ ok: true, status: 200, json: () => Promise.resolve({ clientSecret: "pi_secret", stripeAccountId: "acct_1" }) } as Response);
-  await waitFor(() => expect(join).not.toBeDisabled());
-});
-
-it("shows a pre-registered member the coming-soon page after the community opens without a date", async () => {
-  render(
-    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
-      <FeedClient
-        communitySlug="salsa"
-        initialCommunity={{ ...community, status: "active", opening_date: null } as never}
-        initialThreads={[]}
-        isCreator={false}
-        isAdmin={false}
-        isMember={false}
-        isPreRegistered
-        memberStatus="pre_registered"
-        subscriptionStatus={null}
-        accessEndDate={null}
-      />
-    </SWRConfig>
+it("records the visit for New markers once the feed is on screen", async () => {
+  renderFeed(ACTIVE);
+  await waitFor(() =>
+    expect((global.fetch as jest.Mock).mock.calls.some(([url, init]) => String(url).endsWith("/salsa/feed-visit") && init?.method === "POST")).toBe(true)
   );
+});
+
+it("shows a pre-registered member the coming-soon page after the community opens without a date", () => {
+  renderFeed({
+    isMember: false,
+    isPreRegistered: true,
+    memberStatus: "pre_registered",
+    subscriptionStatus: null,
+    accessEndDate: null,
+  });
 
   expect(screen.getByTestId("coming-soon")).toHaveTextContent("null");
 });

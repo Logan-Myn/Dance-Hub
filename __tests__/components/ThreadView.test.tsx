@@ -256,7 +256,7 @@ describe('ThreadView edit', () => {
       .find((b) => b.getAttribute('aria-haspopup') === 'menu')!;
     await user.click(menuButton);
     await user.click(await screen.findByRole('menuitem', { name: /Edit/ }));
-    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() =>
       expect(onThreadUpdate).toHaveBeenCalledWith('t1', {

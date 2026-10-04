@@ -3,13 +3,17 @@
 import Link from "next/link";
 import { CalendarDays, CalendarPlus, Clock, Plus, Video } from "lucide-react";
 import { DateTile } from "@/components/ds/date-tile";
-import { formatTimeInZone, relativeDayWord, sameUtcOffset, startsIn, zoneAbbreviation } from "@/lib/time/format";
+import { relativeDayWord, sameUtcOffset, startsIn, zoneAbbreviation } from "@/lib/time/format";
 import { communityPath } from "@/lib/safe-redirect";
 import { cn } from "@/lib/utils";
 import { BTN_LIVE, BTN_PRIMARY, BTN_SECONDARY } from "../feed-header";
 import type { UpcomingClass } from "../types";
 
 const SOON_MS = 15 * 60_000;
+
+/** "19:00" in `timeZone`. */
+const clock = (iso: string, timeZone: string) =>
+  new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone });
 
 function LiveDot() {
   return (
@@ -76,11 +80,11 @@ export function NextClassCard({
   const isLive = live(next);
   const msToStart = new Date(next.startsAt).getTime() - now.getTime();
   const isSoon = !isLive && msToStart <= SOON_MS;
-  const time = formatTimeInZone(next.startsAt, timeZone, "en-GB");
+  const time = clock(next.startsAt, timeZone);
   const teacherZone = next.teacherTimezone;
   const teacherLine =
     teacherZone && !sameUtcOffset(next.startsAt, timeZone, teacherZone)
-      ? `${formatTimeInZone(next.startsAt, teacherZone, "en-GB")} ${zoneAbbreviation(next.startsAt, teacherZone)} for ${next.teacherName}`
+      ? `${clock(next.startsAt, teacherZone)} ${zoneAbbreviation(next.startsAt, teacherZone)} for ${next.teacherName.split(" ")[0]}`
       : null;
 
   return (

@@ -55,7 +55,8 @@ export function FilterBar({
 
   return (
     <>
-      <div ref={sentinel} aria-hidden="true" className="h-0" />
+      {/* Zero-height marker; the negative margin cancels the parent's gap. */}
+      <div ref={sentinel} aria-hidden="true" className="-mb-4 h-0" />
       <div
         id="thread-categories"
         className={cn(
