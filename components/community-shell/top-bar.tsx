@@ -4,22 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
-import { ChevronDown, Compass, LayoutDashboard } from "lucide-react";
-import NotificationsButton from "@/components/NotificationsButton";
-import UserAccountNav from "@/components/UserAccountNav";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAuthModal } from "@/contexts/AuthModalContext";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { fetcher } from "@/lib/fetcher";
 import { getCommunityTabs, isTabActive } from "@/lib/community-nav";
 import type { Offerings } from "@/lib/offerings";
 import { cn } from "@/lib/utils";
+import AccountMenu from "./account-menu";
+import CommunitySwitcher from "./community-switcher";
+import NotificationsMenu from "./notifications-menu";
 
 interface TopBarUser {
   id: string;
@@ -85,8 +78,6 @@ export default function TopBar({
     return () => window.removeEventListener("resize", resetInk);
   }, [resetInk, activeKey, tabs.length]);
 
-  const initial = communityName.trim()[0]?.toUpperCase() ?? "?";
-
   return (
     <header className="sticky top-[env(safe-area-inset-top)] z-40 hidden border-b border-line bg-surface/90 backdrop-blur-md md:block">
       <div className="mx-auto flex h-[60px] max-w-[1160px] items-center gap-2 px-4 lg:gap-3 lg:px-6">
@@ -99,41 +90,12 @@ export default function TopBar({
           DH
         </Link>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger className="flex h-10 min-w-0 items-center gap-2.5 rounded-[10px] pl-1 pr-2 transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand">
-            {communityImageUrl ? (
-              <img src={communityImageUrl} alt="" className="h-[30px] w-[30px] shrink-0 rounded-lg object-cover" />
-            ) : (
-              <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-lg bg-ink font-display text-[15px] font-semibold text-white">
-                {initial}
-              </span>
-            )}
-            <span className="hidden max-w-[220px] truncate font-display text-[15px] font-semibold text-ink lg:block">
-              {communityName}
-            </span>
-            <span className="sr-only lg:hidden">{communityName}</span>
-            <ChevronDown className="h-4 w-4 shrink-0 text-ink-3" aria-hidden="true" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-60">
-            <DropdownMenuItem asChild>
-              <Link href="/discovery" className="flex items-center gap-2">
-                <Compass className="h-4 w-4" aria-hidden="true" />
-                Find more communities
-              </Link>
-            </DropdownMenuItem>
-            {user && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/dashboard" className="flex items-center gap-2">
-                    <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
-                    My dashboard
-                  </Link>
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <CommunitySwitcher
+          communitySlug={communitySlug}
+          communityName={communityName}
+          communityImageUrl={communityImageUrl}
+          userId={user?.id ?? null}
+        />
 
         <nav
           ref={navRef}
@@ -182,8 +144,8 @@ export default function TopBar({
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {user ? (
             <>
-              <NotificationsButton />
-              <UserAccountNav user={user} profile={liveProfile ?? null} />
+              <NotificationsMenu />
+              <AccountMenu user={user} profile={liveProfile ?? null} />
             </>
           ) : (
             <>

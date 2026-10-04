@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState } from "react";
 import { Bell, Check } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -11,112 +11,12 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/contexts/AuthContext";
-
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  created_at: string;
-  read: boolean;
-  link?: string;
-  type: 'course_published' | 'course_updated' | 'announcement' | 'other';
-}
-
-const POLL_INTERVAL = 30000; // Poll every 30 seconds
+import { useNotifications } from "@/hooks/use-notifications";
 
 export default function NotificationsButton() {
-  const { session } = useAuth();
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { notifications, unreadCount, markAsRead: handleMarkAsRead, markAllAsRead: handleMarkAllAsRead } =
+    useNotifications();
   const [open, setOpen] = useState(false);
-
-  const fetchNotifications = useCallback(async () => {
-    if (!session) return;
-
-    try {
-      const response = await fetch('/api/notifications');
-      if (!response.ok) {
-        console.error('Error fetching notifications:', response.status);
-        return;
-      }
-
-      const data: Notification[] = (await response.json()) || [];
-
-      // Skip the state update when nothing changed — otherwise the poll
-      // re-renders the popover subtree every 30s for no reason.
-      setNotifications((prev) => {
-        if (prev.length !== data.length) return data;
-        for (let i = 0; i < data.length; i++) {
-          if (prev[i].id !== data[i].id || prev[i].read !== data[i].read) {
-            return data;
-          }
-        }
-        return prev;
-      });
-      setUnreadCount((prev) => {
-        const next = data.filter((n) => !n.read).length;
-        return prev === next ? prev : next;
-      });
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-    }
-  }, [session]);
-
-  useEffect(() => {
-    fetchNotifications();
-
-    // Set up polling for notifications (replaces real-time subscription)
-    const pollInterval = setInterval(fetchNotifications, POLL_INTERVAL);
-
-    return () => {
-      clearInterval(pollInterval);
-    };
-  }, [fetchNotifications]);
-
-  const handleMarkAsRead = async (notificationId: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
-    );
-    setUnreadCount((prev) => Math.max(0, prev - 1));
-
-    try {
-      const response = await fetch('/api/notifications', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notificationId }),
-      });
-
-      if (!response.ok) {
-        console.error('Error marking notification as read:', response.status);
-        await fetchNotifications();
-      }
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-      await fetchNotifications();
-    }
-  };
-
-  const handleMarkAllAsRead = async () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    setUnreadCount(0);
-
-    try {
-      const response = await fetch('/api/notifications', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markAllRead: true }),
-      });
-
-      if (!response.ok) {
-        console.error('Error marking all notifications as read:', response.status);
-        await fetchNotifications();
-      }
-    } catch (error) {
-      console.error('Error marking all notifications as read:', error);
-      await fetchNotifications();
-    }
-  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

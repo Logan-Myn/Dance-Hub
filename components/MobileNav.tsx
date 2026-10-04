@@ -15,7 +15,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import NotificationsButton from '@/components/NotificationsButton';
+import NotificationsMenu from '@/components/community-shell/notifications-menu';
 import { signOut } from '@/lib/auth';
 import { useAuthModal } from '@/contexts/AuthModalContext';
 import { getCommunityTabs, isTabActive, type CommunityTabKey } from '@/lib/community-nav';
@@ -105,7 +105,7 @@ export default function MobileNav({
             </Avatar>
             <span className="font-semibold text-sm truncate max-w-[180px]">{communityName}</span>
           </Link>
-          <NotificationsButton />
+          {user ? <NotificationsMenu /> : null}
         </div>
       </header>
 
