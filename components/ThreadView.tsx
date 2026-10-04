@@ -1,32 +1,27 @@
 "use client";
 
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import {
   Heart,
-  MessageSquare,
   MoreHorizontal,
   Edit2,
   Trash2,
   MessageCircle,
   Pin,
   Send,
+  Link2,
+  X,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { formatDisplayName } from "@/lib/utils";
-import { CATEGORY_ICONS } from "@/lib/constants";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useEffect, useRef } from "react";
 import Comment from "./Comment";
-import { Textarea } from "./ui/textarea";
-import { Button } from "./ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "./ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,6 +34,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import Editor from "./Editor";
 import { cn } from "@/lib/utils";
+import { InitialsAvatar } from "@/components/ds/initials-avatar";
+import { MENU_ITEM, POP } from "@/components/community-shell/menu-styles";
+import { BTN_GHOST, BTN_PRIMARY } from "@/components/community-feed/feed-header";
+
+// Replies shown before "Show N earlier replies".
+const VISIBLE_REPLIES = 5;
 
 export interface ThreadViewProps {
   onClose: () => void;
@@ -92,10 +93,17 @@ export interface ThreadViewProps {
   isCreator?: boolean;
   layout?: "modal" | "page";
   headerSlot?: React.ReactNode;
+  /** Color dot for the topic in the header. */
+  categoryColor?: string;
+  /** The community owner, shown with a Teacher badge. */
+  teacherId?: string;
+  /** Put the cursor in the reply box on open ("Be the first to answer"). */
+  autoFocusReply?: boolean;
 }
 
 interface Comment {
   id: string;
+  user_id?: string;
   content: string;
   author: {
     name: string;
@@ -110,6 +118,7 @@ interface Comment {
 
 interface CommentProps extends Comment {
   threadId: string;
+  teacherId?: string;
   onReply: (commentId: string, content: string) => Promise<void>;
   onLike: (
     commentId: string,
@@ -129,6 +138,9 @@ export default function ThreadView({
   isCreator = false,
   layout = "modal",
   headerSlot,
+  categoryColor,
+  teacherId,
+  autoFocusReply = false,
 }: ThreadViewProps) {
   const { user, session } = useAuth();
   const [isLiking, setIsLiking] = useState(false);
@@ -144,6 +156,11 @@ export default function ThreadView({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [localComments, setLocalComments] = useState(thread.comments || []);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [showAllComments, setShowAllComments] = useState(false);
+  const replyRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (autoFocusReply) replyRef.current?.focus();
+  }, [autoFocusReply]);
 
   // Fetch user profile on mount
   useEffect(() => {
@@ -215,11 +232,6 @@ export default function ThreadView({
   // No sync from props for likes - we use optimistic updates only
   // The initial state is set from props when the component mounts
 
-  const iconConfig = CATEGORY_ICONS.find(
-    (i) => i.label === thread.category_type
-  );
-  const IconComponent = iconConfig?.icon || MessageCircle;
-
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
@@ -262,7 +274,7 @@ export default function ThreadView({
     }
   };
 
-  const handleSubmitComment = async (e: React.FormEvent) => {
+  const handleSubmitComment = async (e: React.FormEvent | React.KeyboardEvent) => {
     e.preventDefault();
 
     if (!user || !session) {
@@ -305,7 +317,8 @@ export default function ThreadView({
       setLocalComments(prev => [...prev, newComment]);
       onCommentUpdate?.(thread.id, newComment);
       setComment("");
-      toast.success("Comment posted successfully");
+      if (replyRef.current) replyRef.current.style.height = "";
+      toast.success("Reply posted");
     } catch (error) {
       console.error("Error posting comment:", error);
       toast.error("Failed to post comment. Please try again.");
@@ -547,6 +560,7 @@ export default function ThreadView({
   const mapCommentToProps = (comment: Comment): CommentProps => ({
     ...comment,
     threadId: thread.id,
+    teacherId,
     onReply: handleReply,
     onLike: handleCommentLike,
     replies: comment.replies?.map((reply: Comment) => mapCommentToProps(reply)),
@@ -559,7 +573,6 @@ export default function ThreadView({
     user?.email?.split("@")[0] ||
     "Anonymous";
   const userAvatarUrl = userProfile?.avatar_url || user?.image;
-  const userInitial = userDisplayName[0]?.toUpperCase() || "A";
 
   const handleTogglePin = async () => {
     if (!session) {
@@ -591,264 +604,216 @@ export default function ThreadView({
     }
   };
 
-  const rootClassName =
-    layout === "page"
-      ? "flex flex-col gap-4 bg-card border-border/50 overflow-hidden h-full"
-      : "flex flex-col gap-4 max-h-[90vh] bg-card border-border/50 rounded-2xl overflow-hidden";
+  const shownComments =
+    showAllComments || organizedComments.length <= VISIBLE_REPLIES
+      ? organizedComments
+      : organizedComments.slice(-VISIBLE_REPLIES);
+  const hiddenCount = organizedComments.length - shownComments.length;
+  const replyCount = thread.comments_count ?? localComments.length;
+
+  const copyLink = async () => {
+    const url = `${window.location.origin}${window.location.pathname}?thread=${thread.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copied");
+    } catch {
+      toast.error("Couldn't copy the link.");
+    }
+  };
+
+  const iconBtn =
+    "grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[10px] text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand data-[state=open]:bg-surface-2";
 
   return (
     <>
-      <div className={rootClassName}>
-        {layout === "page" && headerSlot ? (
-          <div className="shrink-0 border-b border-border/50">{headerSlot}</div>
-        ) : null}
-          {/* Header Section */}
-          <div className="p-6 pb-0">
-            {/* Author info and metadata */}
-            <div className="flex items-start justify-between mb-5">
-              <div className="flex items-start gap-3">
-                <Avatar className="h-11 w-11 ring-2 ring-primary/20 flex-shrink-0">
-                  <AvatarImage
-                    src={thread.author.image}
-                    alt={thread.author.name}
-                  />
-                  <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                    {thread.author.name?.[0]?.toUpperCase() || "U"}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col gap-1">
-                  <span className="font-semibold text-foreground">
-                    {thread.author.name}
-                  </span>
-                  <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-sm">
-                    <span className="text-muted-foreground">
-                      {formatDistanceToNow(new Date(thread.created_at))} ago
-                    </span>
-                    <span className="text-muted-foreground">·</span>
-                    {iconConfig ? (
-                      <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-muted/50">
-                        <IconComponent
-                          className="h-3.5 w-3.5"
-                          style={{ color: iconConfig.color }}
-                        />
-                        <span
-                          className="text-sm font-medium"
-                          style={{ color: iconConfig.color }}
-                        >
-                          {thread.category || "General"}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-sm font-medium text-muted-foreground px-2.5 py-0.5 rounded-full bg-muted/50">
-                        {thread.category || "General"}
-                      </span>
-                    )}
-                    {thread.pinned && (
-                      <>
-                        <span className="text-muted-foreground">·</span>
-                        <div className="flex items-center gap-1 text-primary">
-                          <Pin className="h-3 w-3" />
-                          <span className="text-xs font-medium">Pinned</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
+      <div className={cn("flex min-h-0 flex-1 flex-col bg-surface text-ink", layout === "page" && "h-full")}>
+        {layout === "page" && headerSlot ? <div className="shrink-0 border-b border-line">{headerSlot}</div> : null}
 
-              {/* Actions dropdown */}
-              <div className="flex items-center gap-2">
-                {(isCreator || isOwner) && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-9 w-9 p-0 rounded-full hover:bg-muted transition-colors duration-200"
-                      >
-                        <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="rounded-xl border-border/50">
-                      {isCreator && (
-                        <DropdownMenuItem
-                          onClick={handleTogglePin}
-                          className="rounded-lg cursor-pointer"
-                        >
-                          <Pin className="h-4 w-4 mr-2" />
-                          {thread.pinned ? "Unpin" : "Pin"}
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setEditedTitle(thread.title);
-                          setEditedContent(thread.content);
-                          setIsEditing(true);
-                        }}
-                        className="rounded-lg cursor-pointer"
-                      >
-                        <Edit2 className="h-4 w-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setShowDeleteDialog(true)}
-                        className="text-destructive focus:text-destructive rounded-lg cursor-pointer"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+        <div className="flex shrink-0 items-center gap-3 border-b border-line py-3 pl-4 pr-3 sm:pl-[22px]">
+          <span className="inline-flex min-w-0 items-center gap-1.5 text-[13.5px] font-medium text-ink-2">
+            {categoryColor && <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: categoryColor }} />}
+            <span className="truncate">{thread.category || "General"}</span>
+          </span>
+          {thread.pinned && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-[12px] font-semibold text-brand-ink">
+              <Pin className="h-3 w-3" aria-hidden="true" />
+              Pinned
+            </span>
+          )}
+          <span className="flex-1" />
+          <button type="button" onClick={copyLink} className={iconBtn} aria-label="Copy link to this post" title="Copy link">
+            <Link2 className="h-5 w-5" aria-hidden="true" />
+          </button>
+          {(isCreator || isOwner) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger className={iconBtn} aria-label="Post options">
+                <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={8} className={cn(POP, "w-48")}>
+                {isCreator && (
+                  <DropdownMenuItem onSelect={handleTogglePin} className={MENU_ITEM}>
+                    <Pin aria-hidden="true" />
+                    {thread.pinned ? "Unpin" : "Pin to the top"}
+                  </DropdownMenuItem>
                 )}
-              </div>
-            </div>
-
-            {/* Thread content */}
-            {isEditing ? (
-              <div className="space-y-4 mb-4">
-                <Input
-                  value={editedTitle}
-                  onChange={(e) => setEditedTitle(e.target.value)}
-                  className="font-display text-xl md:text-2xl font-semibold border-border/50 rounded-xl focus:ring-primary/50"
-                  placeholder="Thread title"
-                />
-                <Editor
-                  content={editedContent}
-                  onChange={(html) => setEditedContent(html)}
-                  editable={true}
-                  showHeadings={false}
-                  showParagraphStyle={false}
-                  showAlignment={false}
-                  placeholder="Write your post..."
-                  minHeight="120px"
-                />
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleCancelEdit}
-                    className="rounded-xl border-border/50 hover:bg-muted"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleSaveEdit}
-                    disabled={!editedTitle.trim() || !editedContent.trim()}
-                    className="rounded-xl bg-primary hover:bg-primary/90"
-                  >
-                    Save Changes
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-4">
-                  {thread.title}
-                </h2>
-                <div className="prose prose-sm max-w-none text-foreground">
-                  <Editor
-                    content={thread.content}
-                    onChange={() => {}}
-                    editable={false}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Interaction buttons */}
-            <div className="flex items-center gap-2 border-t border-border/30 pt-4 mt-4">
-              <button
-                onClick={handleLike}
-                disabled={isLiking || !user}
-                className={cn(
-                  "flex items-center gap-2 px-3.5 py-1.5 rounded-full font-semibold text-sm",
-                  "transition-all duration-200 ease-out border",
-                  isLiked
-                    ? "bg-pink-50 text-pink-500 border-pink-200"
-                    : "bg-card text-muted-foreground border-border/50 hover:border-pink-200 hover:text-pink-500"
-                )}
-              >
-                <Heart
-                  className={cn(
-                    "h-4 w-4",
-                    isLiked && "fill-current",
-                    isLiking && "animate-pulse scale-110"
-                  )}
-                />
-                <span>{localLikesCount}</span>
-              </button>
-              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full font-semibold text-sm text-primary bg-primary/10 border border-primary/20">
-                <MessageSquare className="h-4 w-4" />
-                <span>{thread.comments_count} comments</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Comment input - sticky-feeling composer with a soft pill input */}
-          <div className="order-last px-4 py-3 bg-card border-t border-border/40">
-            <div className="flex items-center gap-3">
-              <Avatar className="h-9 w-9 ring-2 ring-primary/20 flex-shrink-0">
-                <AvatarImage src={userAvatarUrl} alt={userDisplayName} />
-                <AvatarFallback className="bg-primary/10 text-primary font-medium text-sm">
-                  {userInitial}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0 relative">
-                <textarea
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="Write a comment…"
-                  className="w-full min-h-[40px] max-h-32 resize-none py-2.5 pl-4 pr-12 rounded-full border border-border/40 bg-muted/40 focus:bg-card focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-transparent transition-colors duration-200 text-sm placeholder:text-muted-foreground/70"
-                  rows={1}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && comment.trim()) {
-                      e.preventDefault();
-                      handleSubmitComment(e);
-                    }
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setEditedTitle(thread.title);
+                    setEditedContent(thread.content);
+                    setIsEditing(true);
                   }}
-                />
-                {!comment && (
-                  <span className="hidden sm:block absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-medium tracking-wider text-muted-foreground/60 pointer-events-none">
-                    ↵
-                  </span>
+                  className={MENU_ITEM}
+                >
+                  <Edit2 aria-hidden="true" />
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setShowDeleteDialog(true)} className={cn(MENU_ITEM, "text-live [&>svg]:text-live")}>
+                  <Trash2 aria-hidden="true" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {layout === "modal" && (
+            <button type="button" onClick={onClose} className={iconBtn} aria-label="Close">
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-2 pt-5 sm:px-[22px]">
+          <div className="flex items-center gap-3">
+            <InitialsAvatar id={thread.user_id} name={thread.author.name} imageUrl={thread.author.image || null} size={40} />
+            <div className="min-w-0">
+              <span className="flex items-center gap-2 font-semibold text-ink">
+                {thread.author.name}
+                {teacherId && thread.user_id === teacherId && (
+                  <span className="rounded-full bg-brand-soft px-[7px] py-0.5 text-[11.5px] font-semibold text-brand-ink">Teacher</span>
                 )}
-              </div>
-              <Button
-                onClick={handleSubmitComment}
-                disabled={isSubmitting || !comment.trim()}
-                size="icon"
-                className="h-10 w-10 rounded-full bg-primary hover:bg-primary/90 shadow-md shadow-primary/30 flex-shrink-0 transition-all duration-200"
-              >
-                <Send className={cn(
-                  "h-4 w-4",
-                  isSubmitting && "animate-pulse"
-                )} />
-              </Button>
+              </span>
+              <time dateTime={thread.created_at} className="block text-[13px] text-ink-3">
+                {formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}
+              </time>
             </div>
           </div>
 
-          {/* Comments section - tinted scrollable panel */}
-          <div className="flex-1 overflow-y-auto px-6 py-5 bg-muted/25 border-t border-border/30">
-            {organizedComments.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
-                  <MessageSquare className="h-8 w-8 text-muted-foreground/50" />
-                </div>
-                <p className="text-muted-foreground font-medium">No comments yet</p>
-                <p className="text-sm text-muted-foreground/70">Be the first to share your thoughts</p>
+          {isEditing ? (
+            <div className="mt-4 flex flex-col gap-3">
+              <label htmlFor={`edit-title-${thread.id}`} className="sr-only">Title</label>
+              <input
+                id={`edit-title-${thread.id}`}
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+                maxLength={120}
+                className="w-full rounded-[10px] border border-line bg-surface px-3 py-2.5 font-display text-[19px] font-semibold text-ink outline-none focus:border-brand focus:shadow-[0_0_0_3px_rgb(var(--ds-brand)/0.18)]"
+                placeholder="Title"
+              />
+              <Editor
+                content={editedContent}
+                onChange={(html) => setEditedContent(html)}
+                editable={true}
+                showHeadings={false}
+                showParagraphStyle={false}
+                showAlignment={false}
+                placeholder="Write your post..."
+                minHeight="120px"
+              />
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={handleCancelEdit} className={BTN_GHOST}>
+                  Cancel
+                </button>
+                <button type="button" onClick={handleSaveEdit} disabled={!editedTitle.trim() || !editedContent.trim()} className={BTN_PRIMARY}>
+                  Save changes
+                </button>
               </div>
+            </div>
+          ) : (
+            <>
+              <h2 className="mb-2.5 mt-4 text-balance font-display text-[22px] font-semibold leading-[1.2] tracking-[-0.012em] text-ink sm:text-[26px]">
+                {thread.title}
+              </h2>
+              <div className="prose max-w-[65ch] text-[16px] leading-[1.65] text-ink prose-p:my-2 prose-a:text-brand-ink">
+                <Editor content={thread.content} onChange={() => {}} editable={false} />
+              </div>
+            </>
+          )}
+
+          <div className="flex items-center gap-2 border-b border-line py-3.5">
+            <button
+              type="button"
+              onClick={handleLike}
+              disabled={isLiking}
+              aria-pressed={isLiked}
+              aria-label={`${isLiked ? "Unlike" : "Like"} post, ${localLikesCount} likes`}
+              className={cn(
+                "-ml-2.5 inline-flex h-[34px] items-center gap-1.5 rounded-full px-2.5 text-[13.5px] font-semibold tabular-nums transition-colors hover:bg-heart/10 hover:text-heart",
+                isLiked ? "text-heart" : "text-ink-2"
+              )}
+            >
+              <Heart className={cn("h-[18px] w-[18px]", isLiked && "fill-current")} aria-hidden="true" />
+              {localLikesCount}
+            </button>
+            <span className="inline-flex items-center gap-1.5 px-1 text-[13.5px] font-semibold text-ink-2">
+              <MessageCircle className="h-[18px] w-[18px]" aria-hidden="true" />
+              {replyCount} {replyCount === 1 ? "reply" : "replies"}
+            </span>
+          </div>
+
+          <section aria-label="Replies" className="flex flex-col gap-[18px] pb-3 pt-[18px]">
+            {organizedComments.length === 0 ? (
+              <p className="text-[15px] text-ink-2">No replies yet. Be the first to answer.</p>
             ) : (
               <>
-                <div className="text-[10px] font-bold tracking-[0.12em] uppercase text-muted-foreground/70 mb-3">
-                  {organizedComments.length} {organizedComments.length === 1 ? "Reply" : "Replies"}
-                </div>
-                <div className="space-y-4">
-                  {organizedComments.map((comment) => (
-                    <Comment key={comment.id} {...mapCommentToProps(comment)} />
-                  ))}
-                </div>
+                <h3 className="font-display text-[15px] font-semibold text-ink">
+                  {organizedComments.length} {organizedComments.length === 1 ? "reply" : "replies"}
+                </h3>
+                {hiddenCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllComments(true)}
+                    className="-ml-2.5 self-start rounded-lg px-2.5 py-1.5 text-[13.5px] font-semibold text-brand-ink hover:bg-brand-soft"
+                  >
+                    Show {hiddenCount} earlier {hiddenCount === 1 ? "reply" : "replies"}
+                  </button>
+                )}
+                {shownComments.map((comment) => (
+                  <Comment key={comment.id} {...mapCommentToProps(comment)} />
+                ))}
               </>
             )}
-          </div>
+          </section>
+        </div>
+
+        <form
+          onSubmit={handleSubmitComment}
+          className="flex shrink-0 items-end gap-2.5 border-t border-line bg-surface px-3 py-3 pb-[calc(12px+env(safe-area-inset-bottom))] sm:px-4"
+        >
+          <InitialsAvatar id={user?.id ?? "me"} name={userDisplayName} imageUrl={userAvatarUrl || null} size={32} className="mb-1.5 hidden sm:inline-grid" />
+          <label htmlFor={`reply-${thread.id}`} className="sr-only">Write a reply</label>
+          <textarea
+            ref={replyRef}
+            id={`reply-${thread.id}`}
+            value={comment}
+            onChange={(e) => {
+              setComment(e.target.value);
+              e.target.style.height = "auto";
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+            }}
+            placeholder="Write a reply…"
+            rows={1}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && comment.trim()) {
+                e.preventDefault();
+                handleSubmitComment(e);
+              }
+            }}
+            className="h-11 max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-[10px] border border-line bg-surface px-3 py-[11px] text-[15px] leading-[1.4] text-ink outline-none transition-[border-color,box-shadow] placeholder:text-ink-3 focus:border-brand focus:shadow-[0_0_0_3px_rgb(var(--ds-brand)/0.18)]"
+          />
+          <button type="submit" disabled={isSubmitting || !comment.trim()} className={cn(BTN_PRIMARY, "h-11")}>
+            <Send aria-hidden="true" />
+            <span className="hidden sm:inline">Reply</span>
+          </button>
+        </form>
       </div>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

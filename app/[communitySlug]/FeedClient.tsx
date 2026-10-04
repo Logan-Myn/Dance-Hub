@@ -123,6 +123,7 @@ export default function FeedClient({
   const [category, setCategory] = useState<string | null>(null);
   const [sort, setSort] = useState<FeedSort>("latest");
   const [selected, setSelected] = useState<FeedPost | null>(null);
+  const [focusReply, setFocusReply] = useState(false);
   const [freshId, setFreshId] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const composer = useRef<ComposerHandle>(null);
@@ -340,7 +341,10 @@ export default function FeedClient({
   }
   if (!isMember && !isCreator && !isAdmin) return null;
 
-  const openPost = (post: FeedPost) => setSelected(post);
+  const openPost = (post: FeedPost, opts?: { focusReply?: boolean }) => {
+    setFocusReply(!!opts?.focusReply);
+    setSelected(post);
+  };
   const postHref = (p: FeedPost) => communityPath(slug, `/threads/${p.id}`);
   const card = (p: FeedPost, embedded = false) => (
     <div id={`post-${p.id}`}>
@@ -554,6 +558,9 @@ export default function FeedClient({
             setSelected(null);
           }}
           isCreator={isCreator}
+          categoryColor={current.categoryId ? categoriesById.get(current.categoryId)?.color : undefined}
+          teacherId={community.createdBy}
+          autoFocusReply={focusReply}
         />
       )}
 
