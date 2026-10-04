@@ -11,6 +11,14 @@ interface MuxPlayerProps {
     video_description?: string;
   };
   maxResolution?: '720p' | '1080p' | '1440p' | '2160p';
+  /** Classroom extras (all optional; other players keep Mux's defaults). */
+  playbackRates?: number[];
+  seekOffset?: number;
+  mirrored?: boolean;
+  autoPlay?: boolean;
+  /** Mux keyboard shortcuts to turn off, e.g. "nom" frees the M key. */
+  hotkeys?: string;
+  onEnded?: () => void;
 }
 
 type PlaybackStatus = 'ready' | 'processing' | 'failed';
@@ -41,6 +49,12 @@ function MuxPlayerForVideo({
   playbackId,
   metadata,
   maxResolution = '720p',
+  playbackRates,
+  seekOffset,
+  mirrored = false,
+  autoPlay,
+  hotkeys,
+  onEnded,
 }: MuxPlayerProps) {
   // Videos are attached to a lesson as soon as the upload lands (so a long
   // encode can never lose them), which means a video can be shown before it
@@ -106,6 +120,14 @@ function MuxPlayerForVideo({
           metadata={metadata}
           preload="metadata"
           maxResolution={maxResolution}
+          playbackRates={playbackRates}
+          forwardSeekOffset={seekOffset}
+          backwardSeekOffset={seekOffset}
+          autoPlay={autoPlay}
+          hotkeys={hotkeys}
+          onEnded={onEnded}
+          accentColor={playbackRates ? '#8E57DB' : undefined}
+          className={mirrored ? 'mux-mirrored' : undefined}
           style={{
             position: 'absolute',
             inset: 0,

@@ -771,6 +771,7 @@ export const getCourseProgress = cache(async (
     LEFT JOIN lesson_completions lc ON lc.lesson_id = l.id AND lc.user_id = ${userId}
     WHERE co.community_id = ${communityId}
       AND (${includePrivate} OR co.is_public = true)
+      AND co.slug <> 'live-class-replays'
     ORDER BY co.id, ch.chapter_position, l.lesson_position
   `;
   if (rows.length === 0) return null;

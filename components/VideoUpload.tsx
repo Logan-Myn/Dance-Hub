@@ -10,12 +10,15 @@ interface VideoUploadProps {
   communityId: string;
   onUploadComplete: (assetId: string, playbackId: string) => void;
   onUploadError: (error: string) => void;
+  /** Told when an upload starts and stops, so the page can keep it alive. */
+  onUploadingChange?: (uploading: boolean) => void;
 }
 
 export default function VideoUpload({
   communityId,
   onUploadComplete,
   onUploadError,
+  onUploadingChange,
 }: VideoUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -24,6 +27,11 @@ export default function VideoUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cancelledRef = useRef(false);
   const { session } = useAuth();
+
+  useEffect(() => {
+    onUploadingChange?.(isUploading);
+  }, [isUploading, onUploadingChange]);
+  useEffect(() => () => onUploadingChange?.(false), [onUploadingChange]);
 
   useEffect(() => {
     return () => {

@@ -67,7 +67,7 @@ test.describe('Course settings: cover image and delete', () => {
     await page.getByRole('button', { name: /create course/i }).click();
 
     const dialog = page.locator('div[role="dialog"]');
-    await expect(dialog.getByRole('heading', { name: 'Create Course' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Create a course' })).toBeVisible();
 
     await dialog.locator('#title').fill(courseTitle);
     await dialog.locator('#description').fill('Created by the course settings e2e run.');
@@ -79,7 +79,8 @@ test.describe('Course settings: cover image and delete', () => {
 
     await dialog.getByRole('button', { name: /^create course$/i }).click();
 
-    await expect(page.getByText(courseTitle)).toBeVisible({ timeout: 15000 });
+    // Creating opens the new course.
+    await expect(page.getByRole('heading', { level: 1, name: courseTitle })).toBeVisible({ timeout: 15000 });
 
     const imageUrl = await getCourseImageUrl(page, courseSlug);
     expect(imageUrl).toBeTruthy();
@@ -96,7 +97,7 @@ test.describe('Course settings: cover image and delete', () => {
     await page.getByRole('button', { name: /settings/i }).click();
 
     const dialog = page.locator('div[role="dialog"]');
-    await expect(dialog.getByRole('heading', { name: 'Edit Course' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Course settings' })).toBeVisible();
 
     await dialog.locator('input[type="file"]').setInputFiles({
       name: 'cover-blue.png',
@@ -155,10 +156,10 @@ test.describe('Course settings: cover image and delete', () => {
     await page.getByRole('button', { name: /settings/i }).click();
 
     const dialog = page.locator('div[role="dialog"]');
-    await expect(dialog.getByRole('heading', { name: 'Edit Course' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Course settings' })).toBeVisible();
 
     await dialog.getByRole('button', { name: /^delete$/i }).click();
-    await expect(dialog.getByRole('heading', { name: 'Delete course' })).toBeVisible();
+    await expect(dialog.getByRole('alertdialog')).toBeVisible();
 
     await dialog.getByRole('button', { name: /^delete course$/i }).click();
 

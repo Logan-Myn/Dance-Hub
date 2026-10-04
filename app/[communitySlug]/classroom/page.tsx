@@ -3,9 +3,11 @@ import { getSession } from '@/lib/auth-session';
 import {
   getCommunityBySlug,
   getCommunityMembership,
+  getPublicProfile,
+  getRosterCount,
   getUserIsAdmin,
-  getCoursesForCommunity,
 } from '@/lib/community-data';
+import { getClassroomOverview } from '@/lib/classroom/data';
 import ClassroomPageClient from './ClassroomPageClient';
 import { getOfferings, offeringAccess } from '@/lib/offerings';
 import { OfferingOffBanner } from '@/components/community-shell/offering-off-banner';
@@ -38,20 +40,30 @@ export default async function ClassroomPage(
     redirect(communityPath(params.communitySlug, '/about'));
   }
 
-  const access = offeringAccess(getOfferings(community), 'courses', isCreator || isAdmin);
+  const offerings = getOfferings(community);
+  const access = offeringAccess(offerings, 'courses', isCreator || isAdmin);
   if (access === 'redirect') redirect(communityPath(params.communitySlug));
 
-  const initialCourses = await getCoursesForCommunity(community.id, isCreator || isAdmin);
+  const canManage = isCreator || isAdmin;
+  const [overview, memberCount, owner, viewer] = await Promise.all([
+    getClassroomOverview(community.id, session.user.id, canManage),
+    getRosterCount(community.id),
+    getPublicProfile(community.created_by),
+    getPublicProfile(session.user.id),
+  ]);
 
   return (
     <>
       {access === 'banner' && <OfferingOffBanner />}
       <ClassroomPageClient
         communitySlug={params.communitySlug}
-        communityId={community.id}
+        teacherName={owner?.name ?? 'the teacher'}
+        canManage={canManage}
         isCreator={isCreator}
-        isAdmin={isAdmin}
-        initialCourses={initialCourses}
+        overview={overview}
+        memberCount={memberCount}
+        liveClassesOn={offerings.liveClasses}
+        viewerTimeZone={viewer?.timezone ?? null}
       />
     </>
   );

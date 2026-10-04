@@ -97,7 +97,10 @@ export async function PUT(
     const { community } = guard;
 
     const body = await request.json();
-    const { title, content: rawContent, videoAssetId, playbackId } = body;
+    const { title, content: rawContent, videoAssetId, playbackId, isPreview } = body;
+    if (isPreview != null && typeof isPreview !== "boolean") {
+      return NextResponse.json({ error: "Invalid preview flag" }, { status: 400 });
+    }
 
     // Lesson text is rendered as HTML on the classroom page: store only the
     // editor's allowlisted markup. Leaving it out keeps the current text.
@@ -147,6 +150,7 @@ export async function PUT(
         content = COALESCE(${content ?? null}, content),
         video_asset_id = COALESCE(${videoAssetId ?? null}, video_asset_id),
         playback_id = COALESCE(${playbackId ?? null}, playback_id),
+        is_preview = COALESCE(${isPreview ?? null}, is_preview),
         updated_at = NOW()
       WHERE id = ${currentLesson.id}
         AND chapter_id = ${currentLesson.chapter_id}

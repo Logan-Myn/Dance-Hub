@@ -14,6 +14,7 @@ import {
 } from "@/lib/storage";
 import { deleteMuxAsset } from "@/lib/mux";
 import { isMuxAssetUsedElsewhere } from "@/lib/mux-asset-usage";
+import { REPLAYS_COURSE_SLUG } from "@/lib/classroom/replays";
 import { sanitizeRichTextOrNull } from "@/lib/sanitize-html";
 
 interface Course {
@@ -217,8 +218,9 @@ export async function PUT(
     // Regenerate the slug when the title changes so the URL tracks the new
     // title. Suffix with `-2`, `-3`, ... if the candidate collides with
     // another course in this community.
+    // The replays course keeps its slug: recordings find it by that slug.
     let newSlug = currentCourse.slug;
-    if (title && title !== currentCourse.title) {
+    if (title && title !== currentCourse.title && currentCourse.slug !== REPLAYS_COURSE_SLUG) {
       newSlug = await uniqueCourseSlug(community.id, title, currentCourse.id);
     }
 

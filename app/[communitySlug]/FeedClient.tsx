@@ -184,6 +184,17 @@ export default function FeedClient({
     selected ??
     (threadParam && threadParam !== dismissedParam ? posts.find((p) => p.id === threadParam) ?? null : null);
 
+  // ?compose=1&title=… (from "Ask a question" in a lesson) opens the composer.
+  const composeParam = searchParams.get("compose");
+  const composeTitle = searchParams.get("title");
+  const composed = useRef(false);
+  useEffect(() => {
+    if (!composeParam || composed.current || !feedShown) return;
+    composed.current = true;
+    composer.current?.open({ title: composeTitle ?? undefined });
+    router.replace(pathname, { scroll: false });
+  }, [composeParam, composeTitle, feedShown, router, pathname]);
+
   const closePost = useCallback(() => {
     setSelected(null);
     if (threadParam) {
