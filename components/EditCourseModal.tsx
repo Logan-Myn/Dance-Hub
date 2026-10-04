@@ -81,6 +81,7 @@ export default function EditCourseModal({ isOpen, onClose, course, onUpdateCours
           <label htmlFor="title" className={FIELD_LABEL}>Name</label>
           <input
             id="title"
+            autoFocus
             value={title}
             maxLength={100}
             required

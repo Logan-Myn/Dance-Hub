@@ -76,6 +76,8 @@ export function LessonPanel({
   onCompleteAndContinue,
   onSaveLesson,
   onUploadingChange,
+  uploading,
+  coursePublished,
 }: {
   slug: string;
   courseSlug: string;
@@ -98,6 +100,8 @@ export function LessonPanel({
   onCompleteAndContinue: () => Promise<void>;
   onSaveLesson: (data: { content?: string; videoAssetId?: string; playbackId?: string; isPreview?: boolean }) => Promise<void>;
   onUploadingChange: (uploading: boolean) => void;
+  uploading: boolean;
+  coursePublished: boolean;
 }) {
   const [mirrored, setMirrored] = useState(false);
   const [ended, setEnded] = useState(false);
@@ -264,7 +268,7 @@ export function LessonPanel({
         <div className="rounded-2xl border-[1.5px] border-dashed border-line-strong bg-surface-2 p-5">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h3 className="font-display text-[15px] font-semibold text-ink">{lesson.playbackId ? "Replace the video" : "Add a video"}</h3>
-            {changingVideo && (
+            {changingVideo && !uploading && (
               <button type="button" className={BTN_GHOST} onClick={() => setChangingVideo(false)}>
                 Cancel
               </button>
@@ -349,7 +353,7 @@ export function LessonPanel({
               Free preview
             </label>
           )}
-          {lesson.is_preview && (
+          {lesson.is_preview && coursePublished && (
             <button type="button" className={BTN_GHOST} onClick={copyPreviewLink}>
               <Link2 aria-hidden="true" />
               Copy preview link

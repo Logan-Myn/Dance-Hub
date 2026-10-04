@@ -8,7 +8,7 @@ import {
 } from '@/lib/community-data';
 import { getClassroomOverview } from '@/lib/classroom/data';
 import { redactForPreview } from '@/lib/classroom/model';
-import { REPLAYS_COURSE_SLUG } from '@/lib/classroom/replays';
+import { REPLAYS_COURSE_SLUG, replayTitle } from '@/lib/classroom/replays';
 import CourseDetailClient from './CourseDetailClient';
 import { getOfferings, offeringAccess } from '@/lib/offerings';
 import { OfferingOffBanner } from '@/components/community-shell/offering-off-banner';
@@ -80,7 +80,19 @@ export default async function CourseDetailPage(
   if (!initialCourse.is_public && !isCreator && !isAdmin) notFound();
 
   // "Start {next course}" on the finish card: the next course not done yet.
-  const next = overview.courses.find((c) => c.slug !== initialCourse.slug && c.isPublic && c.status !== 'done');
+  const next = overview.courses.find(
+    (c) => c.slug !== initialCourse.slug && c.isPublic && c.status !== 'done' && c.lessonCount > 0
+  );
+  const isReplays = initialCourse.slug === REPLAYS_COURSE_SLUG;
+  const course = isReplays
+    ? {
+        ...initialCourse,
+        chapters: initialCourse.chapters.map((c) => ({
+          ...c,
+          lessons: c.lessons.map((l) => ({ ...l, title: replayTitle(l.title) })),
+        })),
+      }
+    : initialCourse;
 
   return (
     <>
@@ -89,12 +101,12 @@ export default async function CourseDetailPage(
         communitySlug={params.communitySlug}
         courseSlug={params.courseSlug}
         community={{ id: community.id, name: community.name, created_by: community.created_by }}
-        initialCourse={initialCourse as never}
+        initialCourse={course as never}
         isCreator={isCreator}
         isAdmin={isAdmin}
         mode="member"
         initialLessonId={searchParams.lesson ?? null}
-        isReplays={initialCourse.slug === REPLAYS_COURSE_SLUG}
+        isReplays={isReplays}
         nextCourse={next ? { slug: next.slug, title: next.title } : null}
         searchIndex={overview.lessons}
       />

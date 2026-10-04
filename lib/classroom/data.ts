@@ -102,6 +102,7 @@ export const getClassroomOverview = cache(async (
       JOIN community_members m ON m.user_id = c.user_id AND m.community_id = ${communityId}
       WHERE ch.course_id = ANY(${courseIds}::uuid[])
         AND m.status = 'active' AND m.role != 'admin'
+        AND (m.subscription_status = 'active' OR m.subscription_status IS NULL)
       GROUP BY ch.course_id, c.user_id
     `;
     stats = new Map();

@@ -64,7 +64,7 @@ test.describe('Course settings: cover image and delete', () => {
     await signInAsOwner(page);
     await page.goto(`/${COMMUNITY_SLUG}/classroom`);
 
-    await page.getByRole('button', { name: /create course/i }).click();
+    await page.getByRole('button', { name: /create course/i }).first().click();
 
     const dialog = page.locator('div[role="dialog"]');
     await expect(dialog.getByRole('heading', { name: 'Create a course' })).toBeVisible();

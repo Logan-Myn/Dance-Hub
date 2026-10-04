@@ -34,7 +34,10 @@ Branch: `redesign/phase-3-classroom` (stacked on phase 2)
 - Lesson completion route: members only, the lesson must belong to the community, and `{ completed }` sets the state (a double click could un-complete before). Tested.
 - The replays course keeps its slug when renamed (recordings find it by slug).
 - The feed's "Continue learning" card no longer picks the replays course.
-- Switching lessons during a video upload is blocked (it would lose the upload); leaving the page asks first.
+- While a video uploads, anything that would unmount the uploader is blocked with a toast: other lessons, adding a lesson, Done editing, Cancel, search picks and in-app links; reloading asks first.
+
+## Release note
+Apply `supabase/migrations/2026-10-06_lesson_preview.sql` on prod BEFORE deploying: the lesson PUT writes `is_preview`, so without the column every lesson save (including attaching an uploaded video) fails.
 
 ## Decisions made while building
 - Anyone can watch free preview lessons, signed in or not.

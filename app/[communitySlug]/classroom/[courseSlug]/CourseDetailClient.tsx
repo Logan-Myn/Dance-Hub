@@ -95,21 +95,35 @@ export default function CourseDetailClient({
   const doneCount = lessons.filter((l) => l.completed).length;
   const base = `/api/community/${encodeURIComponent(slug)}/courses/${encodeURIComponent(courseSlug)}`;
 
-  // Leaving mid-upload would lose the video.
+  // Anything that unmounts the uploader mid-upload loses the video: reloads,
+  // in-app links, other lessons, leaving edit mode. Block them until it's done.
+  const blockedByUpload = () => {
+    if (!uploading) return false;
+    toast.error("Wait for the video upload to finish first.");
+    return true;
+  };
   useEffect(() => {
     if (!uploading) return;
     const warn = (e: BeforeUnloadEvent) => {
       e.preventDefault();
     };
+    const onClick = (e: MouseEvent) => {
+      const link = (e.target as HTMLElement | null)?.closest?.("a[href]");
+      if (!link || link.getAttribute("target") === "_blank") return;
+      e.preventDefault();
+      e.stopPropagation();
+      toast.error("Wait for the video upload to finish first.");
+    };
     window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
+    document.addEventListener("click", onClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      document.removeEventListener("click", onClick, true);
+    };
   }, [uploading]);
 
   const select = (id: string) => {
-    if (uploading) {
-      toast.error("Wait for the video upload to finish before opening another lesson.");
-      return;
-    }
+    if (blockedByUpload()) return;
     setSelectedId(id);
     setSheetOpen(false);
     window.history.replaceState(null, "", `?lesson=${id}`);
@@ -194,6 +208,7 @@ export default function CourseDetailClient({
   };
 
   const addLesson = async (chapterId: string, title: string) => {
+    if (blockedByUpload()) return;
     const response = await fetch(`${base}/chapters/${chapterId}/lessons`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -375,7 +390,7 @@ export default function CourseDetailClient({
                   type="button"
                   aria-pressed={editMode}
                   className={editMode ? BTN_PRIMARY : BTN_SECONDARY}
-                  onClick={() => setEditMode((m) => !m)}
+                  onClick={() => !blockedByUpload() && setEditMode((m) => !m)}
                 >
                   <Pencil aria-hidden="true" />
                   {editMode ? "Done editing" : "Edit content"}
@@ -432,6 +447,8 @@ export default function CourseDetailClient({
               onCompleteAndContinue={completeAndContinue}
               onSaveLesson={saveLesson}
               onUploadingChange={setUploading}
+              uploading={uploading}
+              coursePublished={!!course.is_public}
             />
           ) : (
             <div className="flex flex-col items-center gap-2.5 rounded-2xl border border-dashed border-line-strong bg-surface px-6 py-10 text-center">
@@ -475,7 +492,10 @@ export default function CourseDetailClient({
           label="Search lessons"
           placeholder="Search lessons, like turn or frame"
           search={(q) =>
-            (q.trim() ? searchLessons(searchIndex, q, 8) : searchIndex.filter((l) => l.courseSlug === courseSlug && !l.completed).slice(0, 4)).map((l) => ({
+            (q.trim()
+              ? searchLessons(searchIndex, q, 8)
+              : lessons.filter((l) => !l.completed).slice(0, 4).map((l) => searchIndex.find((s) => s.id === l.id)).filter((l): l is LessonSearchItem => !!l)
+            ).map((l) => ({
               id: l.id,
               title: l.title,
               subtitle: `${l.courseTitle}, ${l.chapterTitle}`,
@@ -486,6 +506,7 @@ export default function CourseDetailClient({
           idleTitle="Up next in this course"
           noResults={(q) => (q ? `No lessons match "${q}". Try a move, like turn, frame or footwork.` : "You've done every lesson here.")}
           onPick={(item) => {
+            if (blockedByUpload()) return;
             if (item.lesson.courseSlug === courseSlug) select(item.lesson.id);
             else router.push(communityPath(slug, `/classroom/${encodeURIComponent(item.lesson.courseSlug)}?lesson=${item.lesson.id}`));
           }}

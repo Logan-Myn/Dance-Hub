@@ -24,7 +24,7 @@ export function ContinueCard({ slug, course }: { slug: string; course: Classroom
       <div className="flex min-w-0 flex-col gap-2.5">
         <span className="flex items-center gap-2 text-[13px] font-semibold text-ink-2">
           {started ? <Play className="h-4 w-4" aria-hidden="true" /> : <BookOpen className="h-4 w-4" aria-hidden="true" />}
-          {started ? "Continue where you left off" : "Start your first course"}
+          {started ? "Continue where you left off" : "Start a new course"}
         </span>
         <h2 id="continue-title" className="text-balance font-display text-[22px] font-semibold leading-[1.15] text-ink sm:text-[24px]">
           {course.title}

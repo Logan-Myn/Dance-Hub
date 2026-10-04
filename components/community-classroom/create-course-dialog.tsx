@@ -45,7 +45,6 @@ export function CreateCourseDialog({
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { "image/*": [".jpeg", ".jpg", ".png", ".gif", ".webp"] },
-    maxSize: MAX_BYTES,
     multiple: false,
   });
 
@@ -67,6 +66,8 @@ export function CreateCourseDialog({
       await onCreate({ title: title.trim(), description: description.trim(), image });
       reset();
       onOpenChange(false);
+    } catch {
+      // onCreate already showed what went wrong; keep the form as typed.
     } finally {
       setBusy(false);
     }
@@ -87,6 +88,7 @@ export function CreateCourseDialog({
           <label htmlFor={ids.title} className={FIELD_LABEL}>Name</label>
           <input
             id={ids.title}
+            autoFocus
             value={title}
             maxLength={100}
             autoComplete="off"
@@ -131,7 +133,14 @@ export function CreateCourseDialog({
           </div>
         </div>
         <div className="flex justify-end gap-2 pt-1">
-          <button type="button" className={BTN_GHOST} onClick={() => onOpenChange(false)}>
+          <button
+            type="button"
+            className={BTN_GHOST}
+            onClick={() => {
+              reset();
+              onOpenChange(false);
+            }}
+          >
             Cancel
           </button>
           <button type="submit" className={BTN_PRIMARY} disabled={busy}>
