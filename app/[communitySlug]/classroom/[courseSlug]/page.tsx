@@ -63,6 +63,7 @@ export default async function CourseDetailPage(
         initialLessonId={searchParams.lesson ?? null}
         isReplays={false}
         nextCourse={null}
+        searchIndex={[]}
       />
     );
   }
@@ -95,6 +96,7 @@ export default async function CourseDetailPage(
         initialLessonId={searchParams.lesson ?? null}
         isReplays={initialCourse.slug === REPLAYS_COURSE_SLUG}
         nextCourse={next ? { slug: next.slug, title: next.title } : null}
+        searchIndex={overview.lessons}
       />
     </>
   );

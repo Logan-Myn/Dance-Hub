@@ -13,6 +13,9 @@ import NotifyMembersModal from "@/components/NotifyMembersModal";
 import { BTN_PRIMARY, BTN_SECONDARY } from "@/components/community-feed/feed-header";
 import { LessonIndex, type IndexChapter } from "@/components/community-classroom/lesson-index";
 import { LessonPanel, type PanelLesson } from "@/components/community-classroom/lesson-panel";
+import { SearchPalette } from "@/components/ds/search-palette";
+import { searchLessons, type LessonSearchItem } from "@/lib/classroom/model";
+import { registerPageSearch } from "@/lib/feed/search-slot";
 import { communityPath } from "@/lib/safe-redirect";
 import { cn } from "@/lib/utils";
 import type { Course } from "@/types/course";
@@ -32,6 +35,8 @@ interface CourseDetailClientProps {
   initialLessonId: string | null;
   isReplays: boolean;
   nextCourse: { slug: string; title: string } | null;
+  /** Every lesson the viewer can open, for "Search lessons" (empty in preview). */
+  searchIndex: LessonSearchItem[];
 }
 
 export default function CourseDetailClient({
@@ -45,6 +50,7 @@ export default function CourseDetailClient({
   initialLessonId,
   isReplays,
   nextCourse,
+  searchIndex,
 }: CourseDetailClientProps) {
   const router = useRouter();
   const preview = mode === "preview";
@@ -66,6 +72,22 @@ export default function CourseDetailClient({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const savingOrder = useRef(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => (searchIndex.length ? registerPageSearch(() => setSearchOpen(true), "Search lessons") : undefined), [searchIndex.length]);
+  useEffect(() => {
+    if (!searchIndex.length) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      e.preventDefault();
+      setSearchOpen(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [searchIndex.length]);
 
   const selected = lessons.find((l) => l.id === selectedId) ?? null;
   const index = selected ? lessons.indexOf(selected) : -1;
@@ -445,6 +467,30 @@ export default function CourseDetailClient({
           </DialogPrimitive.Overlay>
         </DialogPrimitive.Portal>
       </DialogPrimitive.Root>
+
+      {searchIndex.length > 0 && (
+        <SearchPalette
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          label="Search lessons"
+          placeholder="Search lessons, like turn or frame"
+          search={(q) =>
+            (q.trim() ? searchLessons(searchIndex, q, 8) : searchIndex.filter((l) => l.courseSlug === courseSlug && !l.completed).slice(0, 4)).map((l) => ({
+              id: l.id,
+              title: l.title,
+              subtitle: `${l.courseTitle}, ${l.chapterTitle}`,
+              lesson: l,
+            }))
+          }
+          emptyTitle="Lessons"
+          idleTitle="Up next in this course"
+          noResults={(q) => (q ? `No lessons match "${q}". Try a move, like turn, frame or footwork.` : "You've done every lesson here.")}
+          onPick={(item) => {
+            if (item.lesson.courseSlug === courseSlug) select(item.lesson.id);
+            else router.push(communityPath(slug, `/classroom/${encodeURIComponent(item.lesson.courseSlug)}?lesson=${item.lesson.id}`));
+          }}
+        />
+      )}
 
       {canEdit && (
         <EditCourseModal
