@@ -11,7 +11,7 @@ describe("calendar grid", () => {
     expect(visibleHours([ev("a", "2026-10-18T17:00:00Z")], "UTC", false)).toEqual({ minH: 14, maxH: 20 });
     expect(visibleHours([ev("a", "2026-10-18T08:00:00Z"), ev("b", "2026-10-18T20:00:00Z", 90)], "UTC", false)).toEqual({ minH: 7, maxH: 23 });
     expect(visibleHours([], "UTC", false)).toEqual({ minH: 8, maxH: 22 });
-    expect(visibleHours([ev("a", "2026-10-18T17:00:00Z")], "UTC", true)).toEqual({ minH: 6, maxH: 24 });
+    expect(visibleHours([ev("a", "2026-10-18T17:00:00Z")], "UTC", true)).toEqual({ minH: 0, maxH: 24 });
   });
 
   it("places events by minute and puts overlaps side by side", () => {

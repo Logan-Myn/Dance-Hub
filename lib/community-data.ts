@@ -88,37 +88,6 @@ export interface LiveClassWithDetails {
   is_starting_soon: boolean;
 }
 
-// Pre-fetch live classes between two UTC instants (start inclusive, end
-// exclusive) so the calendar page can render with initial data (no
-// client-side spinner on first paint).
-//
-// The neon driver returns timestamptz columns as JS Date objects, which
-// survive RSC serialization as Dates — but the /api/.../live-classes route
-// returns them as ISO strings (via JSON.stringify). Callers downstream
-// (date-fns parseISO, WeekCalendar) assume strings, so we normalize here.
-export const getLiveClassesInRange = cache(async (
-  communityId: string,
-  startISO: string, // UTC instant, e.g. '2026-09-27T04:00:00.000Z'
-  endISO: string,   // UTC instant, exclusive
-) => {
-  const rows = await query<LiveClassWithDetails>`
-    SELECT *
-    FROM live_classes_with_details
-    WHERE community_id = ${communityId}
-      AND scheduled_start_time >= ${startISO}
-      AND scheduled_start_time < ${endISO}
-    ORDER BY scheduled_start_time ASC
-  `;
-  const toIso = (v: unknown): string =>
-    v instanceof Date ? v.toISOString() : (v as string);
-  return rows.map((r) => ({
-    ...r,
-    scheduled_start_time: toIso(r.scheduled_start_time),
-    created_at: toIso(r.created_at),
-    updated_at: toIso(r.updated_at),
-  }));
-});
-
 // Row shape straight out of the DB (matches the private_lessons table) —
 // differs from the client-side PrivateLesson type in that nullable fields
 // arrive as `null` and timestamps as Date objects.

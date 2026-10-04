@@ -59,7 +59,7 @@ export function NextUpCard({ item, ctx, onDetails }: { item: CalendarItem; ctx: 
         <div className="flex flex-wrap gap-1.5">
           <Pill variant={live ? "live" : open ? "brand" : "neutral"}>
             <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-            {live ? `Started ${startedMin} min ago` : `Starts ${startsIn(item.startsAt, ctx.now)}`}
+            {live ? (startedMin < 1 ? "Started just now" : `Started ${startedMin} min ago`) : `Starts ${startsIn(item.startsAt, ctx.now)}`}
           </Pill>
           {item.kind === "class" && item.enableRecording && (
             <Pill>
@@ -67,7 +67,7 @@ export function NextUpCard({ item, ctx, onDetails }: { item: CalendarItem; ctx: 
               Recorded
             </Pill>
           )}
-          {item.kind === "lesson" && item.pricePaid != null && <Pill variant="ok">Paid €{item.pricePaid}</Pill>}
+          {item.kind === "lesson" && item.pricePaid != null && <Pill variant="ok">Paid €{Number.isInteger(item.pricePaid) ? item.pricePaid : item.pricePaid.toFixed(2)}</Pill>}
         </div>
       </div>
       <div className="col-span-2 flex min-w-0 flex-col gap-2 sm:col-span-1 sm:min-w-[210px]">

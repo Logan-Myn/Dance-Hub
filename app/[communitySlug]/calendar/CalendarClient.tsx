@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import useSWR, { useSWRConfig } from "swr";
 import { CalendarDays, ChevronLeft, ChevronRight, Globe, List, Plus } from "lucide-react";
@@ -34,6 +34,7 @@ type View = "week" | "list";
 type Filter = "all" | "class" | "lesson";
 
 const narrowQuery = "(max-width: 759px)";
+const noopSubscribe = () => () => {};
 const subscribeNarrow = (cb: () => void) => {
   const mq = window.matchMedia(narrowQuery);
   mq.addEventListener("change", cb);
@@ -74,6 +75,9 @@ export default function CalendarClient({
   const now = useNow(60_000, serverNow) ?? new Date(serverNow);
   const yourZone = useViewerTimeZone(viewerZone);
   const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia(narrowQuery).matches, () => false);
+  // Phones start on List; hold the body until the browser says which, so it
+  // doesn't flash the week grid first.
+  const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
 
   const [userView, setUserView] = useState<View | null>(null);
   const view: View = userView ?? (narrow ? "list" : "week");
@@ -103,7 +107,7 @@ export default function CalendarClient({
   const key = needsFetch
     ? `/api/community/${encodeURIComponent(slug)}/calendar?start=${weekRange.start.toISOString()}&end=${weekRange.end.toISOString()}`
     : null;
-  const { data: fetched, error, isLoading, mutate: retry } = useSWR<CalendarItem[]>(key, fetchItems, { keepPreviousData: true });
+  const { data: fetched, error, isLoading, mutate: retry } = useSWR<CalendarItem[]>(key, fetchItems);
   const visible = useMemo(
     () => (needsFetch ? fetched ?? [] : initialItems).filter((i) => filter === "all" || i.kind === filter),
     [needsFetch, fetched, initialItems, filter]
@@ -117,12 +121,13 @@ export default function CalendarClient({
     })
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0];
 
-  // ← → move weeks, T jumps to today.
+  // ← → move weeks, T jumps to today, when nothing else has focus (or the
+  // focus is on the calendar itself).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
       const t = e.target as HTMLElement | null;
-      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (t && t !== document.body && !t.closest("[data-calendar-grid]")) return;
       if (document.querySelector('[role="dialog"]')) return;
       if (view !== "week") return;
       if (e.key === "ArrowLeft") setWeekOffset((w) => w - 1);
@@ -135,10 +140,18 @@ export default function CalendarClient({
     return () => window.removeEventListener("keydown", onKey);
   }, [view]);
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     router.refresh();
     mutate((k) => typeof k === "string" && k.includes("/calendar?"));
-  };
+  }, [router, mutate]);
+
+  // The live class page says when a class ends early.
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel("live-class-updates");
+    channel.onmessage = () => refresh();
+    return () => channel.close();
+  }, [refresh]);
 
   const errorText = async (res: Response) => {
     const data = await res.json().catch(() => null);
@@ -381,14 +394,16 @@ export default function CalendarClient({
             </div>
           </div>
 
-          {needsFetch && error && !fetched ? (
+          {!mounted ? (
+            <div aria-hidden="true" className="mt-3.5 h-[420px] rounded-2xl border border-line bg-surface" />
+          ) : needsFetch && error ? (
             <FeedError
               className="mt-3.5"
               title="The calendar didn't load"
               text="The connection dropped while loading this week's classes."
               onRetry={() => retry()}
             />
-          ) : needsFetch && isLoading && !fetched ? (
+          ) : needsFetch && (isLoading || !fetched) ? (
             <div aria-busy="true" className="mt-3.5 flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4">
               <span className="sr-only">Loading the calendar</span>
               {Array.from({ length: 6 }, (_, i) => (

@@ -149,6 +149,13 @@ export async function PUT(
     if (status != null && !['scheduled', 'live', 'ended', 'cancelled'].includes(status)) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
+    if (
+      scheduled_start_time &&
+      new Date(scheduled_start_time).getTime() !== new Date(liveClass.scheduled_start_time).getTime() &&
+      new Date(scheduled_start_time).getTime() < Date.now() - 5 * 60_000
+    ) {
+      return NextResponse.json({ error: "Pick a time in the future." }, { status: 400 });
+    }
     // Restoring a canceled class takes its slot back, so check it like a move.
     const restoring = status === 'scheduled' && liveClass.status === 'cancelled';
 

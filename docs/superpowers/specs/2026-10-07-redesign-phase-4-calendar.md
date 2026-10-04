@@ -31,6 +31,9 @@ Branch: `redesign/phase-4-calendar` (stacked on phase 3)
 - Repeat next week copies the class one week later on the same wall clock.
 - The owner's "N reminders set", "N attended", Remind me, Notify me, email toggles and the subscribe feed are not built (reminders and the .ics feed are later projects; attendance isn't recorded).
 - Cancel notes aren't stored; the details say "Canceled by {teacher}".
+- Repeat defaults to "Does not repeat" (the prototype said 6 weeks): a quick schedule must not create six classes that take six cancels to undo.
+- Lengths 15 to 240 minutes (the old modal allowed workshops up to 4 hours).
+- ← → and T only act when focus is on the page body or the calendar grid.
 
 ## Release note
 Apply `supabase/migrations/2026-10-07_live_class_series.sql` on prod BEFORE deploying: the calendar loader reads `series_id`.

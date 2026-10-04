@@ -27,9 +27,12 @@ export async function GET(request: Request, props: { params: Promise<{ community
   const replays = await queryOne<{ is_public: boolean | null }>`
     SELECT is_public FROM courses WHERE community_id = ${guard.community.id} AND slug = ${REPLAYS_COURSE_SLUG}
   `;
-  const offers = await queryOne<{ offers_private_lessons: boolean | null; offers_courses: boolean | null }>`
-    SELECT offers_private_lessons, offers_courses FROM communities WHERE id = ${guard.community.id}
+  const offers = await queryOne<{ offers_private_lessons: boolean | null; offers_courses: boolean | null; offers_live_classes: boolean | null }>`
+    SELECT offers_private_lessons, offers_courses, offers_live_classes FROM communities WHERE id = ${guard.community.id}
   `;
+  if (offers?.offers_live_classes === false && !canManage) {
+    return NextResponse.json({ error: "Live classes are off in this community" }, { status: 403 });
+  }
 
   try {
     const items = await getCalendarItems({

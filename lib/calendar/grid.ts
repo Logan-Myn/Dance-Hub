@@ -48,7 +48,7 @@ export function visibleHours(items: GridInput[], tz: string, fullDay: boolean): 
     if (minH === 0 && maxH === 24) break;
   }
   if (fullDay) {
-    minH = Math.min(minH, 6);
+    minH = 0;
     maxH = 24;
   }
   return { minH, maxH };

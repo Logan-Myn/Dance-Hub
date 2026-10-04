@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { city } from "./format";
 import type { CalendarClass } from "./types";
 
-const LENGTHS = [30, 45, 60, 75, 90, 120];
+const LENGTHS = [15, 30, 45, 60, 75, 90, 120, 150, 180, 240];
 
 export interface ScheduleInput {
   title: string;
@@ -65,7 +65,8 @@ export function ScheduleDialog({
   const [date, setDate] = useState(() => formatInTimeZone(new Date(start), timeZone, "yyyy-MM-dd"));
   const [time, setTime] = useState(() => formatInTimeZone(new Date(start), timeZone, "HH:mm"));
   const [length, setLength] = useState(editing?.durationMinutes ?? 60);
-  const [repeat, setRepeat] = useState(editing ? 1 : 6);
+  // One class unless the owner asks for more (undoing six is six cancels).
+  const [repeat, setRepeat] = useState(1);
   const [record, setRecord] = useState(editing ? editing.enableRecording : true);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -140,7 +141,7 @@ export function ScheduleDialog({
             id={ids.desc}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Shown in the class details and the reminder email."
+            placeholder="Shown in the class details."
             className={cn(FIELD_INPUT, "min-h-[84px] resize-y leading-[1.55]")}
           />
         </div>

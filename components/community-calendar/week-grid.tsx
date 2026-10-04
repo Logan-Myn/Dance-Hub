@@ -46,6 +46,8 @@ export function WeekGrid({
     const y = e.clientY - e.currentTarget.getBoundingClientRect().top;
     return Math.max(0, Math.min(rows * 2 - 1, Math.floor(y / (ROW / 2))));
   };
+  // Today, slots that already started can't take a new class.
+  const slotPassed = (d: string, slot: number) => d === todayKey && minH + (slot + 1) / 2 <= nowH;
 
   const column = (d: string, mobile: boolean) => {
     const past = d < todayKey;
@@ -66,13 +68,21 @@ export function WeekGrid({
           backgroundSize: `100% ${ROW}px, 100% ${ROW}px`,
           backgroundPosition: `0 0, 0 ${ROW / 2}px`,
         }}
-        onMouseMove={canAdd ? (e) => setGhost({ day: d, slot: slotAt(e) }) : undefined}
+        onMouseMove={
+          canAdd
+            ? (e) => {
+                const slot = slotAt(e);
+                setGhost(slotPassed(d, slot) ? null : { day: d, slot });
+              }
+            : undefined
+        }
         onMouseLeave={canAdd ? () => setGhost(null) : undefined}
         onClick={
           canAdd
             ? (e) => {
                 if ((e.target as HTMLElement).closest("button")) return;
                 const slot = slotAt(e);
+                if (slotPassed(d, slot)) return;
                 const minutes = minH * 60 + slot * 30;
                 onAddAt!(zonedTimeToUtc(d, Math.floor(minutes / 60), minutes % 60, ctx.timeZone).toISOString());
               }
@@ -164,7 +174,7 @@ export function WeekGrid({
   );
 
   return (
-    <div className="relative mt-3.5 overflow-hidden rounded-2xl border border-line bg-surface">
+    <div data-calendar-grid className="relative mt-3.5 overflow-hidden rounded-2xl border border-line bg-surface">
       {/* Phones: pick a day */}
       <div role="group" aria-label="Choose a day" className="flex gap-1 border-b border-line p-2 md:hidden">
         {days.map((d) => {
