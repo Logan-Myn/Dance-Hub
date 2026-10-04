@@ -299,7 +299,11 @@ export function ViewBlock({ block, ctx }: { block: AboutBlock; ctx: AboutCtx }) 
           {c.heading && <Heading text={c.heading} />}
           {c.text && (
             <div
-              className="prose max-w-[65ch] text-[16px] leading-[1.7] text-ink-2 prose-headings:font-display prose-headings:text-ink prose-strong:text-ink prose-a:text-brand-ink"
+              className={cn(
+                "prose max-w-[65ch] text-[16px] leading-[1.7] text-ink-2",
+                "prose-p:my-2 prose-a:text-brand-ink prose-headings:font-display prose-headings:text-ink prose-strong:text-ink",
+                "prose-li:my-0.5 [&_li>p]:my-0 [&_li>p]:inline prose-blockquote:border-brand-line prose-blockquote:text-ink-2"
+              )}
               dangerouslySetInnerHTML={{ __html: c.text }}
             />
           )}

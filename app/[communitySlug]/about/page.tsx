@@ -8,7 +8,7 @@ import {
 } from '@/lib/community-data';
 import { getOfferings } from '@/lib/offerings';
 import { getAboutData } from '@/lib/about/data';
-import { normalizeAboutPage, suggestedTemplate, templateBlocks } from '@/lib/about/model';
+import { isAuto, normalizeAboutPage, suggestedTemplate, templateBlocks } from '@/lib/about/model';
 import AboutClient from './AboutClient';
 
 export const dynamic = 'force-dynamic';
@@ -63,7 +63,11 @@ export default async function AboutPage(
   // A page the owner never set up starts from the template that fits what
   // they offer, so visitors always see something and a way to join.
   const saved = normalizeAboutPage(community.about_page);
-  const blocks = saved?.sections ?? templateBlocks(suggestedTemplate(offered), offered);
+  const template = templateBlocks(suggestedTemplate(offered), offered);
+  // Pages from the old builder keep the owner's content first, then get the
+  // automatic blocks for what the community offers. Saving stores the result.
+  const legacy = !!saved && (community.about_page as { version?: unknown } | null)?.version !== 2;
+  const blocks = !saved ? template : legacy ? [...saved.sections, ...template.filter((b) => isAuto(b.type))] : saved.sections;
 
   const monthly = community.membership_enabled ? Number(community.membership_price ?? 0) : 0;
   const yearly = community.yearly_enabled && Number(community.yearly_price ?? 0) > 0 ? Number(community.yearly_price) : null;
