@@ -30,7 +30,15 @@ const paidCommunity: JoinCommunityData = {
   stripeAccountId: "acct_1",
 };
 
-function Harness({ community, doubleCall = false }: { community: JoinCommunityData; doubleCall?: boolean }) {
+function Harness({
+  community,
+  doubleCall = false,
+  plan,
+}: {
+  community: JoinCommunityData;
+  doubleCall?: boolean;
+  plan?: "monthly" | "yearly";
+}) {
   const { join, isJoining, modals } = useJoinCommunity(community);
   return (
     <>
@@ -38,7 +46,7 @@ function Harness({ community, doubleCall = false }: { community: JoinCommunityDa
         type="button"
         disabled={isJoining}
         onClick={() => {
-          join();
+          join(plan ? { plan } : undefined);
           if (doubleCall) join();
         }}
       >
@@ -96,4 +104,26 @@ it("treats an already-paid earlier checkout as a successful join", async () => {
   expect(toast.error).not.toHaveBeenCalled();
   expect(mockRouter.push).toHaveBeenCalledWith("/salsa");
   expect(screen.queryByText("checkout body")).not.toBeInTheDocument();
+});
+
+it("goes straight to checkout with the plan picked on the page", async () => {
+  mockJoinPaid({ body: { clientSecret: "pi_yearly" } });
+  render(<Harness community={{ ...paidCommunity, yearlyEnabled: true, yearlyPrice: 200 }} plan="yearly" />);
+
+  await userEvent.click(screen.getByRole("button", { name: "Join" }));
+
+  await waitFor(() => expect(lastBodyProps?.clientSecret).toBe("pi_yearly"));
+  const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+  expect(JSON.parse(init.body)).toEqual({ plan: "yearly" });
+  expect(screen.queryByText("Choose your plan")).not.toBeInTheDocument();
+});
+
+it("falls back to monthly when yearly isn't offered", async () => {
+  mockJoinPaid({ body: { clientSecret: "pi_monthly" } });
+  render(<Harness community={paidCommunity} plan="yearly" />);
+
+  await userEvent.click(screen.getByRole("button", { name: "Join" }));
+
+  await waitFor(() => expect(lastBodyProps?.clientSecret).toBe("pi_monthly"));
+  expect(JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)).toEqual({ plan: "monthly" });
 });

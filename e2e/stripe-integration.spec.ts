@@ -120,10 +120,11 @@ test.describe('Test A: Community Membership Subscription Flow', () => {
     await page.goto(`/${TEST_CONFIG.testCommunity.slug}/about`);
 
     // Verify community page loads
-    await expect(page.getByText(TEST_CONFIG.testCommunity.name)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { level: 1, name: TEST_CONFIG.testCommunity.name })).toBeVisible({ timeout: 10000 });
 
     // Step 2: Click join button
-    const joinButton = page.getByRole('button', { name: /join|become a member/i });
+    // The About page has a join card, a last call to join and a phone bar.
+    const joinButton = page.getByRole('button', { name: /join|become a member/i }).first();
     await expect(joinButton).toBeVisible();
     await joinButton.click();
 
@@ -186,11 +187,11 @@ test.describe('Test B: Pre-Registration Flow', () => {
     await page.goto(`/${preRegCommunity.slug}/about`);
 
     // Check if community exists and is in pre-registration
-    const preRegBadge = page.getByText(/pre-registration|coming soon|opening/i);
+    const preRegBadge = page.getByText(/pre-registration|coming soon|opening|opens/i).first();
 
     if (await preRegBadge.isVisible({ timeout: 5000 }).catch(() => false)) {
       // Step 2: Click pre-register button
-      const preRegButton = page.getByRole('button', { name: /pre-register|reserve|join waitlist/i });
+      const preRegButton = page.getByRole('button', { name: /pre-register|reserve|join waitlist/i }).first();
       await expect(preRegButton).toBeVisible();
       await preRegButton.click();
 

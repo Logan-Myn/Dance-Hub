@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql, queryOne } from "@/lib/db";
 import { getSession } from "@/lib/auth-session";
+import { normalizeAboutPage } from "@/lib/about/model";
 
 // Disable caching for this route
 export const dynamic = 'force-dynamic';
@@ -36,15 +37,16 @@ export async function PUT(request: Request, props: { params: Promise<{ community
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { aboutPage } = await request.json();
-
-    // Update the community
+    const body = await request.json().catch(() => null);
+    // Store only known blocks with cleaned content (text sanitized, links and
+    // images http(s) only). Older shapes are converted to v2.
+    const page = normalizeAboutPage({ ...(body?.aboutPage ?? {}), version: body?.aboutPage?.version === 2 ? 2 : undefined });
+    const now = new Date().toISOString();
     const aboutPageData = {
-      ...aboutPage,
-      meta: {
-        last_updated: new Date().toISOString(),
-        published_version: new Date().toISOString(),
-      },
+      version: 2,
+      sections: page?.sections ?? [],
+      finalCta: page?.finalCta ?? null,
+      meta: { last_updated: now, published_version: now },
     };
 
     // Use sql.json() so postgres.js serializes the object exactly once.
@@ -54,7 +56,7 @@ export async function PUT(request: Request, props: { params: Promise<{ community
     const result = await sql`
       UPDATE communities
       SET
-        about_page = ${sql.json(aboutPageData)},
+        about_page = ${sql.json(JSON.parse(JSON.stringify(aboutPageData)))},
         updated_at = NOW()
       WHERE slug = ${communitySlug}
       RETURNING id
@@ -69,7 +71,7 @@ export async function PUT(request: Request, props: { params: Promise<{ community
 
     return NextResponse.json({
       message: "About page updated successfully",
-      data: aboutPage,
+      data: aboutPageData,
     });
   } catch (error) {
     console.error("Error updating about page:", error);

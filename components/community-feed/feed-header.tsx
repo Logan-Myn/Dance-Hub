@@ -21,7 +21,7 @@ export const BTN_GHOST = `${BTN} text-ink-2 hover:bg-surface-2 hover:text-ink`;
 export const BTN_LIVE = `${BTN} bg-live text-white hover:brightness-105`;
 
 /** "@handle" for an Instagram profile link, or null. */
-function instagramHandle(url: string): string | null {
+export function instagramHandle(url: string): string | null {
   const m = url.match(/instagram\.com\/([A-Za-z0-9._]+)/i);
   return m ? `@${m[1]}` : null;
 }

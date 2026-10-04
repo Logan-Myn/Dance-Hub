@@ -1,14 +1,41 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import type { Section } from '@/types/page-builder';
 import { getSession } from '@/lib/auth-session';
 import {
   getCommunityBySlug,
-  getCommunityMembership,
+  getMembershipStatus,
+  getPublicProfile,
 } from '@/lib/community-data';
+import { getOfferings } from '@/lib/offerings';
+import { getAboutData } from '@/lib/about/data';
+import { normalizeAboutPage, suggestedTemplate, templateBlocks } from '@/lib/about/model';
 import AboutClient from './AboutClient';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
+
+// The moment this request renders; the page's clock starts here.
+function requestTime(): number {
+  return Date.now();
+}
+
+const chosenZone = (tz: string | null | undefined) => (tz && tz !== 'UTC' ? tz : null);
+
+export async function generateMetadata(props: { params: Promise<{ communitySlug: string }> }): Promise<Metadata> {
+  const { communitySlug } = await props.params;
+  const community = await getCommunityBySlug(communitySlug);
+  if (!community) return {};
+  const description = community.description || `Join ${community.name} on Dance-Hub.`;
+  return {
+    title: `${community.name} | Dance-Hub`,
+    description,
+    openGraph: {
+      title: community.name,
+      description,
+      images: community.image_url ? [community.image_url] : undefined,
+    },
+  };
+}
 
 export default async function AboutPage(
   props: {
@@ -19,54 +46,71 @@ export default async function AboutPage(
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) notFound();
 
-  // Public page — anonymous viewers are fine. We just resolve member /
-  // creator state when there's a session so the editor / member-only UI
-  // shows correctly.
+  // Public page: visitors are welcome. A session only decides member and
+  // owner state.
   const session = await getSession();
-  const isCreator = !!session && community.created_by === session.user.id;
-  const isMember = !!session && (await getCommunityMembership(community.id, session.user.id));
+  const isOwner = !!session && community.created_by === session.user.id;
+  const now = requestTime();
+  const offered = getOfferings(community);
 
-  // Coerce DB shape to what AboutClient expects.
-  const initialCommunity = {
-    id: community.id,
-    name: community.name,
-    slug: community.slug,
-    description: community.description ?? '',
-    created_by: community.created_by,
-    membership_enabled: community.membership_enabled ?? undefined,
-    membership_price:
-      typeof community.membership_price === 'string'
-        ? parseFloat(community.membership_price)
-        : community.membership_price ?? undefined,
-    yearly_enabled: community.yearly_enabled ?? undefined,
-    yearly_price:
-      typeof community.yearly_price === 'string'
-        ? parseFloat(community.yearly_price)
-        : community.yearly_price ?? undefined,
-    yearly_benefits: community.yearly_benefits ?? undefined,
-    stripe_account_id: community.stripe_account_id ?? null,
-    status: (community.status ?? undefined) as 'active' | 'pre_registration' | 'inactive' | undefined,
-    opening_date:
-      community.opening_date instanceof Date
-        ? community.opening_date.toISOString()
-        : community.opening_date ?? null,
-    about_page: community.about_page
-      ? {
-          sections: (community.about_page.sections ?? []) as Section[],
-          meta: {
-            last_updated: community.about_page.meta?.last_updated ?? new Date().toISOString(),
-            published_version: community.about_page.meta?.published_version,
-          },
-        }
-      : null,
-  };
+  const [membership, teacher, viewerProfile, data] = await Promise.all([
+    session ? getMembershipStatus(community.id, session.user.id) : Promise.resolve(null),
+    getPublicProfile(community.created_by),
+    session ? getPublicProfile(session.user.id) : Promise.resolve(null),
+    getAboutData(community, offered, new Date(now)),
+  ]);
+
+  // A page the owner never set up starts from the template that fits what
+  // they offer, so visitors always see something and a way to join.
+  const saved = normalizeAboutPage(community.about_page);
+  const blocks = saved?.sections ?? templateBlocks(suggestedTemplate(offered), offered);
+
+  const monthly = community.membership_enabled ? Number(community.membership_price ?? 0) : 0;
+  const yearly = community.yearly_enabled && Number(community.yearly_price ?? 0) > 0 ? Number(community.yearly_price) : null;
+  const status = (['active', 'pre_registration', 'inactive'] as const).find((s) => s === community.status) ?? 'active';
+  const customLinks = (Array.isArray(community.custom_links) ? community.custom_links : []) as Array<{ title?: string; url?: string }>;
 
   return (
     <AboutClient
-      communitySlug={params.communitySlug}
-      community={initialCommunity}
-      isCreator={isCreator}
-      isMember={isMember}
+      community={{
+        id: community.id,
+        slug: community.slug,
+        name: community.name,
+        description: community.description ?? '',
+        imageUrl: community.image_url ?? null,
+        imageFocalX: community.image_focal_x ?? 50,
+        imageFocalY: community.image_focal_y ?? 50,
+        imageZoom: Number(community.image_zoom ?? 1),
+        links: customLinks.filter((l) => typeof l.url === 'string').map((l) => ({ title: l.title ?? '', url: l.url! })),
+        membershipEnabled: !!community.membership_enabled,
+        membershipPrice: monthly,
+        yearlyEnabled: !!community.yearly_enabled,
+        yearlyPrice: yearly ?? undefined,
+        stripeAccountId: community.stripe_account_id ?? null,
+      }}
+      initialBlocks={blocks}
+      initialFinalCta={saved?.finalCta ?? null}
+      customized={!!saved}
+      teacher={{
+        id: community.created_by,
+        name: teacher?.name ?? 'The teacher',
+        avatarUrl: teacher?.avatarUrl ?? null,
+      }}
+      offered={offered}
+      data={data}
+      pricing={{ paid: monthly > 0, monthly, yearly }}
+      join={{
+        status,
+        openingDate:
+          community.opening_date instanceof Date ? community.opening_date.toISOString() : community.opening_date ?? null,
+        isMember: !!membership?.isMember || isOwner,
+        isPreRegistered: !!membership?.isPreRegistered,
+        canceling: membership?.subscriptionStatus === 'canceling',
+        accessEndDate: membership?.subscriptionStatus === 'canceling' ? membership.currentPeriodEnd : null,
+      }}
+      isOwner={isOwner}
+      viewerZone={chosenZone(viewerProfile?.timezone)}
+      serverNow={now}
     />
   );
 }

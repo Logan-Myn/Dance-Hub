@@ -32,7 +32,8 @@ export interface JoinCommunityData {
 }
 
 export interface UseJoinCommunityResult {
-  join: () => Promise<void>;
+  /** With a plan (chosen on the page), a paid join skips the plan chooser. */
+  join: (opts?: { plan?: 'monthly' | 'yearly' }) => Promise<void>;
   isJoining: boolean;
   modals: ReactNode;
 }
@@ -130,7 +131,7 @@ export function useJoinCommunity(
     }
   };
 
-  const join = async () => {
+  const join = async (opts?: { plan?: 'monthly' | 'yearly' }) => {
     if (!user) {
       showAuthModal('signup');
       return;
@@ -183,7 +184,12 @@ export function useJoinCommunity(
     if (isPaid) {
       // Offer the plan chooser when a yearly option is configured; otherwise go
       // straight to the monthly checkout.
-      if (community.yearlyEnabled && (community.yearlyPrice ?? 0) > 0) {
+      const yearlyOffered = community.yearlyEnabled && (community.yearlyPrice ?? 0) > 0;
+      if (opts?.plan) {
+        await startPaid(opts.plan === 'yearly' && yearlyOffered ? 'yearly' : 'monthly');
+        return;
+      }
+      if (yearlyOffered) {
         setShowPlanChooser(true);
         return;
       }
