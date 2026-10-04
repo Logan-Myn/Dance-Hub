@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, Users, Percent, EyeOff, Pencil } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
 import { getLocationIcon, getLocationText } from "@/lib/private-lessons-display";
+import { formatDiscountBadge } from "@/lib/format-discount";
 
 interface PrivateLessonCardProps {
   lesson: PrivateLesson;
@@ -61,7 +62,7 @@ export default function PrivateLessonCard({
             {hasDiscount && (
               <Badge className="bg-emerald-100 text-emerald-700 border-0 rounded-full px-2.5 py-1">
                 <Percent className="w-3 h-3 mr-1" />
-                {lesson.member_discount_percentage}% off
+                {formatDiscountBadge(lesson.member_discount_percentage)}
               </Badge>
             )}
           </div>
