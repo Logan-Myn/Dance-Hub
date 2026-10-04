@@ -1,7 +1,7 @@
 # Redesign phase 2: Community feed
 
 Date: 2026-10-05
-Status: draft for Logan's review
+Status: approved 2026-10-05 (Teacher badge; .ics instead of Google Calendar)
 Program: docs/superpowers/specs/2026-10-04-community-redesign-program-design.md
 Target: https://claude.ai/artifact/M5ee8CCteMk1XWyfFDkSWB (ignore "Preview states", dark mode)
 Branch / worktree: `redesign/phase-2-feed` in `../dance-hub-redesign-p2`
@@ -15,14 +15,14 @@ Unchanged: signed-out visitors and non-members are sent to About (`page.tsx`). M
 **Header**
 - Cover in a 4:1 frame (max 200px tall), no text on top. Existing focal point and zoom keep working inside the new frame.
 - Name, description, links row (Instagram handle from the custom links when there is one) below the cover.
-- Members button: facepile + "N members". Opens a popover with up to 8 people, "(you)", the owner badge, and "See all N members", which opens the full roster in a panel. The owner joins the list (today the route leaves them out).
+- Members button: facepile + "N members". Opens a popover with up to 8 people, "(you)", the "Teacher" badge, and "See all N members", which opens the full roster in a panel. The owner joins the list (today the route leaves them out).
 - Actions: everyone gets "Invite a friend" (copies the About link, toast "Invite link copied"); the owner also gets "Manage community".
 
 **Feed column**
 - Composer: collapsed "Share a question or a win…" bar; `N` opens it. Expands inline: "Posting as {name}", topic chooser (owner-only topics shown with a lock for members), title (max 120, inline error), rich-text body, Ctrl+Enter posts, Esc closes, owner keeps the pin switch. After posting: toast "Posted to {topic}", the post is highlighted at the top. No attachment button (no upload path yet).
 - Filter bar, always shown, sticky with a shadow once stuck: "All posts", one chip per topic with its color dot and count, Latest / Top switch (Top = likes + 2 × replies). Under 640px the chips become a select.
 - Pinned box "Pinned by {owner}" on All posts: every pinned post, newest first, Hide/Show remembered per browser.
-- Post card: avatar, name, owner badge, "5 h ago" (full date on hover), topic, title, two-line plain-text preview, like with a small pop, replies count, last 3 repliers and "Last reply X ago", or "No replies yet" + "Be the first to answer".
+- Post card: avatar, name, "Teacher" badge on the owner, "5 h ago" (full date on hover), topic, title, two-line plain-text preview, like with a small pop, replies count, last 3 repliers and "Last reply X ago", or "No replies yet" + "Be the first to answer".
 - "New" dot on posts written by someone else since your last visit (see Data).
 - States: per-section errors with "Try again" (a failed refresh no longer replaces the whole page), empty community (member and owner versions, owner gets a generic welcome-post starter), empty topic.
 
@@ -30,7 +30,7 @@ Unchanged: signed-out visitors and non-members are sent to About (`page.tsx`). M
 - 720px, full-screen sheet on phones (replaces sending phones to `/threads/[id]`; that page stays for links). Head: topic, Pinned, Copy link, Close. Like, replies, "Show N earlier replies", "(you)" on your replies, sticky reply bar, Ctrl+Enter sends, toast "Reply posted", focus returns to the card. Keeps today's owner menu (pin, edit, delete), nested replies and reply likes.
 
 **Right rail** (each card hides when its offering is off or it has nothing to show)
-- Next class: date tile, "Today at 7:00 PM, 60 min", the teacher's time when zones differ, "Starts in 2 h 10 min", then Join class when live. One "Add to Google Calendar" button. "Then Sun 12 Oct: {title}" for the class after.
+- Next class: date tile, "Today at 7:00 PM, 60 min", the teacher's time when zones differ, "Starts in 2 h 10 min", then Join class when live. One "Add to calendar" button: downloads an `.ics` file for that class, so it opens in the member's own calendar app (Apple, Outlook, Google). No Google link, so nobody mistakes it for a video call. "Then Sun 12 Oct: {title}" for the class after.
 - Continue learning: the course you last worked on, "Lesson 5 of 9", progress bar.
 - Private lessons: cheapest lesson, member price with the regular price struck through, link to the page.
 - Your membership: status and "Renews 21 Oct" from local data; Manage menu (change plan and payment method open today's subscription dialog; Leave opens an inline confirm). The canceling + Rejoin state stays.
@@ -45,9 +45,10 @@ Unchanged: signed-out visitors and non-members are sent to About (`page.tsx`). M
 
 - **Migration** `community_members.feed_visit_at`, `feed_prev_visit_at` (timestamptz, null). `POST /api/community/[slug]/feed-visit` (members only) runs after the feed mounts: if the last visit is more than 30 minutes old it becomes the previous visit; the last visit becomes now.
 - **"New" baseline** at render: the last visit if it's more than 30 minutes old, otherwise the previous visit. No baseline (first visit, site admin without a row) means no dots. Dots stay for the whole session.
+- `GET /api/community/[slug]/live-classes/[id]/ics` (members only) returns that one class as `text/calendar` with a download filename. This is not the Phase 8 subscription feed.
 - `getCommunityThreads` also returns last reply time and the last 3 repliers.
 - Server loaders: owner profile, course progress for the viewer, cheapest private lesson. `upcoming-classes` adds the teacher's time zone and gets a viewer check (it has none today).
-- Pure helpers with tests: time ago, Google Calendar URL, Top score, search match, HTML to plain text, new-post rule.
+- Pure helpers with tests: time ago, `.ics` event builder, Top score, search match, HTML to plain text, new-post rule.
 
 ## Not in this phase (no dead buttons)
 
