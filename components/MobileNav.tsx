@@ -113,6 +113,7 @@ export default function MobileNav({
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-line bg-surface/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]"
         aria-label="Primary"
+        data-phone-tabbar
       >
         <ul className="flex justify-around items-stretch">
           {tabs.map((tab) => {

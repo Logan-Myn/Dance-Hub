@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Calendar-style month/day tile. Pass `timeZone` (the viewer's) when this
- * renders on the server too, so server and browser agree on the day.
+ * Calendar-style month/day tile in `timeZone` (the viewer's), with a fixed
+ * locale, so server and browser render the same day.
  * Decorative (aria-hidden): callers must also render the date as text.
  */
 export function DateTile({
@@ -13,15 +13,15 @@ export function DateTile({
   className,
 }: {
   date: Date | string | number;
-  timeZone?: string;
+  timeZone: string;
   variant?: "brand" | "live";
   showWeekday?: boolean;
   className?: string;
 }) {
   const d = new Date(date);
-  const month = d.toLocaleDateString(undefined, { month: "short", timeZone });
-  const day = d.toLocaleDateString(undefined, { day: "numeric", timeZone });
-  const weekday = d.toLocaleDateString(undefined, { weekday: "short", timeZone });
+  const month = d.toLocaleDateString("en-US", { month: "short", timeZone });
+  const day = d.toLocaleDateString("en-US", { day: "numeric", timeZone });
+  const weekday = d.toLocaleDateString("en-US", { weekday: "short", timeZone });
   return (
     <div
       aria-hidden="true"

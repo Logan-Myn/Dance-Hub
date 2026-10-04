@@ -3,8 +3,8 @@ import { addDaysToKey, dateKeyInTz } from "@/lib/calendar-week";
 type Instant = Date | string | number;
 const toDate = (i: Instant) => (i instanceof Date ? i : new Date(i));
 
-/** "7:00 PM" (en-US) or "19:00" (en-GB) at that moment in `timeZone`. */
-export function formatTimeInZone(instant: Instant, timeZone?: string, locale?: string): string {
+/** "7:00 PM" (en-US) or "19:00" (en-GB) at that moment in `timeZone` (required: the server has its own zone). */
+export function formatTimeInZone(instant: Instant, timeZone: string, locale?: string): string {
   return toDate(instant).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit", timeZone });
 }
 

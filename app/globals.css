@@ -226,3 +226,8 @@ html {
     }
   }
 }
+
+/* Toasts sit above the phone tab bar, only on pages that have one. */
+body:has([data-phone-tabbar]) {
+  --toast-offset: 80px;
+}

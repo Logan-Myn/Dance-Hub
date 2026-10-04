@@ -70,7 +70,7 @@ export default function RootLayout({
               </AuthModalProvider>
               <Toaster
                 position="bottom-center"
-                containerClassName="!bottom-[calc(80px+env(safe-area-inset-bottom))] md:!bottom-6"
+                containerClassName="!bottom-[calc(var(--toast-offset,16px)+env(safe-area-inset-bottom))] md:!bottom-6"
                 toastOptions={{
                   className: "!rounded-xl !bg-ink !text-white !text-sm !font-medium !shadow-overlay",
                   success: { iconTheme: { primary: "rgb(216 199 246)", secondary: "rgb(30 23 48)" } },
