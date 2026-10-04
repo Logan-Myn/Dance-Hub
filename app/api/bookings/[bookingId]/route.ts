@@ -116,3 +116,42 @@ export async function GET(request: Request, props: { params: Promise<{ bookingId
     );
   }
 }
+
+const MAX_NOTES = 5000;
+
+/**
+ * The teacher's notes on a booking (what you worked on, what to practice).
+ * Only the community owner can write them; the student reads them on the
+ * private lessons page.
+ */
+export async function PATCH(request: Request, props: { params: Promise<{ bookingId: string }> }) {
+  const { bookingId } = await props.params;
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await request.json().catch(() => null);
+  const notes = body?.teacher_notes;
+  if (notes !== null && typeof notes !== "string") {
+    return NextResponse.json({ error: "Invalid notes" }, { status: 400 });
+  }
+  if (typeof notes === "string" && notes.length > MAX_NOTES) {
+    return NextResponse.json({ error: "Notes are too long" }, { status: 400 });
+  }
+
+  const owner = await queryOne<{ created_by: string }>`
+    SELECT c.created_by
+    FROM lesson_bookings lb
+    JOIN communities c ON c.id = lb.community_id
+    WHERE lb.id = ${bookingId}
+  `;
+  if (!owner) return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+  if (owner.created_by !== session.user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const saved = await queryOne<{ teacher_notes: string | null }>`
+    UPDATE lesson_bookings
+    SET teacher_notes = ${typeof notes === "string" && notes.trim() ? notes.trim() : null}, updated_at = NOW()
+    WHERE id = ${bookingId}
+    RETURNING teacher_notes
+  `;
+  return NextResponse.json({ teacher_notes: saved?.teacher_notes ?? null });
+}

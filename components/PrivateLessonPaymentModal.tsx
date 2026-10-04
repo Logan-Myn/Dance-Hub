@@ -21,15 +21,18 @@ interface PrivateLessonPaymentFormProps {
   onClose: () => void;
   lessonTitle: string;
   communitySlug: string;
+  /** The booking dialog shows its own summary above the form. */
+  hideSummary?: boolean;
 }
 
-function PrivateLessonPaymentForm({ 
+export function PrivateLessonPaymentForm({ 
   clientSecret, 
   price, 
   onSuccess, 
   onClose,
   lessonTitle,
   communitySlug,
+  hideSummary = false,
 }: PrivateLessonPaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
@@ -76,25 +79,21 @@ function PrivateLessonPaymentForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-        <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-1">
-          Private Lesson: {lessonTitle}
-        </h3>
-        <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          {formatPrice(price)}
-        </p>
-        <p className="text-sm text-gray-600 dark:text-gray-300">
-          One-time payment
-        </p>
-      </div>
-      
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      {!hideSummary && (
+        <div className="rounded-xl bg-surface-2 p-4">
+          <h3 className="mb-1 font-medium text-ink">Private lesson: {lessonTitle}</h3>
+          <p className="font-display text-[24px] font-semibold text-ink">{formatPrice(price)}</p>
+          <p className="text-[13px] text-ink-2">One-time payment</p>
+        </div>
+      )}
+
       <PaymentElement options={PAYMENT_ELEMENT_OPTIONS} />
-      
-      <Button 
-        type="submit" 
-        disabled={!stripe || isLoading} 
-        className="w-full"
+
+      <Button
+        type="submit"
+        disabled={!stripe || isLoading}
+        className="h-11 w-full rounded-[10px] bg-brand text-[15px] font-semibold text-white hover:bg-brand-hover"
       >
         {isLoading ? (
           <div className="flex items-center space-x-2">
@@ -118,6 +117,48 @@ interface PrivateLessonPaymentModalProps {
   lessonTitle: string;
   communitySlug: string;
   onSuccess: (outcome: LessonPaymentOutcome) => void;
+}
+
+/** The payment form without its own dialog, for the booking dialog's last step. */
+export function LessonPaymentInline({
+  clientSecret,
+  stripeAccountId,
+  price,
+  lessonTitle,
+  communitySlug,
+  onSuccess,
+}: {
+  clientSecret: string;
+  stripeAccountId: string;
+  price: number;
+  lessonTitle: string;
+  communitySlug: string;
+  onSuccess: (outcome: LessonPaymentOutcome) => void;
+}) {
+  const stripePromise = useMemo(
+    () => loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!, { stripeAccount: stripeAccountId }),
+    [stripeAccountId]
+  );
+  const options: StripeElementsOptions = {
+    clientSecret,
+    appearance: {
+      theme: "stripe" as const,
+      variables: { colorPrimary: "#8E57DB", borderRadius: "10px", fontFamily: "Figtree, system-ui, sans-serif" },
+    },
+  };
+  return (
+    <Elements stripe={stripePromise} options={options}>
+      <PrivateLessonPaymentForm
+        clientSecret={clientSecret}
+        price={price}
+        lessonTitle={lessonTitle}
+        communitySlug={communitySlug}
+        onSuccess={onSuccess}
+        onClose={() => {}}
+        hideSummary
+      />
+    </Elements>
+  );
 }
 
 export default function PrivateLessonPaymentModal({ 

@@ -45,7 +45,7 @@ export function PrimaryAction({
   }
   if (st === "upcoming" && item.kind === "lesson") {
     return (
-      <Link href={item.role === "student" ? "/dashboard" : communityPath(ctx.slug, "/private-lessons")} className={cn(BTN_SECONDARY, sz)}>
+      <Link href={communityPath(ctx.slug, "/private-lessons")} className={cn(BTN_SECONDARY, sz)}>
         <GraduationCap aria-hidden="true" />
         Manage lesson
       </Link>

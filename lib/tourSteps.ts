@@ -72,8 +72,8 @@ export const tourSteps: Tour[] = [
       },
       {
         icon: '🛠️',
-        title: 'Manage Private Lessons',
-        content: 'On the Private Lessons page, use this button to edit, activate, or remove existing lessons. The "Add Private Lesson" button next to it lets you create new ones.',
+        title: 'Manage private lessons',
+        content: 'Add the times members can book with "Open times", and create lessons with "Add lesson type". Each lesson card lets you edit it or hide it.',
         selector: '#manage-private-lessons',
         side: 'bottom',
         showControls: true,
