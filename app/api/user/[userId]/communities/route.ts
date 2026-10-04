@@ -21,6 +21,9 @@ interface CommunityWithMemberCount {
   status: string;
   opening_date: string | null;
   members_count: number;
+  /** The viewer's own membership, for the community switcher. */
+  member_role?: string | null;
+  member_joined_at?: string | null;
 }
 
 export async function GET(
@@ -40,11 +43,14 @@ export async function GET(
 
     // Get community IDs the user is an active member of
     const memberRows = await sql`
-      SELECT community_id FROM community_members
+      SELECT community_id, role, joined_at FROM community_members
       WHERE user_id = ${userId} AND status IN ('active', 'pending')
     `;
 
-    const communityIds = (memberRows as any[]).map((m: any) => m.community_id);
+    const memberships = new Map(
+      (memberRows as any[]).map((m: any) => [m.community_id, { role: m.role, joined_at: m.joined_at }])
+    );
+    const communityIds = Array.from(memberships.keys());
 
     // Fetch communities by IDs (avoids JOIN issues with Neon pooler)
     let communities: CommunityWithMemberCount[] = [];
@@ -59,6 +65,11 @@ export async function GET(
         WHERE c.id = ANY(${communityIds})
         ORDER BY c.created_at DESC
       ` as CommunityWithMemberCount[];
+      communities = communities.map((c) => ({
+        ...c,
+        member_role: memberships.get(c.id)?.role ?? null,
+        member_joined_at: memberships.get(c.id)?.joined_at ?? null,
+      }));
     }
 
     const response = NextResponse.json(communities);

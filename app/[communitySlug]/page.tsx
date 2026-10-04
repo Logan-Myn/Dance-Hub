@@ -4,6 +4,7 @@ import {
   getCommunityBySlug,
   getCommunityThreads,
   getMembershipStatus,
+  getRosterCount,
   getUserIsAdmin,
 } from '@/lib/community-data';
 import FeedClient from './FeedClient';
@@ -46,9 +47,10 @@ export default async function CommunityFeedPage(
   const session = await getSession();
   if (!session) redirect(communityPath(params.communitySlug, '/about'));
 
-  const [membership, isAdmin] = await Promise.all([
+  const [membership, isAdmin, initialMemberCount] = await Promise.all([
     getMembershipStatus(community.id, session.user.id),
     getUserIsAdmin(session.user.id),
+    getRosterCount(community.id),
   ]);
   const isCreator = community.created_by === session.user.id;
 
@@ -94,6 +96,7 @@ export default async function CommunityFeedPage(
       memberStatus={membership.status}
       subscriptionStatus={membership.subscriptionStatus}
       accessEndDate={membership.currentPeriodEnd}
+      initialMemberCount={initialMemberCount}
     />
   );
 }

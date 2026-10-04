@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAuthModal } from "@/contexts/AuthModalContext";
 import { formatPrice } from "@/lib/utils";
 import { getLocationText } from "@/lib/private-lessons-display";
+import { formatDiscountBadge } from "@/lib/format-discount";
 import PrivateLessonPaymentModal, { type LessonPaymentOutcome } from "./PrivateLessonPaymentModal";
 import { WeekSlotPicker } from './WeekSlotPicker';
 import { availabilityFetchRange, slotStartUtc } from '@/lib/slot-grouping';
@@ -228,7 +229,7 @@ export default function LessonBookingModal({
             {hasDiscount && (
               <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                 <Percent className="w-3 h-3 mr-1" />
-                {lesson.member_discount_percentage}% off
+                {formatDiscountBadge(lesson.member_discount_percentage)}
               </Badge>
             )}
           </div>

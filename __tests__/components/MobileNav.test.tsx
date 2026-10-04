@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import MobileNav from '@/components/MobileNav';
+import { ALL_OFFERINGS } from '@/lib/offerings';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/bachataflow',
@@ -29,6 +30,7 @@ const baseProps = {
   communityImageUrl: null,
   isMember: true,
   isOwner: false,
+  offerings: ALL_OFFERINGS,
   user: { id: 'u1', email: 'u@example.com' },
   profile: { full_name: 'User One', avatar_url: null },
 };
@@ -83,13 +85,13 @@ describe('MobileNav', () => {
     process.env.NEXT_PUBLIC_BROADCASTS_ENABLED = originalEnv;
   });
 
-  it('hides Admin even for owners when broadcasts are disabled', () => {
+  it('shows Admin for owners even when the broadcasts kill-switch is off', () => {
     const originalEnv = process.env.NEXT_PUBLIC_BROADCASTS_ENABLED;
     process.env.NEXT_PUBLIC_BROADCASTS_ENABLED = 'false';
 
     render(<MobileNav {...baseProps} isOwner={true} />);
     fireEvent.click(screen.getByRole('button', { name: /more/i }));
-    expect(screen.queryByText(/^admin$/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/^admin$/i)).toBeInTheDocument();
 
     process.env.NEXT_PUBLIC_BROADCASTS_ENABLED = originalEnv;
   });
