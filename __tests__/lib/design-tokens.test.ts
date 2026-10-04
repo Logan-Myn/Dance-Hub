@@ -2,7 +2,6 @@ import fs from "fs";
 import path from "path";
 
 // tailwind.config.js is CommonJS.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const config = require("../../tailwind.config.js");
 const css = fs.readFileSync(path.join(__dirname, "../../app/globals.css"), "utf8");
 

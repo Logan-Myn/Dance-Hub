@@ -93,7 +93,6 @@ export default function TopBar({
         <DropdownMenu>
           <DropdownMenuTrigger className="flex h-10 min-w-0 items-center gap-2.5 rounded-[10px] pl-1 pr-2 transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand">
             {communityImageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={communityImageUrl} alt="" className="h-[30px] w-[30px] shrink-0 rounded-lg object-cover" />
             ) : (
               <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-lg bg-ink font-display text-[15px] font-semibold text-white">
