@@ -17,6 +17,7 @@ import { OwnerBookings } from "@/components/community-lessons/owner-bookings";
 import { YourLessons } from "@/components/community-lessons/your-lessons";
 import type { LessonType } from "@/components/community-lessons/types";
 import { useNow } from "@/hooks/use-now";
+import { useAuth } from "@/contexts/AuthContext";
 import { useViewerTimeZone } from "@/hooks/use-viewer-time-zone";
 import { dateKeyInTz } from "@/lib/calendar-week";
 import { lessonPaymentReturnNotice } from "@/lib/lesson-payment-return";
@@ -75,7 +76,16 @@ export default function LessonsClient({
     router.refresh();
   }, [router]);
 
-  const slotsFor = (l: LessonType) => slots.filter((s) => s.teacherId === l.teacherId);
+  // Times paid for in this visit stay hidden until the booking is recorded.
+  const [justBooked, setJustBooked] = useState<Set<string>>(new Set());
+  const slotsFor = (l: LessonType) =>
+    slots.filter((s) => s.teacherId === l.teacherId && !justBooked.has(s.id) && new Date(s.startsAt).getTime() > now.getTime());
+
+  // Signed in from the booking dialog: load the page as that member.
+  const { user } = useAuth();
+  useEffect(() => {
+    if (!signedIn && user) router.refresh();
+  }, [signedIn, user, router]);
   const visibleLessons = isOwner ? lessons : lessons.filter((l) => l.isActive);
   const anyOpen = visibleLessons.some((l) => slotsFor(l).length > 0);
   const discountFrom = visibleLessons
@@ -97,6 +107,14 @@ export default function LessonsClient({
     }
     return out;
   })();
+
+  const deleteLesson = async (l: LessonType) => {
+    const res = await fetch(`/api/community/${encodeURIComponent(slug)}/private-lessons/${l.id}`, { method: "DELETE" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) return void toast.error(data?.error || "Couldn't remove the lesson type.");
+    toast.success("Lesson type removed. Bookings already made stay as they are.");
+    router.refresh();
+  };
 
   const toggleVisible = async (l: LessonType) => {
     const res = await fetch(`/api/community/${encodeURIComponent(slug)}/private-lessons/${l.id}`, {
@@ -225,6 +243,7 @@ export default function LessonsClient({
                 onBook={() => setBooking(l)}
                 onEdit={() => setEditing(l)}
                 onToggleVisible={() => toggleVisible(l)}
+                onDelete={() => deleteLesson(l)}
               />
             ))}
           </div>
@@ -242,6 +261,7 @@ export default function LessonsClient({
           viewer={signedIn ? viewer : null}
           timeZone={timeZone}
           todayKey={dateKeyInTz(now, timeZone)}
+          onBooked={(id) => setJustBooked((s) => new Set(s).add(id))}
         />
       )}
 
@@ -285,7 +305,7 @@ export default function LessonsClient({
               if (!o) router.refresh();
             }}
             title="Open times"
-            description={`Each open time is one lesson start, in ${city(teacher.timezone ?? timeZone)} time. Members see them in their own time zone.`}
+            description={`Each open time is one lesson start, in ${teacher.timezone ? `${city(teacher.timezone)} time` : "UTC (set your time zone in Settings)"}. Members see them in their own time zone.`}
             width={720}
           >
             <AvailabilityTab communitySlug={slug} />

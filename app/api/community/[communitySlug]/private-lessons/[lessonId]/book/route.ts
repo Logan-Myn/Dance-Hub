@@ -125,7 +125,7 @@ export async function POST(
 
     if (!slot) {
       return NextResponse.json(
-        { error: "This time slot is not available. Please pick another time." },
+        { error: "This time slot is not available. Please pick another time.", code: "slot_taken" },
         { status: 404 }
       );
     }
@@ -149,7 +149,7 @@ export async function POST(
     `;
     if (taken) {
       return NextResponse.json(
-        { error: "This time slot was just booked. Please pick another time." },
+        { error: "This time slot was just booked. Please pick another time.", code: "slot_taken" },
         { status: 409 }
       );
     }

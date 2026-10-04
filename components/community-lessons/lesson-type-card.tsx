@@ -1,6 +1,8 @@
 "use client";
 
-import { CalendarClock, Clock, Eye, EyeOff, Info, MapPin, Pencil, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { CalendarClock, Clock, Eye, EyeOff, Info, MapPin, Pencil, ShieldCheck, Trash2 } from "lucide-react";
+import { InlineConfirm } from "@/components/ds/inline-confirm";
 import { BTN_PRIMARY, BTN_SECONDARY } from "@/components/community-feed/feed-header";
 import { Pill } from "@/components/ds/pill";
 import type { OpenSlot } from "@/lib/private-lessons/data";
@@ -22,6 +24,7 @@ export function LessonTypeCard({
   onBook,
   onEdit,
   onToggleVisible,
+  onDelete,
 }: {
   lesson: LessonType;
   isMember: boolean;
@@ -34,7 +37,10 @@ export function LessonTypeCard({
   onBook: () => void;
   onEdit?: () => void;
   onToggleVisible?: () => void;
+  onDelete?: () => Promise<void>;
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const discounted = lesson.memberPrice != null && lesson.memberPrice > 0 && lesson.memberPrice < lesson.regularPrice;
   const price = isMember && discounted ? lesson.memberPrice! : lesson.regularPrice;
   const next = slots[0];
@@ -146,6 +152,9 @@ export function LessonTypeCard({
               <Pencil aria-hidden="true" />
               Edit
             </button>
+            <button type="button" aria-label={`Remove ${lesson.title}`} className={cn(BTN_SECONDARY, "w-[38px] px-0 text-live")} onClick={() => setConfirmDelete(true)}>
+              <Trash2 aria-hidden="true" />
+            </button>
           </div>
         ) : (
           <button type="button" className={BTN_PRIMARY} onClick={onBook} disabled={!next}>
@@ -153,6 +162,26 @@ export function LessonTypeCard({
           </button>
         )}
       </div>
+      {isOwner && confirmDelete && (
+        <InlineConfirm
+          title="Remove this lesson type?"
+          confirmLabel={deleting ? "Removing…" : "Remove"}
+          cancelLabel="Keep it"
+          busy={deleting}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={async () => {
+            setDeleting(true);
+            try {
+              await onDelete?.();
+            } finally {
+              setDeleting(false);
+              setConfirmDelete(false);
+            }
+          }}
+        >
+          Members can&apos;t book it any more. Bookings already made stay as they are.
+        </InlineConfirm>
+      )}
     </article>
   );
 }

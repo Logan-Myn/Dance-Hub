@@ -60,6 +60,8 @@ export function OwnerBookings({ bookings, timeZone, now }: { bookings: OwnerBook
         body: JSON.stringify({ teacher_notes: notes }),
       });
       if (!res.ok) throw new Error();
+      const saved = await res.json().catch(() => null);
+      setOpen((o) => (o ? { ...o, teacherNotes: saved?.teacher_notes ?? notes } : o));
       toast.success(`Notes saved. ${open.studentName.split(" ")[0]} sees them on the private lessons page.`);
       router.refresh();
     } catch {

@@ -138,6 +138,7 @@ export async function PATCH(request: Request, props: { params: Promise<{ booking
     return NextResponse.json({ error: "Notes are too long" }, { status: 400 });
   }
 
+  try {
   const owner = await queryOne<{ created_by: string }>`
     SELECT c.created_by
     FROM lesson_bookings lb
@@ -154,4 +155,8 @@ export async function PATCH(request: Request, props: { params: Promise<{ booking
     RETURNING teacher_notes
   `;
   return NextResponse.json({ teacher_notes: saved?.teacher_notes ?? null });
+  } catch (error) {
+    console.error("Error saving teacher notes:", error);
+    return NextResponse.json({ error: "Couldn't save the notes" }, { status: 500 });
+  }
 }

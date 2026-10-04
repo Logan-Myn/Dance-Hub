@@ -33,6 +33,7 @@ export function BookingDialog({
   viewer,
   timeZone,
   todayKey,
+  onBooked,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,13 +44,15 @@ export function BookingDialog({
   viewer: { name: string; email: string } | null;
   timeZone: string;
   todayKey: string;
+  /** Paid: hide this time on the page until the booking shows up. */
+  onBooked: (slotId: string) => void;
 }) {
   const router = useRouter();
   const { showAuthModal } = useAuthModal();
   const [step, setStep] = useState<Step>("time");
   const [taken, setTaken] = useState<Set<string>>(new Set());
   const open_ = slots.filter((s) => !taken.has(s.id));
-  const days = useMemo(() => Array.from({ length: 30 }, (_, i) => addDaysToKey(todayKey, i)), [todayKey]);
+  const days = useMemo(() => Array.from({ length: 31 }, (_, i) => addDaysToKey(todayKey, i)), [todayKey]);
   const byDay = useMemo(() => {
     const m = new Map<string, OpenSlot[]>();
     for (const s of open_) {
@@ -73,7 +76,11 @@ export function BookingDialog({
   const [payment, setPayment] = useState<{ clientSecret: string; stripeAccountId: string; price: number } | null>(null);
   const [outcome, setOutcome] = useState<LessonPaymentOutcome | null>(null);
 
-  const price = isMember && lesson.memberPrice != null && lesson.memberPrice < lesson.regularPrice ? lesson.memberPrice : lesson.regularPrice;
+  // A member price of 0 means "no member price" (the book route agrees).
+  const price =
+    isMember && lesson.memberPrice != null && lesson.memberPrice > 0 && lesson.memberPrice < lesson.regularPrice
+      ? lesson.memberPrice
+      : lesson.regularPrice;
   const when = slot
     ? `${new Date(slot.startsAt).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone })}, ${clock(slot.startsAt, timeZone)}`
     : null;
@@ -89,7 +96,7 @@ export function BookingDialog({
   const continueFromTime = () => {
     if (!slot) return;
     if (!viewer) {
-      showAuthModal("signin");
+      showAuthModal("signin", window.location.pathname);
       return;
     }
     setError(null);
@@ -98,8 +105,8 @@ export function BookingDialog({
 
   const book = async () => {
     if (!slot) return;
-    if (!email.trim()) {
-      setError("Add the email for your confirmation.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Check the email address. The confirmation goes there.");
       return;
     }
     setBusy(true);
@@ -118,14 +125,14 @@ export function BookingDialog({
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        if (res.status === 409 || res.status === 404) {
+        if (data?.code === "slot_taken") {
           setTaken((t) => new Set(t).add(slot.id));
           setSlotId(null);
           setStep("time");
           setError("That time was just booked by someone else. Nothing was charged. Pick another time.");
           return;
         }
-        setError(data?.error || "Couldn't start the booking. Try again.");
+        setError(data?.error ? `${data.error} Nothing was charged.` : "Couldn't start the booking. Try again.");
         return;
       }
       // The price the server will charge (it knows the membership for sure).
@@ -155,7 +162,7 @@ export function BookingDialog({
         }
         onOpenChange(next);
       }}
-      title={step === "done" ? "Payment received" : `Book ${lesson.title}`}
+      title={step === "done" ? (outcome === "processing" ? "Payment processing" : "Payment received") : `Book ${lesson.title}`}
       width={680}
     >
       {step !== "done" && (
@@ -224,6 +231,7 @@ export function BookingDialog({
                         key={s.id}
                         type="button"
                         aria-pressed={s.id === slotId}
+                        aria-label={`${formatDayKey(shownDay, "EEEE d MMMM")}, ${clock(s.startsAt, timeZone)}`}
                         onClick={() => setSlotId(s.id)}
                         className={cn(
                           "h-[42px] rounded-[10px] border text-[14.5px] font-semibold tabular-nums transition-colors active:scale-[.97]",
@@ -312,6 +320,7 @@ export function BookingDialog({
             onSuccess={(o) => {
               setOutcome(o);
               setStep("done");
+              if (slot) onBooked(slot.id);
             }}
           />
         </>

@@ -31,3 +31,7 @@ Branch: `redesign/phase-5-private-lessons` (stacked on phase 4)
 - The create / edit lesson dialog and the per-date open-times editor are reused as they are (old look inside the new dialog for open times); restyling them belongs with the Admin phase.
 - Stats say "Paid this month" (the platform fee isn't stored per booking).
 - The calendar's "Manage lesson" now opens this page for students too.
+- Owners remove a lesson type from its card (inline confirm, same soft delete as before). The old management modal and its tabs are gone; open times keep the per-date editor.
+- `/book` 409s for a taken slot carry `code: "slot_taken"` (no change to how payments work); other refusals (monthly limit, hidden lesson) show the server's message.
+- A time paid for during the visit stays hidden until the booking is recorded, so it can't be paid twice by mistake.
+- In-person lessons don't show "Join lesson".

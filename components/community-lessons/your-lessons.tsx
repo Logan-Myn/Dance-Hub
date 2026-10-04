@@ -117,7 +117,9 @@ export function YourLessons({
               </div>
             </div>
             <div className="col-span-2 flex min-w-0 flex-col gap-2 sm:col-span-1 sm:min-w-[200px]">
-              {joinable ? (
+              {b.locationType === "in_person" ? (
+                <p className="text-center text-[12.5px] text-ink-3">In person. {teacherName} will confirm the place by email.</p>
+              ) : joinable ? (
                 <Link href={`/video-session/${b.id}`} className={cn(BTN_PRIMARY, "h-11 text-[15px]")}>
                   <Video aria-hidden="true" />
                   Join lesson
@@ -130,7 +132,7 @@ export function YourLessons({
                   <CalendarPlus aria-hidden="true" />
                   Add to calendar
                 </a>
-                {canCancel(b.startsAt, now) && (
+                {canCancel(b.startsAt, now) && (b.status === "booked" || b.status === "scheduled") && (
                   <button type="button" className={cn(BTN_GHOST, "h-8 flex-1 px-2.5 text-[13px]")} onClick={() => setConfirming(b.id)}>
                     <X aria-hidden="true" />
                     Cancel
