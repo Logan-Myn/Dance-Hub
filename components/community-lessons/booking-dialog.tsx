@@ -290,8 +290,10 @@ export function BookingDialog({
           <dd className="text-right font-semibold tabular-nums text-ink">{when}</dd>
           <dt className="text-ink-2">Length</dt>
           <dd className="text-right font-semibold text-ink">{lesson.durationMinutes} min</dd>
-          <dt className="border-t border-line-strong pt-2 text-[16px] text-ink-2">Total</dt>
-          <dd className="border-t border-line-strong pt-2 text-right text-[16px] font-semibold tabular-nums text-ink">{euro(payment?.price ?? price)}</dd>
+          <div className="col-span-2 flex justify-between gap-4 border-t border-line-strong pt-2 text-[16px]">
+            <dt className="text-ink-2">Total</dt>
+            <dd className="font-semibold tabular-nums text-ink">{euro(payment?.price ?? price)}</dd>
+          </div>
         </dl>
       )}
 
