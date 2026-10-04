@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import useSWR from "swr";
 import { ChevronDown, Compass, LayoutDashboard } from "lucide-react";
 import NotificationsButton from "@/components/NotificationsButton";
 import UserAccountNav from "@/components/UserAccountNav";
@@ -15,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { fetcher } from "@/lib/fetcher";
 import { getCommunityTabs, isTabActive } from "@/lib/community-nav";
 import type { Offerings } from "@/lib/offerings";
 import { cn } from "@/lib/utils";
@@ -36,8 +38,10 @@ export interface TopBarProps {
   offerings: Offerings;
   /** Server-resolved user, so the first paint already shows the right side. */
   initialUser: TopBarUser | null;
-  profile: { id: string; full_name: string | null; avatar_url: string | null } | null;
+  profile: TopBarProfile | null;
 }
+
+type TopBarProfile = { id: string; full_name: string | null; avatar_url: string | null };
 
 /** One bar for the community area on desktop: identity, tabs, account. */
 export default function TopBar({
@@ -56,6 +60,10 @@ export default function TopBar({
   const { showAuthModal } = useAuthModal();
   // Until the auth context hydrates, trust the server's answer.
   const user = (loading ? initialUser : contextUser) as TopBarUser | null;
+  // Same key as the site navbar, so a sign-in from the modal picks up the photo without a reload.
+  const { data: liveProfile } = useSWR<TopBarProfile>(user ? `profile:${user.id}` : null, fetcher, {
+    fallbackData: profile ?? undefined,
+  });
 
   const tabs = getCommunityTabs({ slug: communitySlug, isMember, isOwner, isAdmin, offerings });
   const activeKey = tabs.find((t) => isTabActive(t, pathname, communitySlug))?.key;
@@ -65,7 +73,8 @@ export default function TopBar({
   const [ink, setInk] = useState<{ left: number; width: number } | null>(null);
   const moveInk = useCallback((el: HTMLElement | null) => {
     if (!el) return setInk(null);
-    setInk({ left: el.offsetLeft + 12, width: Math.max(0, el.offsetWidth - 24) });
+    const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0;
+    setInk({ left: el.offsetLeft + pad, width: Math.max(0, el.offsetWidth - pad * 2) });
   }, []);
   const resetInk = useCallback(() => {
     moveInk(navRef.current?.querySelector<HTMLElement>('[aria-current="page"]') ?? null);
@@ -80,9 +89,9 @@ export default function TopBar({
 
   return (
     <header className="sticky top-[env(safe-area-inset-top)] z-40 hidden border-b border-line bg-surface/90 backdrop-blur-md md:block">
-      <div className="mx-auto flex h-[60px] max-w-[1160px] items-center gap-3 px-6">
+      <div className="mx-auto flex h-[60px] max-w-[1160px] items-center gap-2 px-4 lg:gap-3 lg:px-6">
         <Link
-          href="/dashboard"
+          href={user ? "/dashboard" : "/"}
           aria-label="Dance-Hub home"
           title="Dance-Hub home"
           className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-lg bg-brand font-display text-[13px] font-bold tracking-tight text-white"
@@ -99,7 +108,10 @@ export default function TopBar({
                 {initial}
               </span>
             )}
-            <span className="truncate font-display text-[15px] font-semibold text-ink">{communityName}</span>
+            <span className="hidden max-w-[220px] truncate font-display text-[15px] font-semibold text-ink lg:block">
+              {communityName}
+            </span>
+            <span className="sr-only lg:hidden">{communityName}</span>
             <ChevronDown className="h-4 w-4 shrink-0 text-ink-3" aria-hidden="true" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-60">
@@ -109,13 +121,17 @@ export default function TopBar({
                 Find more communities
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard" className="flex items-center gap-2">
-                <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
-                My dashboard
-              </Link>
-            </DropdownMenuItem>
+            {user && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard" className="flex items-center gap-2">
+                    <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+                    My dashboard
+                  </Link>
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -123,7 +139,7 @@ export default function TopBar({
           ref={navRef}
           id="navigation-tab-buttons"
           aria-label="Community sections"
-          className="relative ml-3 flex h-full items-stretch"
+          className="scrollbar-hide relative flex h-full min-w-0 items-stretch overflow-x-auto lg:ml-3"
           onMouseLeave={resetInk}
           onBlur={resetInk}
         >
@@ -138,29 +154,36 @@ export default function TopBar({
                 onMouseEnter={(e) => moveInk(e.currentTarget)}
                 onFocus={(e) => moveInk(e.currentTarget)}
                 className={cn(
-                  "flex items-center whitespace-nowrap px-3 text-[14.5px] transition-colors",
+                  "flex shrink-0 items-center whitespace-nowrap px-2 text-[14px] transition-colors lg:px-3 lg:text-[14.5px]",
                   "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand",
                   active ? "font-semibold text-ink" : "font-medium text-ink-2 hover:text-ink"
                 )}
               >
-                {t.label}
+                {t.shortLabel === t.label ? (
+                  t.label
+                ) : (
+                  <>
+                    <span className="lg:hidden">{t.shortLabel}</span>
+                    <span className="hidden lg:inline">{t.label}</span>
+                  </>
+                )}
               </Link>
             );
           })}
           {ink && (
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute bottom-[-1px] left-0 h-0.5 rounded bg-brand transition-[transform,width] duration-300 ease-out motion-reduce:transition-none"
+              className="pointer-events-none absolute bottom-0 left-0 h-0.5 rounded bg-brand transition-[transform,width] duration-300 ease-out motion-reduce:transition-none"
               style={{ width: ink.width, transform: `translateX(${ink.left}px)` }}
             />
           )}
         </nav>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           {user ? (
             <>
               <NotificationsButton />
-              <UserAccountNav user={user} profile={profile} />
+              <UserAccountNav user={user} profile={liveProfile ?? null} />
             </>
           ) : (
             <>

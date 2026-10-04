@@ -74,6 +74,7 @@ export default function RootLayout({
                 toastOptions={{
                   className: "!rounded-xl !bg-ink !text-white !text-sm !font-medium !shadow-overlay",
                   success: { iconTheme: { primary: "rgb(216 199 246)", secondary: "rgb(30 23 48)" } },
+                  loading: { iconTheme: { primary: "rgb(216 199 246)", secondary: "rgb(93 85 113)" } },
                 }}
               />
             </AuthProvider>

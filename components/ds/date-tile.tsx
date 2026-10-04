@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 /**
  * Calendar-style month/day tile. Pass `timeZone` (the viewer's) when this
  * renders on the server too, so server and browser agree on the day.
+ * Decorative (aria-hidden): callers must also render the date as text.
  */
 export function DateTile({
   date,

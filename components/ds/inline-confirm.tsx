@@ -25,6 +25,7 @@ export function InlineConfirm({
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
+  const bodyId = useId();
   useEffect(() => {
     cancelRef.current?.focus();
   }, []);
@@ -32,6 +33,13 @@ export function InlineConfirm({
     <div
       role="alertdialog"
       aria-labelledby={titleId}
+      aria-describedby={children ? bodyId : undefined}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onCancel();
+        }
+      }}
       className={cn(
         "flex flex-col gap-2.5 rounded-xl border p-3",
         destructive ? "border-live/35 bg-live-soft" : "border-brand-line bg-brand-soft"
@@ -39,7 +47,7 @@ export function InlineConfirm({
     >
       <p className="text-sm text-ink">
         <strong id={titleId}>{title}</strong>
-        {children ? <> {children}</> : null}
+        {children ? <> <span id={bodyId}>{children}</span></> : null}
       </p>
       <div className="flex flex-wrap gap-2">
         <button

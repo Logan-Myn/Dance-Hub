@@ -63,7 +63,8 @@ export default function MobileNav({
     calendar: Calendar,
   };
   const tabs = allTabs.filter((t) => BAR_KEYS.includes(t.key));
-  const showAdmin = allTabs.some((t) => t.key === 'admin');
+  const aboutHref = allTabs.find((t) => t.key === 'about')?.href ?? `/${communitySlug}/about`;
+  const adminHref = allTabs.find((t) => t.key === 'admin')?.href;
   const isActive = (href: string) => {
     const tab = allTabs.find((t) => t.href === href);
     return tab ? isTabActive(tab, pathname, communitySlug) : false;
@@ -142,10 +143,13 @@ export default function MobileNav({
                 <button
                   type="button"
                   aria-label="More"
-                  className="w-full flex flex-col items-center justify-center gap-0.5 py-2 min-h-[44px] text-muted-foreground"
+                  className={cn(
+                    'relative flex min-h-[56px] w-full flex-col items-center justify-center gap-0.5 py-2',
+                    moreOpen ? 'text-brand-ink' : 'text-ink-3'
+                  )}
                 >
                   <MoreHorizontal className="h-5 w-5" />
-                  <span className="text-[10px]">More</span>
+                  <span className="text-[11px] font-medium">More</span>
                 </button>
               </SheetTrigger>
               <SheetContent side="bottom" className="pb-safe rounded-t-2xl">
@@ -168,10 +172,10 @@ export default function MobileNav({
                 </div>
 
                 <ul className="flex flex-col py-2">
-                  <MoreItem href={`/${communitySlug}/about`} icon={Info} label="About" onNavigate={() => setMoreOpen(false)} />
-                  {showAdmin ? (
+                  <MoreItem href={aboutHref} icon={Info} label="About" onNavigate={() => setMoreOpen(false)} />
+                  {adminHref ? (
                     <MoreItem
-                      href={`/${communitySlug}/admin`}
+                      href={adminHref}
                       icon={Settings}
                       label="Admin"
                       onNavigate={() => setMoreOpen(false)}
@@ -184,7 +188,7 @@ export default function MobileNav({
 
                 <ul className="flex flex-col py-2">
                   <MoreItem href="/discovery" icon={Repeat} label="Switch community" onNavigate={() => setMoreOpen(false)} />
-                  <MoreItem href="/dashboard" icon={Users} label="My Dashboard" onNavigate={() => setMoreOpen(false)} />
+                  <MoreItem href="/dashboard" icon={Users} label="My dashboard" onNavigate={() => setMoreOpen(false)} />
                   {user ? (
                     <MoreItem
                       href="/dashboard/settings"
