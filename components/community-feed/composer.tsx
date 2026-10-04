@@ -119,12 +119,20 @@ export const Composer = forwardRef<ComposerHandle, {
     <div
       id="write-post"
       className={cn(
-        "rounded-2xl border bg-surface shadow-card transition-[border-color,box-shadow] duration-200",
+        "rounded-2xl border bg-surface shadow-card transition-[border-color,box-shadow] duration-300",
         open ? "border-brand-line shadow-[0_0_0_4px_rgb(var(--ds-brand)/0.12),0_10px_28px_-12px_rgba(30,23,48,.22)]" : "border-line"
       )}
     >
-      {/* Collapsed bar: gone as soon as the composer opens (like the prototype). */}
-      <div className={cn("items-center gap-3 px-3.5 py-3", open ? "hidden" : "flex")}>
+      {/* Collapsed bar folds away while the form unfolds, so the card's height
+          changes in one continuous motion. */}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows,opacity] duration-[420ms] ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none",
+          open ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
+        )}
+      >
+      <div className="min-h-0 overflow-hidden" inert={open} aria-hidden={open}>
+      <div className="flex items-center gap-3 px-3.5 py-3">
           <InitialsAvatar id={viewer.id} name={viewer.name} imageUrl={viewer.avatarUrl} size={36} />
           <button
             ref={triggerRef}
@@ -141,12 +149,14 @@ export const Composer = forwardRef<ComposerHandle, {
             N
           </kbd>
       </div>
+      </div>
+      </div>
 
-      {/* The form grows open: grid rows animate from 0fr to 1fr. It stays
-          mounted (so it can animate) and is inert while closed. */}
+      {/* The form unfolds (grid rows 0fr to 1fr) and its contents fade in a
+          beat later. It stays mounted so it can animate, inert while closed. */}
       <div
         className={cn(
-          "grid transition-[grid-template-rows] duration-[280ms] ease-[cubic-bezier(.2,.7,.2,1)] motion-reduce:transition-none",
+          "grid transition-[grid-template-rows] duration-[420ms] ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none",
           open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
         )}
       >
@@ -156,7 +166,10 @@ export const Composer = forwardRef<ComposerHandle, {
           inert={!open}
           aria-hidden={!open}
           noValidate
-          className="flex flex-col gap-3 px-[18px] pb-3.5 pt-4"
+          className={cn(
+            "flex flex-col gap-3 px-[18px] pb-3.5 pt-4 transition-[opacity,transform] ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none",
+            open ? "translate-y-0 opacity-100 delay-[80ms] duration-[380ms]" : "-translate-y-1 opacity-0 duration-150"
+          )}
           onSubmit={(e) => {
             e.preventDefault();
             submit();
