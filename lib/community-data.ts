@@ -217,6 +217,9 @@ export interface CommunityThread {
   }>;
   pinned: boolean;
   author: { name: string; image: string };
+  /** Feed only: newest reply time and the last 3 people who replied, newest first. */
+  lastReplyAt?: string | null;
+  repliers?: Array<{ id: string; name: string; image: string }>;
 }
 
 interface ThreadQueryRow {
@@ -235,6 +238,8 @@ interface ThreadQueryRow {
   likes: string[] | null;
   likes_count: number;
   comments_count: number;
+  last_reply_at?: Date | string | null;
+  repliers?: Array<{ id: string; name: string | null; image: string | null }> | null;
 }
 
 interface CommentQueryRow {
@@ -266,7 +271,23 @@ export const getCommunityThreads = cache(async (communityId: string): Promise<Co
       p.display_name as profile_display_name,
       COALESCE(t.likes, ARRAY[]::TEXT[]) as likes,
       COALESCE(array_length(t.likes, 1), 0)::int as likes_count,
-      (SELECT COUNT(*) FROM comments c WHERE c.thread_id = t.id)::int as comments_count
+      (SELECT COUNT(*) FROM comments c WHERE c.thread_id = t.id)::int as comments_count,
+      (SELECT MAX(c.created_at) FROM comments c WHERE c.thread_id = t.id) as last_reply_at,
+      (
+        SELECT COALESCE(json_agg(json_build_object('id', r.user_id, 'name', r.name, 'image', r.image) ORDER BY r.last_at DESC), '[]'::json)
+        FROM (
+          SELECT c.user_id,
+                 MAX(c.created_at) AS last_at,
+                 COALESCE(MAX(rp.display_name), MAX(rp.full_name), (array_agg(c.author->>'name' ORDER BY c.created_at DESC))[1]) AS name,
+                 COALESCE(MAX(rp.avatar_url), (array_agg(c.author->>'image' ORDER BY c.created_at DESC))[1]) AS image
+          FROM comments c
+          LEFT JOIN profiles rp ON rp.auth_user_id = c.user_id
+          WHERE c.thread_id = t.id
+          GROUP BY c.user_id
+          ORDER BY last_at DESC
+          LIMIT 3
+        ) r
+      ) as repliers
     FROM threads t
     LEFT JOIN profiles p ON p.auth_user_id = t.user_id
     WHERE t.community_id = ${communityId}
@@ -296,6 +317,8 @@ export const getCommunityThreads = cache(async (communityId: string): Promise<Co
     likes: t.likes || [],
     comments: [],
     pinned: t.pinned ?? false,
+    lastReplyAt: t.last_reply_at ? toIso(t.last_reply_at) : null,
+    repliers: (t.repliers ?? []).map((r) => ({ id: r.id, name: r.name || 'Member', image: r.image || '' })),
   }));
 });
 
@@ -623,5 +646,154 @@ export const getCourseWithChapters = cache(async (
       ...c,
       lessons: lessonsByChapter.get(c.id) ?? [],
     })),
+  };
+});
+
+// ---------------------------------------------------------------------------
+// Feed page loaders (community redesign, phase 2)
+// ---------------------------------------------------------------------------
+
+export interface FeedVisit {
+  feedVisitAt: string | null;
+  feedPrevVisitAt: string | null;
+}
+
+/** The viewer's last two feed visits (see lib/feed/visits.ts). */
+export const getFeedVisit = cache(async (communityId: string, userId: string): Promise<FeedVisit> => {
+  const row = await queryOne<{ feed_visit_at: Date | string | null; feed_prev_visit_at: Date | string | null }>`
+    SELECT feed_visit_at, feed_prev_visit_at
+    FROM community_members
+    WHERE community_id = ${communityId} AND user_id = ${userId}
+  `;
+  const iso = (v: Date | string | null | undefined) => (v ? new Date(v).toISOString() : null);
+  return { feedVisitAt: iso(row?.feed_visit_at), feedPrevVisitAt: iso(row?.feed_prev_visit_at) };
+});
+
+export interface PublicProfile {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  timezone: string | null;
+}
+
+/** Name, photo and saved time zone for a better-auth user id. */
+export const getPublicProfile = cache(async (authUserId: string): Promise<PublicProfile | null> => {
+  const row = await queryOne<{ display_name: string | null; full_name: string | null; avatar_url: string | null; timezone: string | null }>`
+    SELECT display_name, full_name, avatar_url, timezone
+    FROM profiles WHERE auth_user_id = ${authUserId}
+  `;
+  if (!row) return null;
+  return {
+    id: authUserId,
+    name: row.display_name || row.full_name || 'Member',
+    avatarUrl: row.avatar_url || null,
+    timezone: row.timezone || null,
+  };
+});
+
+export interface UpcomingClass {
+  id: string;
+  title: string;
+  description: string | null;
+  startsAt: string;
+  durationMinutes: number;
+  status: LiveClassStatus;
+  teacherName: string;
+  teacherTimezone: string | null;
+}
+
+/** The next classes that haven't ended yet (a live one first), soonest first. */
+export const getUpcomingClasses = cache(async (communityId: string, limit = 2): Promise<UpcomingClass[]> => {
+  const rows = await query<{
+    id: string; title: string; description: string | null; scheduled_start_time: Date | string;
+    duration_minutes: number; status: LiveClassStatus; teacher_name: string; teacher_timezone: string | null;
+  }>`
+    SELECT lc.id, lc.title, lc.description, lc.scheduled_start_time, lc.duration_minutes, lc.status,
+           lc.teacher_name, p.timezone AS teacher_timezone
+    FROM live_classes_with_details lc
+    LEFT JOIN profiles p ON p.auth_user_id = lc.teacher_id
+    WHERE lc.community_id = ${communityId}
+      AND lc.status IN ('scheduled', 'live')
+      AND lc.scheduled_start_time + make_interval(mins => lc.duration_minutes) > NOW()
+      AND lc.scheduled_start_time <= NOW() + INTERVAL '60 days'
+    ORDER BY lc.scheduled_start_time ASC
+    LIMIT ${limit}
+  `;
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    description: r.description,
+    startsAt: new Date(r.scheduled_start_time).toISOString(),
+    durationMinutes: r.duration_minutes,
+    status: r.status,
+    teacherName: r.teacher_name,
+    teacherTimezone: r.teacher_timezone || null,
+  }));
+});
+
+export interface CourseProgress {
+  courseTitle: string;
+  courseSlug: string;
+  completed: number;
+  total: number;
+  /** First lesson not completed yet, in course order. */
+  nextLessonTitle: string | null;
+  started: boolean;
+}
+
+/**
+ * The course the viewer last completed a lesson in (not finished yet), or
+ * else the newest course with lessons. Private courses only for managers.
+ */
+export const getCourseProgress = cache(async (
+  communityId: string,
+  userId: string,
+  includePrivate: boolean,
+): Promise<CourseProgress | null> => {
+  const rows = await query<{
+    course_id: string; title: string; slug: string; created_at: Date | string;
+    lesson_title: string; done_at: Date | string | null;
+  }>`
+    SELECT co.id AS course_id, co.title, co.slug, co.created_at,
+           l.title AS lesson_title, lc.completed_at AS done_at
+    FROM courses co
+    JOIN chapters ch ON ch.course_id = co.id
+    JOIN lessons l ON l.chapter_id = ch.id
+    LEFT JOIN lesson_completions lc ON lc.lesson_id = l.id AND lc.user_id = ${userId}
+    WHERE co.community_id = ${communityId}
+      AND (${includePrivate} OR co.is_public = true)
+    ORDER BY co.id, ch.chapter_position, l.lesson_position
+  `;
+  if (rows.length === 0) return null;
+
+  const byCourse = new Map<string, typeof rows>();
+  for (const r of rows) byCourse.set(r.course_id, [...(byCourse.get(r.course_id) ?? []), r]);
+
+  const summaries = Array.from(byCourse.values()).map((lessons) => {
+    const lastDone = lessons.reduce<number>((max, l) => (l.done_at ? Math.max(max, new Date(l.done_at).getTime()) : max), 0);
+    const completed = lessons.filter((l) => l.done_at).length;
+    return {
+      courseTitle: lessons[0].title,
+      courseSlug: lessons[0].slug,
+      createdAt: new Date(lessons[0].created_at).getTime(),
+      completed,
+      total: lessons.length,
+      nextLessonTitle: lessons.find((l) => !l.done_at)?.lesson_title ?? null,
+      lastDone,
+    };
+  });
+
+  const inProgress = summaries
+    .filter((c) => c.completed > 0 && c.completed < c.total)
+    .sort((a, b) => b.lastDone - a.lastDone)[0];
+  const pick = inProgress ?? summaries.filter((c) => c.completed === 0).sort((a, b) => b.createdAt - a.createdAt)[0];
+  if (!pick) return null;
+  return {
+    courseTitle: pick.courseTitle,
+    courseSlug: pick.courseSlug,
+    completed: pick.completed,
+    total: pick.total,
+    nextLessonTitle: pick.nextLessonTitle,
+    started: pick.completed > 0,
   };
 });

@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query, queryOne } from "@/lib/db";
+import { query } from "@/lib/db";
+import { requireCommunityViewer } from "@/lib/community-auth";
 
 // Force dynamic - no caching
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-interface Community {
-  id: string;
-}
 
 interface UpcomingClass {
   id: string;
@@ -26,17 +23,12 @@ export async function GET(
   props: { params: Promise<{ communitySlug: string }> }
 ) {
   const params = await props.params;
-  try {
-    const community = await queryOne<Community>`
-      SELECT id FROM communities WHERE slug = ${params.communitySlug}
-    `;
+  // Members only, like the feed that shows these.
+  const guard = await requireCommunityViewer(params.communitySlug, { allowPreRegistered: true });
+  if (!guard.ok) return guard.response;
+  const community = guard.community;
 
-    if (!community) {
-      return NextResponse.json(
-        { error: "Community not found" },
-        { status: 404 }
-      );
-    }
+  try {
 
     const classes = await query<UpcomingClass>`
       SELECT id, title, scheduled_start_time, duration_minutes, status,
