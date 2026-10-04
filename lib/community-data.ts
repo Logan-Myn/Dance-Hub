@@ -38,6 +38,21 @@ export const getCommunityBySlug = cache(async (slug: string) => {
   `;
 });
 
+// Same people as the roster served by GET /api/community/[slug]/members, so
+// the feed header can start from the right number before that request lands.
+// The stored counters on communities drift from this and aren't used.
+export const getRosterCount = cache(async (communityId: string): Promise<number> => {
+  const row = await queryOne<{ count: number }>`
+    SELECT COUNT(*)::int AS count
+    FROM community_members_with_profiles
+    WHERE community_id = ${communityId}
+      AND status = 'active'
+      AND role != 'admin'
+      AND (subscription_status = 'active' OR subscription_status IS NULL)
+  `;
+  return row?.count ?? 0;
+});
+
 // Mirrors the logic in /api/community/[slug]/check-subscription: active OR
 // in grace period after cancel. Returns false when user has no row.
 // Thin wrapper over getMembershipStatus so the layout + page that hit this

@@ -132,6 +132,8 @@ interface FeedClientProps {
   memberStatus: string | null;
   subscriptionStatus: string | null;
   accessEndDate: string | null;
+  /** Roster size counted on the server; shown until the roster loads. */
+  initialMemberCount?: number;
 }
 
 export default function FeedClient({
@@ -145,6 +147,7 @@ export default function FeedClient({
   memberStatus: initialMemberStatus,
   subscriptionStatus: initialSubscriptionStatus,
   accessEndDate: initialAccessEndDate,
+  initialMemberCount = 0,
 }: FeedClientProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -230,7 +233,7 @@ export default function FeedClient({
     if (!searchParams.get('thread')) return;
     router.replace(pathname);
   }, [selectedThread, searchParams, router, pathname]);
-  const [totalMembers, setTotalMembers] = useState(0);
+  const [totalMembers, setTotalMembers] = useState(initialMemberCount);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [accessEndDate, setAccessEndDate] = useState<string | null>(initialAccessEndDate);
