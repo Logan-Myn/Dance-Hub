@@ -27,6 +27,9 @@ export interface CommunityRow {
     sections?: unknown[];
     meta?: { last_updated?: string; published_version?: string };
   } | null;
+  offers_live_classes?: boolean | null;
+  offers_courses?: boolean | null;
+  offers_private_lessons?: boolean | null;
 }
 
 // cache() dedupes calls within a single server render pass. Layout and
