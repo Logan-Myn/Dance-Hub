@@ -63,7 +63,7 @@ describe("ics", () => {
     expect(ics).toContain("DTSTART:20261005T170000Z\r\n");
     expect(ics).toContain("DTEND:20261005T180000Z\r\n");
     expect(ics).toContain("DTSTAMP:20261005T120000Z\r\n");
-    expect(ics).toContain("SUMMARY:Bachata\; footwork\\, week 3\r\n");
+    expect(ics).toContain("SUMMARY:Bachata\\; footwork\\, week 3\r\n");
     expect(ics.startsWith("BEGIN:VCALENDAR\r\n")).toBe(true);
     expect(ics.endsWith("END:VCALENDAR\r\n")).toBe(true);
   });

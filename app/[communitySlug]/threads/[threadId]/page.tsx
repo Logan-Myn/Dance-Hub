@@ -34,6 +34,7 @@ export default async function ThreadRoutePage(
       communitySlug={params.communitySlug}
       thread={thread}
       isCreator={isCreator}
+      teacherId={community.created_by}
       threadCategories={community.thread_categories}
     />
   );

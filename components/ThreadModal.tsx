@@ -15,6 +15,19 @@ export default function ThreadModal({ isOpen, onClose, ...rest }: ThreadModalPro
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgba(24,16,36,.52)] backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
+          onEscapeKeyDown={(e) => {
+            // Esc in a reply box closes that box, not the post.
+            const t = e.target as HTMLElement | null;
+            if (t?.closest("[data-reply-box]")) e.preventDefault();
+          }}
+          onCloseAutoFocus={(e) => {
+            // Back to the post's card when it is on the page (opened from search too).
+            const link = document.querySelector<HTMLElement>(`#post-${CSS.escape(rest.thread.id)} a.post-link`);
+            if (link) {
+              e.preventDefault();
+              link.focus();
+            }
+          }}
           onOpenAutoFocus={(e) => {
             if (rest.autoFocusReply) return;
             e.preventDefault();

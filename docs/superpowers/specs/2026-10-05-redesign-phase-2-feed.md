@@ -69,3 +69,12 @@ Remind me, "Add every Sunday class" (.ics), dancers-in-the-room count, clip/phot
 6. Rail and the responsive "Up next" row.
 7. Search.
 8. Port tests, lint, build, one review, preprod (incl. tour run), then prod.
+
+## Decisions made while building
+
+- Site admins without a membership stay on the feed (as before) with a "Join from the About page" card instead of being redirected; the feed's own join flow is gone.
+- Under 640px the topic chips stay as scrollable chips; only Latest / Top becomes a select (matches the prototype).
+- Times use the 24-hour clock ("19:00").
+- The owner's header button says "Invite"; members see "Invite a friend".
+- The membership card says "Paid membership" without a price: the price a member pays can differ (promo codes, older prices) and only billing knows it.
+- Search covers posts; people are found through the author name.

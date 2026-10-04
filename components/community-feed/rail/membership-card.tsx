@@ -24,8 +24,6 @@ const day = (iso: string, timeZone: string) =>
 export function MembershipCard({
   communityName,
   paid,
-  monthlyPrice,
-  yearlyEnabled,
   subscriptionStatus,
   accessEndDate,
   canManageBilling,
@@ -36,8 +34,6 @@ export function MembershipCard({
 }: {
   communityName: string;
   paid: boolean;
-  monthlyPrice: number;
-  yearlyEnabled: boolean;
   subscriptionStatus: string | null;
   accessEndDate: string | null;
   canManageBilling: boolean;
@@ -50,7 +46,9 @@ export function MembershipCard({
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const canceling = subscriptionStatus === "canceling";
-  const plan = !paid ? "Free membership" : yearlyEnabled ? "Paid membership" : `Monthly, €${monthlyPrice}`;
+  // The price a member pays can differ from today's (promo codes, older prices),
+  // and only billing knows it, so the card doesn't name one.
+  const plan = paid ? "Paid membership" : "Free membership";
   const dateLine = accessEndDate
     ? canceling
       ? `Ends ${day(accessEndDate, timeZone)}`
@@ -127,8 +125,8 @@ export function MembershipCard({
           >
             {paid
               ? accessEndDate
-                ? `Your subscription is canceled and you keep access until ${day(accessEndDate, timeZone)}. You can rejoin anytime before then.`
-                : "Your subscription is canceled and you keep access until the end of the period you paid for."
+                ? `Your subscription will be canceled and you keep access until ${day(accessEndDate, timeZone)}. You can rejoin anytime before then.`
+                : "Your subscription will be canceled and you keep access until the end of the period you paid for."
               : "You lose access to posts, classes and courses. You can join again anytime."}
           </InlineConfirm>
         )}

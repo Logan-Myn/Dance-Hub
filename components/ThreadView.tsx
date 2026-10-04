@@ -765,7 +765,7 @@ export default function ThreadView({
             ) : (
               <>
                 <h3 className="font-display text-[15px] font-semibold text-ink">
-                  {organizedComments.length} {organizedComments.length === 1 ? "reply" : "replies"}
+                  {localComments.length} {localComments.length === 1 ? "reply" : "replies"}
                 </h3>
                 {hiddenCount > 0 && (
                   <button

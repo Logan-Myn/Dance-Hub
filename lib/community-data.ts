@@ -278,8 +278,8 @@ export const getCommunityThreads = cache(async (communityId: string): Promise<Co
         FROM (
           SELECT c.user_id,
                  MAX(c.created_at) AS last_at,
-                 COALESCE(MAX(rp.display_name), MAX(rp.full_name), (array_agg(c.author->>'name' ORDER BY c.created_at DESC))[1]) AS name,
-                 COALESCE(MAX(rp.avatar_url), (array_agg(c.author->>'image' ORDER BY c.created_at DESC))[1]) AS image
+                 COALESCE(MAX(NULLIF(rp.display_name, '')), MAX(NULLIF(rp.full_name, '')), (array_agg(c.author->>'name' ORDER BY c.created_at DESC))[1]) AS name,
+                 COALESCE(MAX(NULLIF(rp.avatar_url, '')), (array_agg(NULLIF(c.author->>'image', '') ORDER BY c.created_at DESC))[1]) AS image
           FROM comments c
           LEFT JOIN profiles rp ON rp.auth_user_id = c.user_id
           WHERE c.thread_id = t.id
@@ -659,14 +659,21 @@ export interface FeedVisit {
 }
 
 /** The viewer's last two feed visits (see lib/feed/visits.ts). */
+// Never fails the page: without the columns (migration not applied yet) or on
+// a query error the feed just shows no "New" dots.
 export const getFeedVisit = cache(async (communityId: string, userId: string): Promise<FeedVisit> => {
-  const row = await queryOne<{ feed_visit_at: Date | string | null; feed_prev_visit_at: Date | string | null }>`
-    SELECT feed_visit_at, feed_prev_visit_at
-    FROM community_members
-    WHERE community_id = ${communityId} AND user_id = ${userId}
-  `;
   const iso = (v: Date | string | null | undefined) => (v ? new Date(v).toISOString() : null);
-  return { feedVisitAt: iso(row?.feed_visit_at), feedPrevVisitAt: iso(row?.feed_prev_visit_at) };
+  try {
+    const row = await queryOne<{ feed_visit_at: Date | string | null; feed_prev_visit_at: Date | string | null }>`
+      SELECT feed_visit_at, feed_prev_visit_at
+      FROM community_members
+      WHERE community_id = ${communityId} AND user_id = ${userId}
+    `;
+    return { feedVisitAt: iso(row?.feed_visit_at), feedPrevVisitAt: iso(row?.feed_prev_visit_at) };
+  } catch (error) {
+    console.error('getFeedVisit failed:', error);
+    return { feedVisitAt: null, feedPrevVisitAt: null };
+  }
 });
 
 export interface PublicProfile {
@@ -714,9 +721,10 @@ export const getUpcomingClasses = cache(async (communityId: string, limit = 2): 
     LEFT JOIN profiles p ON p.auth_user_id = lc.teacher_id
     WHERE lc.community_id = ${communityId}
       AND lc.status IN ('scheduled', 'live')
-      AND lc.scheduled_start_time + make_interval(mins => lc.duration_minutes) > NOW()
+      -- A live class that runs over its slot stays until it is ended.
+      AND (lc.status = 'live' OR lc.scheduled_start_time + make_interval(mins => lc.duration_minutes) > NOW())
       AND lc.scheduled_start_time <= NOW() + INTERVAL '60 days'
-    ORDER BY lc.scheduled_start_time ASC
+    ORDER BY (lc.status = 'live') DESC, lc.scheduled_start_time ASC
     LIMIT ${limit}
   `;
   return rows.map((r) => ({
@@ -736,8 +744,9 @@ export interface CourseProgress {
   courseSlug: string;
   completed: number;
   total: number;
-  /** First lesson not completed yet, in course order. */
+  /** First lesson not completed yet, in course order, and its 1-based number. */
   nextLessonTitle: string | null;
+  nextLessonNumber: number | null;
   started: boolean;
 }
 
@@ -772,13 +781,15 @@ export const getCourseProgress = cache(async (
   const summaries = Array.from(byCourse.values()).map((lessons) => {
     const lastDone = lessons.reduce<number>((max, l) => (l.done_at ? Math.max(max, new Date(l.done_at).getTime()) : max), 0);
     const completed = lessons.filter((l) => l.done_at).length;
+    const nextIndex = lessons.findIndex((l) => !l.done_at);
     return {
       courseTitle: lessons[0].title,
       courseSlug: lessons[0].slug,
       createdAt: new Date(lessons[0].created_at).getTime(),
       completed,
       total: lessons.length,
-      nextLessonTitle: lessons.find((l) => !l.done_at)?.lesson_title ?? null,
+      nextLessonTitle: nextIndex >= 0 ? lessons[nextIndex].lesson_title : null,
+      nextLessonNumber: nextIndex >= 0 ? nextIndex + 1 : null,
       lastDone,
     };
   });
@@ -794,6 +805,7 @@ export const getCourseProgress = cache(async (
     completed: pick.completed,
     total: pick.total,
     nextLessonTitle: pick.nextLessonTitle,
+    nextLessonNumber: pick.nextLessonNumber,
     started: pick.completed > 0,
   };
 });

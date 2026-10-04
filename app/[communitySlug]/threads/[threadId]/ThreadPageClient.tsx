@@ -45,11 +45,13 @@ export default function ThreadPageClient({
   communitySlug,
   thread,
   isCreator,
+  teacherId,
   threadCategories,
 }: {
   communitySlug: string;
   thread: ThreadData;
   isCreator: boolean;
+  teacherId?: string;
   threadCategories?: unknown;
 }) {
   const router = useRouter();
@@ -122,6 +124,7 @@ export default function ThreadPageClient({
         onThreadUpdate={noopThreadUpdate}
         onDelete={handleDelete}
         isCreator={isCreator}
+        teacherId={teacherId}
         layout="page"
         headerSlot={backHeader}
       />

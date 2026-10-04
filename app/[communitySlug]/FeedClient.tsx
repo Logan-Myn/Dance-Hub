@@ -136,9 +136,12 @@ export default function FeedClient({
     fetch(`/api/community/${encodeURIComponent(slug)}/feed-visit`, { method: "POST" }).catch(() => {});
   }, [slug, initialIsMember, isCreator]);
 
-  // Top bar search, "/" for search and "N" for a new post.
-  useEffect(() => registerPageSearch(() => setSearchOpen(true), "Search posts"), []);
+  // Top bar search, "/" for search and "N" for a new post, only while the
+  // feed itself is on screen (not the coming-soon screen).
+  const feedShown = !(isPreRegistered && !isMember) && (isMember || isCreator || isAdmin);
+  useEffect(() => (feedShown ? registerPageSearch(() => setSearchOpen(true), "Search posts") : undefined), [feedShown]);
   useEffect(() => {
+    if (!feedShown) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
       const t = e.target as HTMLElement | null;
@@ -154,7 +157,7 @@ export default function FeedClient({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [feedShown]);
 
   // Onboarding tour for owners, once per community and browser.
   const { startNextStep, currentTour } = useNextStep();
@@ -175,6 +178,8 @@ export default function FeedClient({
   // until it is closed.
   const threadParam = searchParams.get("thread");
   const [dismissedParam, setDismissedParam] = useState<string | null>(null);
+  // Once the param is gone, the same link may open the post again.
+  if (!threadParam && dismissedParam) setDismissedParam(null);
   const current =
     selected ??
     (threadParam && threadParam !== dismissedParam ? posts.find((p) => p.id === threadParam) ?? null : null);
@@ -389,8 +394,6 @@ export default function FeedClient({
         <MembershipCard
           communityName={community.name}
           paid={paid}
-          monthlyPrice={community.membershipPrice}
-          yearlyEnabled={community.yearlyEnabled}
           subscriptionStatus={subscriptionStatus}
           accessEndDate={accessEndDate}
           canManageBilling={!!community.stripeAccountId}
@@ -447,7 +450,7 @@ export default function FeedClient({
             secondary={{ label: "See all posts", onClick: () => setCategory(null) }}
           />
         ) : (
-          <div className="flex flex-col gap-3" aria-live="polite">
+          <div className="flex flex-col gap-3">
             {visible.map((p) => (
               <div key={p.id}>{card(p)}</div>
             ))}
@@ -552,7 +555,18 @@ export default function FeedClient({
               ].slice(0, 3),
             }))
           }
-          onThreadUpdate={(id, updates) => updatePost(id, updates as Partial<FeedPost>)}
+          onThreadUpdate={(id, updates) => {
+            const patch: Partial<FeedPost> = {};
+            if (updates.title !== undefined) patch.title = updates.title;
+            if (updates.content !== undefined) patch.content = updates.content;
+            if (updates.pinned !== undefined) patch.pinned = updates.pinned;
+            if (updates.comments_count !== undefined) {
+              // A nested reply: same bookkeeping as a top-level one.
+              patch.commentsCount = updates.comments_count;
+              patch.lastReplyAt = new Date().toISOString();
+            }
+            updatePost(id, patch);
+          }}
           onDelete={(id) => {
             mutateThreads((list) => (list ?? []).filter((p) => p.id !== id), { revalidate: false });
             setSelected(null);

@@ -187,6 +187,7 @@ export default function Comment({
             <div className="mt-2 flex flex-col gap-2">
               <label htmlFor={`reply-to-${id}`} className="sr-only">Reply to {displayName}</label>
               <textarea
+                data-reply-box
                 id={`reply-to-${id}`}
                 autoFocus
                 value={replyContent}

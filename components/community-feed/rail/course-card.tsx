@@ -8,7 +8,6 @@ import type { CourseProgress } from "../types";
 /** The course to pick up next, with lesson progress. */
 export function CourseCard({ slug, progress, card = false }: { slug: string; progress: CourseProgress; card?: boolean }) {
   const pct = progress.total ? Math.round((progress.completed / progress.total) * 100) : 0;
-  const nextNumber = Math.min(progress.completed + 1, progress.total);
   const body = (
     <RailSection
       title={progress.started ? "Continue learning" : "Start learning"}
@@ -24,8 +23,8 @@ export function CourseCard({ slug, progress, card = false }: { slug: string; pro
         <span className="min-w-0">
           <strong className="block truncate text-[14.5px] font-semibold text-ink">{progress.courseTitle}</strong>
           <span className="block truncate text-[13px] text-ink-2">
-            {progress.nextLessonTitle
-              ? `Lesson ${nextNumber} of ${progress.total}: ${progress.nextLessonTitle}`
+            {progress.nextLessonTitle && progress.nextLessonNumber
+              ? `Lesson ${progress.nextLessonNumber} of ${progress.total}: ${progress.nextLessonTitle}`
               : `${progress.total} ${progress.total === 1 ? "lesson" : "lessons"}`}
           </span>
           <span
