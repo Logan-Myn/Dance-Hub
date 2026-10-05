@@ -235,7 +235,7 @@ export default function DashboardPage() {
           <div className="flex min-w-0 items-center gap-4">
             <InitialsAvatar id={user.id} name={displayName} imageUrl={profile?.avatar_url || user?.image || null} size={56} />
             <div className="min-w-0">
-              <h1 className="truncate font-display text-[26px] font-semibold leading-tight tracking-[-0.01em] text-ink sm:text-[30px]">
+              <h1 className="text-balance font-display text-[23px] font-semibold leading-tight tracking-[-0.01em] text-ink sm:text-[30px]">
                 {getGreeting()}, {displayName.split(' ')[0]}
               </h1>
               <p className="mt-0.5 text-[14.5px] text-ink-2">{formatInTz(currentTime, userTimezone, 'EEEE d MMMM')}</p>
