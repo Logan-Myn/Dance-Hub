@@ -94,7 +94,7 @@ export default function DiscoveryClient({ communities, signedIn, savedTimeZone }
   const total = communities.length;
 
   return (
-    <main className="mx-auto flex max-w-[1120px] flex-col gap-6 px-4 pb-16 pt-8 sm:px-6 sm:pt-12">
+    <main className="mx-auto flex max-w-[1240px] flex-col gap-6 px-4 pb-16 pt-8 sm:px-8 sm:pt-12">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight text-ink sm:text-[34px]">
