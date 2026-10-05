@@ -48,21 +48,21 @@ async function signIn(page: Page, email: string, password: string) {
   }
 
   // Wait for modal to be visible
-  await expect(page.getByText('Welcome to DanceHub')).toBeVisible({ timeout: 5000 });
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible({ timeout: 5000 });
 
   // Click Sign In tab if not already active
-  const signInTab = page.getByRole('tab', { name: /sign in/i });
-  await signInTab.click();
+  await dialog.getByRole('tab', { name: /sign in/i }).click();
 
   // Fill in credentials
-  await page.getByPlaceholder(/email/i).fill(email);
-  await page.getByPlaceholder(/password/i).fill(password);
+  await dialog.getByLabel('Email').fill(email);
+  await dialog.getByLabel('Password', { exact: true }).fill(password);
 
   // Submit
-  await page.getByRole('button', { name: /sign in/i }).click();
+  await dialog.getByRole('button', { name: /^sign in$/i }).click();
 
   // Wait for modal to close (successful login)
-  await expect(page.getByText('Welcome to DanceHub')).not.toBeVisible({ timeout: 10000 });
+  await expect(dialog).not.toBeVisible({ timeout: 10000 });
 }
 
 // Helper function to sign up via modal
@@ -74,19 +74,21 @@ async function signUp(page: Page, email: string, password: string, name: string)
   }
 
   // Wait for modal to be visible
-  await expect(page.getByText('Welcome to DanceHub')).toBeVisible({ timeout: 5000 });
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible({ timeout: 5000 });
 
   // Click Sign Up tab
-  const signUpTab = page.getByRole('tab', { name: /sign up/i });
-  await signUpTab.click();
+  await dialog.getByRole('tab', { name: /sign up/i }).click();
 
   // Fill in details
-  await page.getByPlaceholder(/name/i).fill(name);
-  await page.getByPlaceholder(/email/i).fill(email);
-  await page.getByPlaceholder(/password/i).first().fill(password);
+  const [first, ...rest] = name.split(' ');
+  await dialog.getByLabel('First name').fill(first);
+  await dialog.getByLabel('Last name').fill(rest.join(' ') || first);
+  await dialog.getByLabel('Email').fill(email);
+  await dialog.getByLabel('Password', { exact: true }).fill(password);
 
   // Submit
-  await page.getByRole('button', { name: /sign up|create account/i }).click();
+  await dialog.getByRole('button', { name: /create account/i }).click();
 }
 
 // Helper to fill Stripe payment form (in iframe)
@@ -129,7 +131,7 @@ test.describe('Test A: Community Membership Subscription Flow', () => {
     await joinButton.click();
 
     // Step 3: Sign in if auth modal appears
-    const authModal = page.getByText('Welcome to DanceHub');
+    const authModal = page.getByRole('dialog').getByRole('tab', { name: /sign in/i });
     if (await authModal.isVisible({ timeout: 3000 }).catch(() => false)) {
       await signIn(page, TEST_CONFIG.testUser.email, TEST_CONFIG.testUser.password);
     }
@@ -196,7 +198,7 @@ test.describe('Test B: Pre-Registration Flow', () => {
       await preRegButton.click();
 
       // Step 3: Handle auth if needed
-      const authModal = page.getByText('Welcome to DanceHub');
+      const authModal = page.getByRole('dialog').getByRole('tab', { name: /sign in/i });
       if (await authModal.isVisible({ timeout: 3000 }).catch(() => false)) {
         await signIn(page, TEST_CONFIG.testUser.email, TEST_CONFIG.testUser.password);
       }

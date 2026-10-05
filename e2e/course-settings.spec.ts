@@ -29,16 +29,16 @@ async function signInAsOwner(page: Page) {
   await page.goto('/');
 
   await page.getByRole('button', { name: /sign in|log in/i }).first().click();
-  await expect(page.getByText('Welcome to DanceHub')).toBeVisible({ timeout: 10000 });
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible({ timeout: 10000 });
 
-  const dialog = page.locator('div[role="dialog"]');
-  await page.getByRole('tab', { name: /sign in/i }).click();
-  await dialog.getByPlaceholder('Email').fill(OWNER_EMAIL);
-  await dialog.getByPlaceholder('Password').fill(OWNER_PASSWORD);
-  // Scoped to the dialog: the header carries a "Sign In" button too.
+  await dialog.getByRole('tab', { name: /sign in/i }).click();
+  await dialog.getByLabel('Email').fill(OWNER_EMAIL);
+  await dialog.getByLabel('Password', { exact: true }).fill(OWNER_PASSWORD);
+  // Scoped to the dialog: the header carries a "Sign in" button too.
   await dialog.getByRole('button', { name: /^sign in$/i }).click();
 
-  await expect(page.getByText('Welcome to DanceHub')).not.toBeVisible({ timeout: 15000 });
+  await expect(dialog).not.toBeVisible({ timeout: 15000 });
 }
 
 /** Reads the stored cover URL straight from the API the classroom renders from. */

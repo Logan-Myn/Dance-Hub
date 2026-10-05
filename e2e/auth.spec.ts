@@ -25,8 +25,8 @@ test.describe('Authentication', () => {
     if (await signInButton.isVisible()) {
       await signInButton.click();
 
-      // Modal should show "Welcome to DanceHub" title
-      await expect(page.getByText('Welcome to DanceHub')).toBeVisible();
+      // Modal should show the "Welcome back" title
+      await expect(page.getByRole('dialog').getByText('Welcome back')).toBeVisible();
 
       // Modal should have Sign In and Sign Up tabs
       await expect(page.getByRole('tab', { name: /sign in/i })).toBeVisible();
@@ -42,9 +42,10 @@ test.describe('Authentication', () => {
     if (await signInButton.isVisible()) {
       await signInButton.click();
 
-      // Check for email and password inputs (using placeholder text)
-      await expect(page.getByPlaceholder(/email/i)).toBeVisible();
-      await expect(page.getByPlaceholder(/password/i)).toBeVisible();
+      // Check for email and password inputs (labelled fields)
+      const dialog = page.getByRole('dialog');
+      await expect(dialog.getByLabel('Email')).toBeVisible();
+      await expect(dialog.getByLabel('Password', { exact: true })).toBeVisible();
     }
   });
 

@@ -16,6 +16,7 @@ export function AppDialog({
   description,
   children,
   footer,
+  leading,
   width = 560,
   className,
 }: {
@@ -25,6 +26,8 @@ export function AppDialog({
   description?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /** Shown before the title, like a logo mark. */
+  leading?: React.ReactNode;
   width?: number;
   className?: string;
 }) {
@@ -40,6 +43,7 @@ export function AppDialog({
             style={{ maxWidth: width }}
           >
             <div className="flex items-start gap-3 pb-2 pl-[22px] pr-3.5 pt-4">
+              {leading && <div className="shrink-0 pt-1">{leading}</div>}
               <div className="min-w-0 flex-1 pt-1">
                 <DialogPrimitive.Title className="font-display text-[20px] font-semibold leading-tight text-ink">{title}</DialogPrimitive.Title>
                 {description ? (
