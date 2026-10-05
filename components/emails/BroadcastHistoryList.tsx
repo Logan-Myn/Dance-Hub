@@ -1,6 +1,9 @@
 import Link from 'next/link';
-import { format, formatDistanceToNowStrict } from 'date-fns';
-import { ArrowUpRight } from 'lucide-react';
+import { Mail } from 'lucide-react';
+import { Card } from '@/components/community-admin/ui';
+import { EmptyState } from '@/components/ds/empty-state';
+import { Pill, type PillVariant } from '@/components/ds/pill';
+import type { Audience } from '@/lib/broadcasts/audience';
 
 export interface BroadcastHistoryItem {
   id: string;
@@ -9,17 +12,21 @@ export interface BroadcastHistoryItem {
   status: 'pending' | 'sending' | 'sent' | 'partial_failure' | 'failed';
   sent_at: string | null;
   created_at: string;
+  audience?: Audience | null;
 }
 
-const STATUS_META: Record<
-  BroadcastHistoryItem['status'],
-  { label: string; dot: string; text: string }
-> = {
-  pending: { label: 'Draft', dot: 'bg-slate-400', text: 'text-slate-600' },
-  sending: { label: 'Sending', dot: 'bg-primary animate-pulse', text: 'text-primary' },
-  sent: { label: 'Published', dot: 'bg-emerald-500', text: 'text-emerald-700' },
-  partial_failure: { label: 'Partial delivery', dot: 'bg-amber-500', text: 'text-amber-700' },
-  failed: { label: 'Failed', dot: 'bg-rose-500', text: 'text-rose-700' },
+const STATUS: Record<BroadcastHistoryItem['status'], [PillVariant, string]> = {
+  pending: ['muted', 'Draft'],
+  sending: ['brand', 'Sending'],
+  sent: ['ok', 'Sent'],
+  partial_failure: ['warn', 'Partly sent'],
+  failed: ['live', 'Not sent'],
+};
+
+export const AUDIENCE_LABEL: Record<Audience, string> = {
+  all: 'All members',
+  paying: 'Paying members',
+  canceling: 'Members who are canceling',
 };
 
 export function BroadcastHistoryList({
@@ -31,56 +38,40 @@ export function BroadcastHistoryList({
 }) {
   if (broadcasts.length === 0) {
     return (
-      <div className="py-16 border-t border-border/50">
-        <p className="font-display text-2xl text-foreground/80 mb-2">
-          Nothing published yet.
-        </p>
-        <p className="text-sm text-muted-foreground max-w-sm">
-          Your archive will live here. Start with a welcome note, a class
-          announcement, or a Sunday recap.
-        </p>
-      </div>
+      <EmptyState icon={<Mail className="h-7 w-7" />} title="No emails yet">
+        Use emails for things members shouldn&apos;t miss: a new course, a schedule change, a special event.
+      </EmptyState>
     );
   }
 
   return (
-    <ul className="divide-y divide-border/60">
-      {broadcasts.map((b) => {
-        const status = STATUS_META[b.status];
-        const date = b.sent_at ?? b.created_at;
-        const dateObj = new Date(date);
-        const absolute = format(dateObj, 'MMM d, yyyy');
-        const relative = formatDistanceToNowStrict(dateObj, { addSuffix: true });
-
-        return (
-          <li key={b.id}>
-            <Link
-              href={`/${communitySlug}/admin/emails/${b.id}`}
-              className="group grid grid-cols-[1fr_auto] items-baseline gap-6 py-5 transition-colors hover:bg-muted/20 -mx-2 px-2 rounded-sm"
-            >
-              <div className="min-w-0">
-                <div className="flex items-baseline gap-3 mb-1">
-                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${status.dot} shrink-0 translate-y-[-2px]`} />
-                  <span className={`text-[10px] uppercase tracking-[0.14em] font-medium ${status.text}`}>
-                    {status.label}
-                  </span>
-                  <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                    · {b.recipient_count} {b.recipient_count === 1 ? 'reader' : 'readers'}
-                  </span>
-                </div>
-                <h3 className="font-display text-xl sm:text-2xl leading-tight text-foreground truncate group-hover:text-primary transition-colors">
-                  {b.subject || 'Untitled'}
-                </h3>
-              </div>
-
-              <div className="text-right shrink-0 self-center">
-                <p className="text-sm text-foreground tabular-nums">{absolute}</p>
-                <p className="text-xs text-muted-foreground">{relative}</p>
-              </div>
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+    <Card className="overflow-hidden">
+      <ul className="divide-y divide-line">
+        {broadcasts.map((b) => {
+          const [variant, label] = STATUS[b.status];
+          const date = new Date(b.sent_at ?? b.created_at);
+          return (
+            <li key={b.id}>
+              <Link
+                href={`/${communitySlug}/admin/emails/${b.id}`}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-3.5 transition-colors hover:bg-surface-2 sm:grid-cols-[minmax(0,1fr)_200px_110px_96px]"
+              >
+                <strong className="truncate text-[15px] font-semibold text-ink">{b.subject || 'Untitled'}</strong>
+                <span className="hidden truncate text-[13.5px] text-ink-2 sm:block">
+                  {b.recipient_count} {b.recipient_count === 1 ? 'member' : 'members'}
+                  {b.audience && b.audience !== 'all' ? `, ${AUDIENCE_LABEL[b.audience].toLowerCase()}` : ''}
+                </span>
+                <span className="justify-self-end sm:justify-self-start">
+                  <Pill variant={variant}>{label}</Pill>
+                </span>
+                <span className="col-span-2 text-[13px] tabular-nums text-ink-3 sm:col-span-1 sm:text-right">
+                  {date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
   );
 }

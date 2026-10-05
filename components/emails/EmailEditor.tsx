@@ -37,7 +37,7 @@ function ToolbarButton({
       aria-label={label}
       className={cn(
         'h-8 w-8 flex items-center justify-center rounded-lg transition-colors',
-        active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-primary/10'
+        active ? 'bg-brand text-white' : 'text-ink-2 hover:bg-brand-soft'
       )}
     >
       {children}
@@ -107,7 +107,7 @@ export function EmailEditor({ communitySlug, initialHtml = '', onChange }: Email
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2 border rounded-lg p-2 bg-muted/30">
+      <div className="flex flex-wrap items-center gap-2 border rounded-lg p-2 bg-surface-2">
         <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')} label="Bold"><Bold className="h-4 w-4" /></ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')} label="Italic"><Italic className="h-4 w-4" /></ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive('heading', { level: 1 })} label="Heading 1"><Heading1 className="h-4 w-4" /></ToolbarButton>
@@ -120,7 +120,7 @@ export function EmailEditor({ communitySlug, initialHtml = '', onChange }: Email
         <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('center').run()} active={editor.isActive({ textAlign: 'center' })} label="Align center"><AlignCenter className="h-4 w-4" /></ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('right').run()} active={editor.isActive({ textAlign: 'right' })} label="Align right"><AlignRight className="h-4 w-4" /></ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()} label="Clear formatting"><Eraser className="h-4 w-4" /></ToolbarButton>
-        {uploading && <span className="text-xs text-muted-foreground">Uploading…</span>}
+        {uploading && <span className="text-xs text-ink-2">Uploading…</span>}
       </div>
 
       <input
@@ -131,7 +131,7 @@ export function EmailEditor({ communitySlug, initialHtml = '', onChange }: Email
         onChange={(e) => e.target.files?.[0] && insertImage(e.target.files[0])}
       />
 
-      <div className="border-2 border-border/30 rounded-2xl bg-card">
+      <div className="border-2 border-line rounded-2xl bg-surface">
         <EditorContent editor={editor} />
       </div>
     </div>

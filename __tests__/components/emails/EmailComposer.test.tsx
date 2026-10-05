@@ -47,13 +47,15 @@ async function publish() {
       communityId="c1"
       communitySlug="salsa"
       communityName="Salsa"
+      senderName="Ana"
       ownerEmail="o@example.com"
-      activeMemberCount={600}
+      audienceCounts={{ all: 600, paying: 400, canceling: 3 }}
       quota={{ tier: 'paid', used: 1, limit: 200 }}
     />
   );
   await userEvent.type(screen.getByLabelText('Subject'), 'News');
-  await userEvent.click(screen.getByRole('button', { name: 'Publish broadcast' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Send to 600 members' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Send now' }));
 }
 
 beforeEach(() => jest.clearAllMocks());
@@ -80,7 +82,7 @@ it('reports a partial delivery as a problem, with the numbers', async () => {
 it('confirms a full delivery', async () => {
   reply({ status: 'sent', recipientCount: 600, failedCount: 0 });
   await publish();
-  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Published to 600 readers.'));
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Sent to 600 members.'));
   expect(mockPush).toHaveBeenCalledWith('/salsa/admin/emails/b1');
 });
 
@@ -91,8 +93,8 @@ it('waits for a send still in progress, showing that it is sending', async () =>
   );
   await publish();
   expect(toast.loading).toHaveBeenCalledWith('Sending to 600 members…');
-  expect(screen.getByRole('button', { name: 'Publishing…' })).toBeDisabled();
-  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Published to 600 readers.'), { timeout: 5000 });
+  expect(screen.getByRole('button', { name: 'Sending…' })).toBeDisabled();
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Sent to 600 members.'), { timeout: 5000 });
   expect(statusPolls()).toBe(2);
   expect(toast.dismiss).toHaveBeenCalledWith('progress');
 }, 10000);
@@ -113,6 +115,28 @@ it('explains a send with nobody to email instead of showing the error code', asy
   })) as unknown as typeof fetch;
   await publish();
   await waitFor(() => expect(toast.error).toHaveBeenCalled());
-  expect((toast.error as jest.Mock).mock.calls[0][0]).toBe('Your community has no members to email yet.');
+  expect((toast.error as jest.Mock).mock.calls[0][0]).toBe('Nobody in this group can get emails right now.');
   expect(mockPush).not.toHaveBeenCalled();
+});
+
+it('sends to the audience the owner picked', async () => {
+  reply({ status: 'sent', recipientCount: 3, failedCount: 0 });
+  render(
+    <EmailComposer
+      communityId="c1"
+      communitySlug="salsa"
+      communityName="Salsa"
+      senderName="Ana"
+      ownerEmail="o@example.com"
+      audienceCounts={{ all: 600, paying: 400, canceling: 3 }}
+      quota={{ tier: 'paid', used: 1, limit: 200 }}
+    />
+  );
+  await userEvent.selectOptions(screen.getByLabelText('Send to'), 'canceling');
+  await userEvent.type(screen.getByLabelText('Subject'), 'Before you go');
+  await userEvent.click(screen.getByRole('button', { name: 'Send to 3 members' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Send now' }));
+  await waitFor(() => expect(toast.success).toHaveBeenCalled());
+  const post = (global.fetch as jest.Mock).mock.calls.find(([url]) => String(url).endsWith('/broadcasts'));
+  expect(JSON.parse(post[1].body).audience).toBe('canceling');
 });

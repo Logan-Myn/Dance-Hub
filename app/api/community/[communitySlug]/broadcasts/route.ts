@@ -3,6 +3,7 @@ import { queryOne, query, sql } from '@/lib/db';
 import { authorizeBroadcastAccess } from '@/lib/broadcasts/auth';
 import { checkCanSend } from '@/lib/broadcasts/quota';
 import { getActiveRecipientsForCommunity } from '@/lib/broadcasts/recipients';
+import { isAudience } from '@/lib/broadcasts/audience';
 import { runBroadcast, type RunBroadcastInput } from '@/lib/broadcasts/sender';
 import { sanitizeEmailHtml } from '@/lib/sanitize-html';
 
@@ -24,12 +25,17 @@ export async function POST(req: Request, props: { params: Promise<{ communitySlu
   let broadcastId: string | null = null;
 
   try {
-    const { subject, htmlContent: rawHtml, editorJson, previewText } = (await req.json()) as {
+    const { subject, htmlContent: rawHtml, editorJson, previewText, audience: rawAudience } = (await req.json()) as {
       subject: string;
       htmlContent: unknown;
       editorJson: unknown;
       previewText?: string;
+      audience?: unknown;
     };
+    const audience = rawAudience === undefined ? 'all' : rawAudience;
+    if (!isAudience(audience)) {
+      return NextResponse.json({ error: 'Unknown audience' }, { status: 400 });
+    }
     // Stored, sent and shown on the archive page: keep only the editor's markup.
     const htmlContent = sanitizeEmailHtml(rawHtml);
     if (!subject || !htmlContent || !editorJson) {
@@ -60,10 +66,10 @@ export async function POST(req: Request, props: { params: Promise<{ communitySlu
     const inserted = await queryOne<{ id: string }>`
       INSERT INTO email_broadcasts
         (community_id, sender_user_id, subject, html_content, editor_json, preview_text,
-         recipient_count, status)
+         recipient_count, status, audience)
       VALUES
         (${community.id}, ${senderProfile.id}, ${subject}, ${htmlContent},
-         ${sql.json(editorJson as any)}, ${previewText ?? null}, 0, 'sending')
+         ${sql.json(editorJson as any)}, ${previewText ?? null}, 0, 'sending', ${audience})
       RETURNING id
     `;
     if (!inserted) {
@@ -71,7 +77,7 @@ export async function POST(req: Request, props: { params: Promise<{ communitySlu
     }
     broadcastId = inserted.id;
 
-    const recipients = await getActiveRecipientsForCommunity(community.id);
+    const recipients = await getActiveRecipientsForCommunity(community.id, audience);
     if (recipients.length === 0) {
       await sql`
         UPDATE email_broadcasts

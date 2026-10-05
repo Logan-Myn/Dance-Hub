@@ -3,17 +3,26 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
+import { Send } from 'lucide-react';
 import { EmailEditor } from './EmailEditor';
 import { QuotaBadge } from './QuotaBadge';
 import { UpgradeDialog } from './UpgradeDialog';
+import { AUDIENCE_LABEL } from './BroadcastHistoryList';
+import { BTN_PRIMARY, BTN_SECONDARY } from '@/components/community-feed/feed-header';
+import { Card } from '@/components/community-admin/ui';
+import { FIELD_INPUT, FIELD_LABEL } from '@/components/ds/app-dialog';
+import { InlineConfirm } from '@/components/ds/inline-confirm';
+import { AUDIENCES, type Audience } from '@/lib/broadcasts/audience';
 import { communityPath } from '@/lib/safe-redirect';
+import { cn } from '@/lib/utils';
 
 interface Props {
   communityId: string;
   communitySlug: string;
   communityName: string;
+  senderName: string;
   ownerEmail: string;
-  activeMemberCount: number;
+  audienceCounts: Record<Audience, number>;
   quota: { tier: 'vip' | 'paid' | 'free'; used: number; limit: number | null };
 }
 
@@ -60,16 +69,19 @@ export function EmailComposer(props: Props) {
   const [sending, setSending] = useState(false);
   const [testing, setTesting] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [audience, setAudience] = useState<Audience>('all');
+  const [confirming, setConfirming] = useState(false);
+  const count = props.audienceCounts[audience];
 
   const atLimit = props.quota.limit !== null && props.quota.used >= props.quota.limit;
 
   const validate = () => {
     if (!subject.trim()) {
-      toast.error('Subject is required');
+      toast.error('Add a subject.');
       return false;
     }
     if (!html.trim() || html === '<p></p>') {
-      toast.error('Message is empty');
+      toast.error('Write a message first.');
       return false;
     }
     return true;
@@ -86,7 +98,7 @@ export function EmailComposer(props: Props) {
       const res = await fetch(`/api/community/${props.communitySlug}/broadcasts`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ subject, htmlContent: html, editorJson: json, previewText }),
+        body: JSON.stringify({ subject, htmlContent: html, editorJson: json, previewText, audience }),
       });
       if (res.status === 402) {
         setUpgradeOpen(true);
@@ -94,12 +106,12 @@ export function EmailComposer(props: Props) {
       }
       if (!res.ok) {
         const body = await res.text();
-        let msg = 'Send failed';
+        let msg = "Couldn't send the email. Try again.";
         try {
           msg = JSON.parse(body).error || msg;
         } catch {}
         // The owner isn't a recipient, so a community without members has nobody.
-        if (msg === 'no_recipients') msg = 'Your community has no members to email yet.';
+        if (msg === 'no_recipients') msg = 'Nobody in this group can get emails right now.';
         throw new Error(msg);
       }
       const data = await res.json();
@@ -112,7 +124,7 @@ export function EmailComposer(props: Props) {
         toast.dismiss(progress);
       }
       if (!outcome) {
-        toast('Still sending. The broadcast page will show how it went.', { duration: 8000 });
+        toast('Still sending. The email page shows how it went.', { duration: 8000 });
         router.push(broadcastPage);
         return;
       }
@@ -134,13 +146,14 @@ export function EmailComposer(props: Props) {
           { duration: 8000 }
         );
       } else {
-        toast.success(`Published to ${outcome.recipientCount} readers.`);
+        toast.success(`Sent to ${outcome.recipientCount} ${outcome.recipientCount === 1 ? 'member' : 'members'}.`);
       }
       router.push(broadcastPage);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Send failed');
+      toast.error(err instanceof Error ? err.message : "Couldn't send the email. Try again.");
     } finally {
       setSending(false);
+      setConfirming(false);
     }
   };
 
@@ -158,56 +171,62 @@ export function EmailComposer(props: Props) {
       );
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || 'Test send failed');
+        throw new Error(body.error || "Couldn't send the test. Try again.");
       }
       toast.success(`Test sent to ${props.ownerEmail}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Test send failed');
+      toast.error(err instanceof Error ? err.message : "Couldn't send the test. Try again.");
     } finally {
       setTesting(false);
     }
   };
 
+  const blocked = atLimit && props.quota.tier === 'free';
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_18rem] gap-10">
-      {/* Composer */}
-      <div className="space-y-8 min-w-0">
-        <div className="space-y-1">
-          <label
-            htmlFor="subject"
-            className="block text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-medium"
-          >
+    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+      <Card as="section" aria-label="Write the email" className="flex min-w-0 flex-col gap-4 p-5">
+        <div>
+          <label htmlFor="audience" className={FIELD_LABEL}>
+            Send to
+          </label>
+          <select id="audience" value={audience} onChange={(e) => setAudience(e.target.value as Audience)} className={cn(FIELD_INPUT, 'h-10 py-0')}>
+            {AUDIENCES.filter((a) => a === 'all' || props.audienceCounts[a] > 0).map((a) => (
+              <option key={a} value={a}>
+                {AUDIENCE_LABEL[a]} ({props.audienceCounts[a]})
+              </option>
+            ))}
+          </select>
+          <p className="mt-1.5 text-[12.5px] text-ink-3">Members who turned off community emails aren&apos;t counted.</p>
+        </div>
+        <div>
+          <label htmlFor="subject" className={FIELD_LABEL}>
             Subject
           </label>
           <input
             id="subject"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            placeholder="Your headline"
-            className="w-full bg-transparent border-0 border-b border-border/60 rounded-none px-0 py-2 font-display text-3xl leading-tight text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary transition-colors"
+            placeholder="For example: Showcase rehearsal on Saturday"
+            maxLength={200}
+            className={FIELD_INPUT}
           />
         </div>
-
-        <div className="space-y-1">
-          <label
-            htmlFor="preview"
-            className="block text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-medium"
-          >
-            Preview text
+        <div>
+          <label htmlFor="preview" className={FIELD_LABEL}>
+            Preview line <span className="font-normal text-ink-3">optional</span>
           </label>
           <input
             id="preview"
             value={previewText}
             onChange={(e) => setPreviewText(e.target.value)}
-            placeholder="The line people see in their inbox before opening"
-            className="w-full bg-transparent border-0 border-b border-border/60 rounded-none px-0 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary transition-colors italic"
+            placeholder="What people see in their inbox before opening"
+            maxLength={200}
+            className={FIELD_INPUT}
           />
         </div>
-
-        <div className="space-y-2">
-          <label className="block text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-medium">
-            Body
-          </label>
+        <div>
+          <p className={FIELD_LABEL}>Message</p>
           <EmailEditor
             communitySlug={props.communitySlug}
             onChange={(h, j) => {
@@ -216,55 +235,60 @@ export function EmailComposer(props: Props) {
             }}
           />
         </div>
-      </div>
-
-      {/* Side panel */}
-      <aside className="space-y-8">
-        <section>
-          <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-medium mb-3">
-            Readership
-          </p>
-          <p className="font-display text-3xl leading-none text-foreground">
-            {props.activeMemberCount}
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {props.activeMemberCount === 1 ? 'active member' : 'active members'}
-          </p>
-        </section>
-
-        <section className="pt-6 border-t border-border/50">
-          <QuotaBadge {...props.quota} />
-        </section>
-
-        <section className="space-y-2 pt-2">
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={sending}
-            className="w-full bg-primary text-primary-foreground py-3 px-4 rounded-sm text-sm font-medium tracking-wide hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        <QuotaBadge {...props.quota} />
+        {confirming ? (
+          <InlineConfirm
+            title={`Send to ${count} ${count === 1 ? 'member' : 'members'} now?`}
+            confirmLabel={sending ? 'Sending…' : 'Send now'}
+            cancelLabel="Not yet"
+            destructive={false}
+            busy={sending}
+            onCancel={() => setConfirming(false)}
+            onConfirm={() => void handleSend()}
           >
-            {sending
-              ? 'Publishing…'
-              : atLimit && props.quota.tier === 'free'
-              ? 'Upgrade to publish →'
-              : 'Publish broadcast'}
-          </button>
-          <button
-            type="button"
-            onClick={handleSendTest}
-            disabled={testing}
-            className="w-full bg-transparent text-foreground py-3 px-4 rounded-sm text-sm font-medium border border-border hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
-          >
-            {testing ? 'Sending test…' : 'Send test to myself'}
-          </button>
-        </section>
-      </aside>
+            You can&apos;t unsend an email.
+          </InlineConfirm>
+        ) : (
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={handleSendTest} disabled={testing} className={BTN_SECONDARY}>
+              {testing ? 'Sending test…' : 'Send me a test'}
+            </button>
+            <button
+              type="button"
+              disabled={sending || count === 0}
+              onClick={() => (blocked ? setUpgradeOpen(true) : validate() && setConfirming(true))}
+              className={BTN_PRIMARY}
+            >
+              <Send aria-hidden="true" />
+              {blocked ? 'Upgrade to send' : `Send to ${count} ${count === 1 ? 'member' : 'members'}`}
+            </button>
+          </div>
+        )}
+      </Card>
 
-      <UpgradeDialog
-        open={upgradeOpen}
-        onOpenChange={setUpgradeOpen}
-        communitySlug={props.communitySlug}
-      />
+      <Card as="section" aria-label="Preview" className="overflow-hidden lg:sticky lg:top-[calc(env(safe-area-inset-top)+84px)]">
+        <div className="flex flex-col gap-0.5 border-b border-line bg-surface-2 px-5 py-3 text-[13px] text-ink-2">
+          <span>
+            <strong className="text-ink">{props.senderName} at {props.communityName}</strong>
+          </span>
+          <span>To: {AUDIENCE_LABEL[audience].toLowerCase()}</span>
+          <span className="truncate font-semibold text-ink">{subject || 'Your subject'}</span>
+          {previewText && <span className="truncate text-ink-3">{previewText}</span>}
+        </div>
+        {html && html !== '<p></p>' ? (
+          <div
+            className="prose max-w-none px-5 py-4 text-[15px] leading-[1.65] text-ink prose-a:text-brand-ink prose-headings:font-display prose-headings:text-ink"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        ) : (
+          <p className="px-5 py-6 text-[14.5px] text-ink-3">Your message shows up here as you type.</p>
+        )}
+        <p className="border-t border-line px-5 py-3 text-[12.5px] text-ink-3">
+          You get this because you&apos;re a member of {props.communityName}. Unsubscribe from community emails.
+        </p>
+      </Card>
+
+      <UpgradeDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} communitySlug={props.communitySlug} />
     </div>
   );
 }

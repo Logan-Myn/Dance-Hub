@@ -65,3 +65,15 @@ describe('getActiveRecipientsForCommunity', () => {
     expect(sqlText).toMatch(/cep\.broadcasts_enabled IS DISTINCT FROM false/);
   });
 });
+
+describe('audiences', () => {
+  it('sends to paying or canceling members only when asked', async () => {
+    const { inAudience } = await import('@/lib/broadcasts/recipients');
+    const free = { subscription_status: null, has_subscription: false };
+    const paying = { subscription_status: 'active', has_subscription: true };
+    const canceling = { subscription_status: 'canceling', has_subscription: true };
+    expect([free, paying, canceling].filter((r) => inAudience(r, 'all'))).toHaveLength(3);
+    expect([free, paying, canceling].filter((r) => inAudience(r, 'paying'))).toEqual([paying, canceling]);
+    expect([free, paying, canceling].filter((r) => inAudience(r, 'canceling'))).toEqual([canceling]);
+  });
+});

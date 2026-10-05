@@ -3,7 +3,10 @@ import Link from 'next/link';
 import { query } from '@/lib/db';
 import { getCommunityBySlug } from '@/lib/community-data';
 import { getQuota } from '@/lib/broadcasts/quota';
+import { Plus } from 'lucide-react';
 import { QuotaBadge } from '@/components/emails/QuotaBadge';
+import { Screen, ScreenHead } from '@/components/community-admin/ui';
+import { BTN_PRIMARY } from '@/components/community-feed/feed-header';
 import {
   BroadcastHistoryList,
   BroadcastHistoryItem,
@@ -28,7 +31,7 @@ export default async function EmailsListPage(
   const [quota, broadcasts] = await Promise.all([
     getQuota(community.id),
     query<BroadcastHistoryItem>`
-      SELECT id, subject, recipient_count, status, sent_at, created_at::text AS created_at
+      SELECT id, subject, recipient_count, status, sent_at, created_at::text AS created_at, audience
       FROM email_broadcasts
       WHERE community_id = ${community.id}
       ORDER BY created_at DESC
@@ -37,37 +40,19 @@ export default async function EmailsListPage(
   ]);
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-1 duration-500">
-      <header className="flex flex-wrap items-end justify-between gap-6 mb-10">
-        <div>
-          <h1 className="font-display text-4xl sm:text-5xl leading-[1.05] text-foreground">
-            Broadcasts
-          </h1>
-          <div className="mt-4">
-            <QuotaBadge tier={quota.tier} used={quota.used} limit={quota.limit} />
-          </div>
-        </div>
-
-        <Link
-          href={`/${params.communitySlug}/admin/emails/new`}
-          className="group inline-flex items-center gap-2 text-sm font-medium text-foreground border-b border-primary pb-1 hover:text-primary transition-colors"
-        >
-          <span>Write a broadcast</span>
-          <span
-            aria-hidden
-            className="inline-block transition-transform duration-200 group-hover:translate-x-0.5"
-          >
-            →
-          </span>
-        </Link>
-      </header>
-
-      <section aria-label="Archive">
-        <BroadcastHistoryList
-          broadcasts={broadcasts}
-          communitySlug={params.communitySlug}
-        />
-      </section>
-    </div>
+    <Screen>
+      <ScreenHead
+        title="Emails to members"
+        sub="Announcements that land in members' inboxes, beyond the community feed."
+        actions={
+          <Link href={`/${params.communitySlug}/admin/emails/new`} className={BTN_PRIMARY}>
+            <Plus aria-hidden="true" />
+            New email
+          </Link>
+        }
+      />
+      <QuotaBadge tier={quota.tier} used={quota.used} limit={quota.limit} />
+      <BroadcastHistoryList broadcasts={broadcasts} communitySlug={params.communitySlug} />
+    </Screen>
   );
 }

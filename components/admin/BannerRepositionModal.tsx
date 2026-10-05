@@ -102,7 +102,7 @@ export function BannerRepositionModal({
                 Saving...
               </>
             ) : (
-              "Save position"
+"Save position"
             )}
           </Button>
         </DialogFooter>

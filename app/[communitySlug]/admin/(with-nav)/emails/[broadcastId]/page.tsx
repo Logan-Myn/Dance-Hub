@@ -2,7 +2,13 @@ import { requireCommunityManagerPage } from '@/lib/community-auth';
 import Link from 'next/link';
 import { queryOne } from '@/lib/db';
 import { getCommunityBySlug } from '@/lib/community-data';
-import { format } from 'date-fns';
+import { ChevronLeft } from 'lucide-react';
+import { BTN_GHOST } from '@/components/community-feed/feed-header';
+import { Card, Screen, ScreenHead } from '@/components/community-admin/ui';
+import { AUDIENCE_LABEL } from '@/components/emails/BroadcastHistoryList';
+import { EmptyState } from '@/components/ds/empty-state';
+import { Pill, type PillVariant } from '@/components/ds/pill';
+import type { Audience } from '@/lib/broadcasts/audience';
 import { buildBroadcastPreviewDocument } from '@/lib/broadcasts/preview-document';
 
 export const dynamic = 'force-dynamic';
@@ -15,24 +21,17 @@ interface BroadcastRow {
   recipient_count: number;
   status: 'pending' | 'sending' | 'sent' | 'partial_failure' | 'failed';
   error_message: string | null;
+  audience?: Audience | null;
   sent_at: string | null;
   created_at: string;
 }
 
-const STATUS_LABEL: Record<BroadcastRow['status'], string> = {
-  pending: 'Draft',
-  sending: 'Sending',
-  sent: 'Published',
-  partial_failure: 'Partial delivery',
-  failed: 'Failed',
-};
-
-const STATUS_DOT: Record<BroadcastRow['status'], string> = {
-  pending: 'bg-slate-400',
-  sending: 'bg-primary animate-pulse',
-  sent: 'bg-emerald-500',
-  partial_failure: 'bg-amber-500',
-  failed: 'bg-rose-500',
+const STATUS: Record<BroadcastRow['status'], [PillVariant, string]> = {
+  pending: ['muted', 'Draft'],
+  sending: ['brand', 'Sending'],
+  sent: ['ok', 'Sent'],
+  partial_failure: ['warn', 'Partly sent'],
+  failed: ['live', 'Not sent'],
 };
 
 export default async function BroadcastDetailPage(
@@ -49,97 +48,62 @@ export default async function BroadcastDetailPage(
     SELECT * FROM email_broadcasts
     WHERE id = ${params.broadcastId} AND community_id = ${community.id}
   `;
+  const back = (
+    <Link href={`/${params.communitySlug}/admin/emails`} className={BTN_GHOST}>
+      <ChevronLeft aria-hidden="true" />
+      Back to emails
+    </Link>
+  );
   if (!broadcast) {
     return (
-      <div className="py-16">
-        <p className="font-display text-2xl mb-2">Broadcast not found.</p>
-        <Link
-          href={`/${params.communitySlug}/admin/emails`}
-          className="text-sm text-primary hover:underline"
-        >
-          ← Back to archive
-        </Link>
-      </div>
+      <Screen>
+        <EmptyState title="This email doesn't exist" actions={back}>
+          It may have been sent from another community.
+        </EmptyState>
+      </Screen>
     );
   }
 
-  const when = broadcast.sent_at ?? broadcast.created_at;
-  const whenObj = new Date(when);
-  const whenLong = format(whenObj, "MMMM d, yyyy 'at' h:mm a");
+  const [variant, label] = STATUS[broadcast.status];
+  const when = new Date(broadcast.sent_at ?? broadcast.created_at).toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  });
 
   return (
-    <article className="animate-in fade-in slide-in-from-bottom-1 duration-500">
-      <Link
-        href={`/${params.communitySlug}/admin/emails`}
-        className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors mb-10"
-      >
-        <span className="mr-1.5">←</span>
-        Back to archive
-      </Link>
-
-      {/* Masthead */}
-      <header className="mb-10 pb-8 border-b border-border/60">
-        <div className="flex items-center gap-3 mb-4">
-          <span className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[broadcast.status]}`} />
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-medium">
-            {STATUS_LABEL[broadcast.status]}
-          </span>
-        </div>
-
-        <h1 className="font-display text-4xl sm:text-5xl leading-[1.05] text-foreground mb-6">
-          {broadcast.subject || 'Untitled'}
-        </h1>
-
-        {broadcast.preview_text && (
-          <p className="font-display text-lg text-muted-foreground italic mb-6 max-w-2xl leading-snug">
-            {broadcast.preview_text}
-          </p>
-        )}
-
-        <dl className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
-          <div>
-            <dt className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-0.5">
-              {broadcast.sent_at ? 'Sent' : 'Created'}
-            </dt>
-            <dd className="text-foreground tabular-nums">{whenLong}</dd>
-          </div>
-          <div>
-            <dt className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mb-0.5">
-              Readers
-            </dt>
-            <dd className="text-foreground tabular-nums">
-              {broadcast.recipient_count}
-            </dd>
-          </div>
-        </dl>
-
-        {broadcast.error_message && (
-          <div className="mt-6 border-l-2 border-rose-400 pl-4 py-2 bg-rose-50/50">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-rose-700 font-medium mb-1">
-              Delivery note
-            </p>
-            <p className="text-sm text-rose-800">{broadcast.error_message}</p>
-          </div>
-        )}
-      </header>
-
-      {/* The issue itself — framed like a published page */}
-      <div className="mx-auto max-w-2xl">
-        <div className="relative bg-white border border-border/60 shadow-[0_2px_24px_-8px_rgba(80,40,120,0.15)] rounded-sm overflow-hidden">
-          {/* Owner-written HTML: sanitized, and framed with no scripts and an
-              opaque origin, so it cannot act in the viewer's session. */}
-          <iframe
-            title={broadcast.subject || 'Broadcast'}
-            srcDoc={buildBroadcastPreviewDocument(broadcast.html_content)}
-            sandbox="allow-popups allow-popups-to-escape-sandbox"
-            referrerPolicy="no-referrer"
-            className="block w-full h-[70vh] min-h-[480px] border-0 bg-white"
-          />
-        </div>
-        <p className="text-center text-[10px] uppercase tracking-[0.18em] text-muted-foreground mt-6">
-          — End of broadcast —
-        </p>
+    <Screen>
+      <ScreenHead title={broadcast.subject || 'Untitled'} sub={broadcast.preview_text ?? undefined} actions={back} />
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[14px] text-ink-2">
+        <Pill variant={variant}>{label}</Pill>
+        <span className="tabular-nums">
+          {broadcast.sent_at ? 'Sent' : 'Created'} {when} UTC
+        </span>
+        <span className="tabular-nums">
+          {broadcast.recipient_count} {broadcast.recipient_count === 1 ? 'member' : 'members'}
+          {broadcast.audience && broadcast.audience !== 'all' ? `, ${AUDIENCE_LABEL[broadcast.audience].toLowerCase()}` : ''}
+        </span>
       </div>
-    </article>
+      {broadcast.error_message && (
+        <p className="rounded-xl border border-live/25 bg-live-soft px-4 py-3 text-[14px] text-ink">
+          <strong className="block text-live">Delivery note</strong>
+          {broadcast.error_message}
+        </p>
+      )}
+      <Card className="mx-auto w-full max-w-2xl overflow-hidden">
+        {/* Owner-written HTML: sanitized, and framed with no scripts and an
+            opaque origin, so it cannot act in the viewer's session. */}
+        <iframe
+          title={broadcast.subject || 'Email'}
+          srcDoc={buildBroadcastPreviewDocument(broadcast.html_content)}
+          sandbox="allow-popups allow-popups-to-escape-sandbox"
+          referrerPolicy="no-referrer"
+          className="block h-[70vh] min-h-[480px] w-full border-0 bg-white"
+        />
+      </Card>
+    </Screen>
   );
 }

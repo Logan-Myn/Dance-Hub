@@ -1,4 +1,7 @@
 import { query, sql } from '@/lib/db';
+import { inAudience, type Audience } from './audience';
+
+export { AUDIENCES, inAudience, isAudience, type Audience } from './audience';
 
 export interface BroadcastRecipient {
   userId: string;
@@ -12,11 +15,34 @@ interface RecipientRow {
   email: string;
   full_name: string | null;
   unsubscribe_token: string | null;
+  subscription_status?: string | null;
+  has_subscription?: boolean | null;
+}
+
+/** How many members each audience reaches right now. */
+export async function getAudienceCounts(communityId: string): Promise<Record<Audience, number>> {
+  const rows = await loadRecipientRows(communityId);
+  return {
+    all: rows.length,
+    paying: rows.filter((r) => inAudience(r, 'paying')).length,
+    canceling: rows.filter((r) => inAudience(r, 'canceling')).length,
+  };
 }
 
 export async function getActiveRecipientsForCommunity(
-  communityId: string
+  communityId: string,
+  audience: Audience = 'all'
 ): Promise<BroadcastRecipient[]> {
+  const rows = (await loadRecipientRows(communityId)).filter((r) => inAudience(r, audience));
+  return rows.map((row) => ({
+    userId: row.user_id,
+    email: row.email,
+    displayName: row.full_name ?? 'there',
+    unsubscribeToken: row.unsubscribe_token,
+  }));
+}
+
+async function loadRecipientRows(communityId: string): Promise<RecipientRow[]> {
   // Ensure every active member has an email_preferences row so they always
   // have an unsubscribe_token (the column has a DEFAULT that generates one).
   // Members who never visited /dashboard/settings would otherwise have no row,
@@ -38,7 +64,9 @@ export async function getActiveRecipientsForCommunity(
       m.user_id,
       p.email,
       p.full_name,
-      ep.unsubscribe_token
+      ep.unsubscribe_token,
+      m.subscription_status,
+      (m.stripe_subscription_id IS NOT NULL) AS has_subscription
     FROM community_members m
     JOIN communities c ON c.id = m.community_id
     JOIN profiles p ON p.auth_user_id = m.user_id
@@ -61,10 +89,5 @@ export async function getActiveRecipientsForCommunity(
       AND p.email IS NOT NULL
   `;
 
-  return rows.map((row) => ({
-    userId: row.user_id,
-    email: row.email,
-    displayName: row.full_name ?? 'there',
-    unsubscribeToken: row.unsubscribe_token,
-  }));
+  return rows;
 }

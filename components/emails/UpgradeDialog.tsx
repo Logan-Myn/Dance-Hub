@@ -49,7 +49,7 @@ function PaymentForm({
         const data = await res.json();
         if (data.tier === 'paid' || data.tier === 'vip') {
           setProcessing(false);
-          toast.success('Subscription active!');
+          toast.success('Unlimited emails are on');
           onSuccess();
         }
       } catch {}
@@ -86,8 +86,8 @@ function PaymentForm({
   if (processing) {
     return (
       <div className="flex flex-col items-center justify-center space-y-4 py-8">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin text-brand-ink" />
+        <p className="text-sm text-ink-2">
           Activating your subscription...
         </p>
       </div>
@@ -174,21 +174,21 @@ export function UpgradeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Upgrade to unlimited broadcasts</DialogTitle>
+          <DialogTitle>Send unlimited emails</DialogTitle>
           <DialogDescription>
-            You&apos;ve used all your free broadcasts this month. Subscribe
-            to send unlimited broadcasts for €10/month. Cancel anytime.
+            You&apos;ve used this month&apos;s free emails. Send as many as you
+            like for €10 a month. Cancel anytime.
           </DialogDescription>
         </DialogHeader>
 
         {loadingIntent && (
           <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <Loader2 className="h-6 w-6 animate-spin text-ink-2" />
           </div>
         )}
 
         {error && (
-          <div className="text-sm text-rose-600 py-4 text-center">
+          <div className="text-sm text-live py-4 text-center">
             {error}
           </div>
         )}

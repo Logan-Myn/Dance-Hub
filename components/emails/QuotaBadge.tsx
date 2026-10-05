@@ -1,3 +1,4 @@
+import { Pill } from '@/components/ds/pill';
 import { cn } from '@/lib/utils';
 
 export interface QuotaBadgeProps {
@@ -7,44 +8,23 @@ export interface QuotaBadgeProps {
   className?: string;
 }
 
-/**
- * Narrative quota line — intentionally typographic, not a pill.
- * Use in the emails list hero and composer side panel.
- */
+/** How many emails the owner can still send this month. */
 export function QuotaBadge({ tier, used, limit, className }: QuotaBadgeProps) {
-  if (tier === 'vip') {
+  if (tier === 'vip' || tier === 'paid') {
     return (
-      <p className={cn('text-sm text-muted-foreground', className)}>
-        <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 mr-2 align-middle" />
-        <span className="text-foreground font-medium">VIP access</span>
-        <span className="text-muted-foreground"> · unlimited broadcasts</span>
+      <p className={cn('flex items-center gap-2 text-[13.5px] text-ink-2', className)}>
+        <Pill variant="ok">Unlimited</Pill>
+        {used} sent this month
       </p>
     );
   }
-
-  if (tier === 'paid') {
-    return (
-      <p className={cn('text-sm text-muted-foreground', className)}>
-        <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary mr-2 align-middle" />
-        <span className="text-foreground font-medium">Unlimited</span>
-        <span className="text-muted-foreground">
-          {' · '}
-          {used} sent this month
-        </span>
-      </p>
-    );
-  }
-
   const atLimit = limit !== null && used >= limit;
-  const dotColor = atLimit ? 'bg-amber-500' : 'bg-slate-400';
-
   return (
-    <p className={cn('text-sm text-muted-foreground', className)}>
-      <span className={cn('inline-block h-1.5 w-1.5 rounded-full mr-2 align-middle', dotColor)} />
-      <span className="text-foreground font-medium">
+    <p className={cn('flex items-center gap-2 text-[13.5px] text-ink-2', className)}>
+      <Pill variant={atLimit ? 'warn' : 'neutral'}>
         {used} of {limit}
-      </span>
-      <span className="text-muted-foreground"> broadcasts this month</span>
+      </Pill>
+      emails this month
     </p>
   );
 }
