@@ -2,7 +2,7 @@
 // converting older pages. Shared types and helpers live in ./blocks.
 
 import { sanitizeRichText } from "@/lib/sanitize-html";
-import { isAuto, isWritten, newBlockId, type AboutBlock, type AboutPage, type BlockContent, type FaqItem } from "./blocks";
+import { MAX_BLOCKS, isAuto, isWritten, newBlockId, type AboutBlock, type AboutPage, type BlockContent, type FaqItem } from "./blocks";
 
 export * from "./blocks";
 
@@ -132,7 +132,6 @@ export function cleanBlock(raw: unknown): AboutBlock | null {
   return { id, type, title, content };
 }
 
-export const MAX_BLOCKS = 40;
 
 /**
  * The page to render from whatever is stored: v2 pages are cleaned, older

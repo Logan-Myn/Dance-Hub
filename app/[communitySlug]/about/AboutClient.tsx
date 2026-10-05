@@ -1,11 +1,12 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { BookOpen, CalendarDays, Check, EyeOff, GraduationCap, Instagram, LayoutTemplate, Pencil, Plus } from "lucide-react";
 import toast from "react-hot-toast";
 import { BTN_GHOST, BTN_PRIMARY, BTN_SECONDARY, instagramHandle } from "@/components/community-feed/feed-header";
 import { clock } from "@/components/community-calendar/format";
-import { ViewBlock, autoHasData, blockHeading, blockLabel, type AboutCtx } from "@/components/community-about/view-blocks";
+import { ViewBlock, autoHasData, blockHeading, blockLabel, inSentence, type AboutCtx } from "@/components/community-about/view-blocks";
 import { FinalCta, JoinCard, MemberCard, MobileJoinBar, OwnerChecklist, type JoinState, type Plan } from "@/components/community-about/join-rail";
 import { AddBlockDialog, BlockShell, TemplateDialog, WrittenEditor } from "@/components/community-about/editor";
 import { useJoinCommunity } from "@/hooks/useJoinCommunity";
@@ -15,7 +16,9 @@ import {
   AUTO_INFO,
   TEMPLATES,
   autoAvailable,
+  MAX_BLOCKS,
   hasContent,
+  holdsOwnContent,
   isAuto,
   makeBlock,
   templateBlocks,
@@ -94,6 +97,7 @@ export default function AboutClient({
   viewerZone: string | null;
   serverNow: number;
 }) {
+  const router = useRouter();
   const now = useNow(60_000, serverNow) ?? new Date(serverNow);
   const timeZone = useViewerTimeZone(viewerZone);
   const ctx: AboutCtx = { slug: community.slug, communityName: community.name, teacher, offered, data, pricing, timeZone, now };
@@ -125,6 +129,7 @@ export default function AboutClient({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirty = useRef(false);
   const flight = useRef<Promise<boolean> | null>(null);
+  const savedOnce = useRef(false);
 
   const body = useCallback(
     () => JSON.stringify({ aboutPage: { version: 2, sections: latest.current.blocks, finalCta: latest.current.finalCta } }),
@@ -166,6 +171,7 @@ export default function AboutClient({
         return false;
       }
       saved = true;
+      savedOnce.current = true;
     }
     if (saved) setSaveState("saved");
     return true;
@@ -208,19 +214,29 @@ export default function AboutClient({
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [uploadingIds]);
+  // Leaving the page: send what's pending, then drop the router's cached copy
+  // of this page so Back shows the saved version, not the one from before.
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current);
-      if (dirty.current) {
+      const pending = flight.current;
+      if (pending) {
+        // The save underway keeps going and picks up later changes itself.
+        void pending.finally(() => router.refresh());
+      } else if (dirty.current) {
         void fetch(`/api/community/${community.slug}/about`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: body(),
           keepalive: true,
-        }).catch(() => {});
+        })
+          .catch(() => {})
+          .finally(() => router.refresh());
+      } else if (savedOnce.current) {
+        router.refresh();
       }
     },
-    [body, community.slug]
+    [body, community.slug, router]
   );
 
   const leaveEditing = async (then: () => void) => {
@@ -228,13 +244,17 @@ export default function AboutClient({
       toast.error("Wait for the video to finish uploading.");
       return;
     }
-    if (await persist()) then();
-    else toast.error("Couldn't save your changes. Check your connection and try again.");
+    if (await persist()) {
+      then();
+      if (savedOnce.current) router.refresh();
+    } else toast.error("Couldn't save your changes. Check your connection and try again.");
   };
 
   // ---- Block operations
   const updateBlock = (id: string, patch: Partial<AboutBlock>) =>
     commit(latest.current.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+  const patchContent = (id: string, patch: Partial<BlockContent>) =>
+    commit(latest.current.blocks.map((b) => (b.id === id ? { ...b, content: { ...b.content, ...patch } } : b)));
   const moveBlock = (i: number, dir: -1 | 1) => {
     const next = [...latest.current.blocks];
     const j = i + dir;
@@ -248,6 +268,10 @@ export default function AboutClient({
     if (b) toast.success(`${blockLabel(b)} removed. Add it back anytime from Add block.`);
   };
   const addBlock = (type: BlockType, at: number) => {
+    if (latest.current.blocks.length >= MAX_BLOCKS) {
+      toast.error(`A page can have up to ${MAX_BLOCKS} blocks. Remove one to add another.`);
+      return;
+    }
     const next = [...latest.current.blocks];
     const block = makeBlock(type);
     next.splice(Math.min(at, next.length), 0, block);
@@ -255,6 +279,10 @@ export default function AboutClient({
     requestAnimationFrame(() => document.getElementById(`block-${block.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
   };
   const applyTemplate = (key: TemplateKey) => {
+    if (uploadCount > 0) {
+      toast.error("Wait for the video to finish uploading.");
+      return;
+    }
     // The template sets which automatic blocks show and in what order.
     // Written blocks with something in them are kept: in the template's
     // matching spot when it has one, otherwise after the template's blocks.
@@ -266,13 +294,15 @@ export default function AboutClient({
       if (match) used.add(match.id);
       return match;
     };
+    // The owner's own questions are written content too.
     const ownFaq = old.find((b) => b.type === "faq");
     const placed = templateBlocks(key, offered).map((b) => {
       if (!isAuto(b.type)) return take(b.type) ?? b;
       if (b.type === "faq" && ownFaq) return { ...b, title: ownFaq.title, content: ownFaq.content };
       return b;
     });
-    commit([...placed, ...pool.filter((b) => !used.has(b.id))]);
+    const faqKept = ownFaq && holdsOwnContent(ownFaq) && !placed.some((b) => b.type === "faq") ? [ownFaq] : [];
+    commit([...placed, ...pool.filter((b) => !used.has(b.id)), ...faqKept]);
     toast.success(`${TEMPLATES[key].name} applied. Blocks for things you don't offer stay hidden.`);
   };
   const startEditingAt = (type: "video" | "teacher") => {
@@ -323,7 +353,7 @@ export default function AboutClient({
   const next = data.upcoming[0];
   const fact =
     offered.liveClasses && next
-      ? { icon: CalendarDays, text: `Next live class ${relativeDayWord(next.startsAt, now, timeZone, "en-GB")} at ${clock(next.startsAt, timeZone)}` }
+      ? { icon: CalendarDays, text: `Next live class ${inSentence(relativeDayWord(next.startsAt, now, timeZone, "en-GB"))} at ${clock(next.startsAt, timeZone)}` }
       : offered.courses && data.courseCount
         ? { icon: BookOpen, text: `${data.courseCount} ${data.courseCount === 1 ? "course" : "courses"}` }
         : offered.privateLessons && data.lessons.length
@@ -499,7 +529,7 @@ export default function AboutClient({
                       <WrittenEditor
                         block={b}
                         communityId={community.id}
-                        onChange={(content: BlockContent) => updateBlock(b.id, { content })}
+                        onPatch={(patch: Partial<BlockContent>) => patchContent(b.id, patch)}
                         onUploadingChange={b.type === "video" ? uploadHandler(b.id) : undefined}
                       />
                     ) : reason === null ? (

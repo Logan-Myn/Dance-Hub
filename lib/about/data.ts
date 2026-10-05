@@ -116,6 +116,7 @@ export const getAboutData = cache(async (
     ? await query<{ category_id: string; n: number }>`
         SELECT category_id, COUNT(*)::int AS n FROM threads
         WHERE community_id = ${community.id} AND category_id IS NOT NULL
+          AND created_at > NOW() - INTERVAL '30 days'
         GROUP BY category_id
       `
     : [];

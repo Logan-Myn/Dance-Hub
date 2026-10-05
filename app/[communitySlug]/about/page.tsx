@@ -70,8 +70,12 @@ export default async function AboutPage(
   const blocks = !saved ? template : legacy ? [...saved.sections, ...template.filter((b) => isAuto(b.type))] : saved.sections;
 
   const monthly = community.membership_enabled ? Number(community.membership_price ?? 0) : 0;
-  const yearly = community.yearly_enabled && Number(community.yearly_price ?? 0) > 0 ? Number(community.yearly_price) : null;
   const status = (['active', 'pre_registration', 'inactive'] as const).find((s) => s === community.status) ?? 'active';
+  // Pre-registration only offers the monthly plan.
+  const yearly =
+    status !== 'pre_registration' && community.yearly_enabled && Number(community.yearly_price ?? 0) > 0
+      ? Number(community.yearly_price)
+      : null;
   const customLinks = (Array.isArray(community.custom_links) ? community.custom_links : []) as Array<{ title?: string; url?: string }>;
 
   return (

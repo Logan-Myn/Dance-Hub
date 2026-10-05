@@ -54,6 +54,16 @@ export interface Offered {
   privateLessons: boolean;
 }
 
+/** Most blocks a page can hold; the server drops any past this. */
+export const MAX_BLOCKS = 40;
+
+/** Whether removing this block would throw away something the owner wrote. */
+export function holdsOwnContent(b: AboutBlock): boolean {
+  if (b.type === "faq") return !!b.content.items?.some((i) => i.q.trim() || i.a.trim());
+  if (b.type === "teacher") return !!b.content.bio?.trim();
+  return isWritten(b.type) && hasContent(b);
+}
+
 export const isAuto = (t: string): t is AutoType => (AUTO_TYPES as readonly string[]).includes(t);
 export const isWritten = (t: string): t is WrittenType => (WRITTEN_TYPES as readonly string[]).includes(t);
 

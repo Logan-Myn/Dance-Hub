@@ -9,7 +9,7 @@ import { euro } from "@/lib/private-lessons/policy";
 import { communityPath } from "@/lib/safe-redirect";
 import { relativeDayWord } from "@/lib/time/format";
 import { cn } from "@/lib/utils";
-import type { AboutCtx } from "./view-blocks";
+import { inSentence, type AboutCtx } from "./view-blocks";
 
 export type Plan = "monthly" | "yearly";
 
@@ -153,7 +153,7 @@ export function MemberCard({ ctx, state }: { ctx: AboutCtx; state: JoinState }) 
       )}
       {next && (
         <p className="text-[14.5px] text-ink-2">
-          Next live class: <strong className="text-ink">{next.title}</strong>, {relativeDayWord(next.startsAt, ctx.now, ctx.timeZone, "en-GB")} at {clock(next.startsAt, ctx.timeZone)}.
+          Next live class: <strong className="text-ink">{next.title}</strong>, {inSentence(relativeDayWord(next.startsAt, ctx.now, ctx.timeZone, "en-GB"))} at {clock(next.startsAt, ctx.timeZone)}.
         </p>
       )}
       <Link href={communityPath(ctx.slug)} className={cn(BTN_PRIMARY, "w-full")}>

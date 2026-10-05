@@ -1,4 +1,4 @@
-import { cleanBlock, hasContent, normalizeAboutPage, suggestedTemplate, templateBlocks } from "@/lib/about/model";
+import { cleanBlock, hasContent, holdsOwnContent, normalizeAboutPage, suggestedTemplate, templateBlocks } from "@/lib/about/model";
 
 const all = { liveClasses: true, courses: true, privateLessons: true };
 
@@ -48,5 +48,14 @@ describe("about page model", () => {
     expect(hasContent({ id: "a", type: "text", content: { heading: "", text: "<p></p>" } })).toBe(false);
     expect(hasContent({ id: "a", type: "video", content: { videoId: "" } })).toBe(false);
     expect(hasContent({ id: "a", type: "quote", content: { text: "Great teacher" } })).toBe(true);
+  });
+
+  it("knows when removing a block would lose what the owner wrote", () => {
+    expect(holdsOwnContent({ id: "a", type: "faq", content: { items: [] } })).toBe(false);
+    expect(holdsOwnContent({ id: "a", type: "faq", content: { items: [{ q: "Do I need a partner?", a: "" }] } })).toBe(true);
+    expect(holdsOwnContent({ id: "a", type: "teacher", content: {} })).toBe(false);
+    expect(holdsOwnContent({ id: "a", type: "teacher", content: { bio: "I teach in Tallinn." } })).toBe(true);
+    expect(holdsOwnContent({ id: "a", type: "schedule", content: {} })).toBe(false);
+    expect(holdsOwnContent({ id: "a", type: "quote", content: { text: "Great teacher" } })).toBe(true);
   });
 });

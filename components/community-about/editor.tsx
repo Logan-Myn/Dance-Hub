@@ -16,7 +16,7 @@ import {
   WRITTEN_INFO,
   WRITTEN_TYPES,
   autoAvailable,
-  hasContent,
+  holdsOwnContent,
   isAuto,
   type AboutBlock,
   type BlockContent,
@@ -77,7 +77,7 @@ export function BlockShell({
           type="button"
           className={cn(ICON_BTN, "hover:bg-live-soft hover:text-live")}
           aria-label={`Remove ${name}`}
-          onClick={() => (!auto && hasContent(block) ? setConfirm(true) : onRemove())}
+          onClick={() => (holdsOwnContent(block) ? setConfirm(true) : onRemove())}
         >
           <Trash2 className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -108,16 +108,17 @@ export function BlockShell({
 export function WrittenEditor({
   block,
   communityId,
-  onChange,
+  onPatch,
   onUploadingChange,
 }: {
   block: AboutBlock;
   communityId: string;
-  onChange: (content: BlockContent) => void;
+  /** Merged into the block's latest content, so a slow upload can't undo later typing. */
+  onPatch: (patch: Partial<BlockContent>) => void;
   onUploadingChange?: (uploading: boolean) => void;
 }) {
   const c = block.content;
-  const set = (patch: Partial<BlockContent>) => onChange({ ...c, ...patch });
+  const set = onPatch;
   switch (block.type) {
     case "text":
       return (

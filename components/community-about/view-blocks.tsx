@@ -30,6 +30,9 @@ export interface AboutCtx {
 
 const CARD = "rounded-2xl border border-line bg-surface";
 
+/** "today" / "tomorrow" in the middle of a sentence; weekdays keep their capital. */
+export const inSentence = (day: string) => (day === "Today" || day === "Tomorrow" ? day.toLowerCase() : day);
+
 export function blockHeading(b: AboutBlock): string {
   if (b.title) return b.title;
   if (isAuto(b.type)) return AUTO_INFO[b.type].name;
@@ -53,7 +56,8 @@ export function faqItems(ctx: AboutCtx, own: FaqItem[]): FaqItem[] {
   const out: FaqItem[] = [];
   const { pricing, offered, data } = ctx;
   if (pricing.paid) {
-    const yearly = pricing.yearly ? `, or ${euro(pricing.yearly)} a year (you save ${euro(pricing.monthly * 12 - pricing.yearly)})` : "";
+    const saving = pricing.yearly ? pricing.monthly * 12 - pricing.yearly : 0;
+    const yearly = pricing.yearly ? `, or ${euro(pricing.yearly)} a year${saving > 0 ? ` (you save ${euro(saving)})` : ""}` : "";
     out.push({ q: "How much does it cost?", a: `${euro(pricing.monthly)} a month${yearly}. Cancel anytime: you keep access until the end of the period you paid for.` });
   } else {
     out.push({ q: "How much does it cost?", a: "Joining is free. You only pay for private lessons, if you book one." });
@@ -99,7 +103,7 @@ export function ViewBlock({ block, ctx }: { block: AboutBlock; ctx: AboutCtx }) 
           icon: Video,
           title: "Live classes",
           text: ctx.data.upcoming.length ? `Join from home, with ${ctx.teacher.name}.` : "Scheduled in the calendar.",
-          fact: ctx.data.upcoming.length ? `Next: ${relativeDayWord(ctx.data.upcoming[0].startsAt, ctx.now, ctx.timeZone, "en-GB")} at ${clock(ctx.data.upcoming[0].startsAt, ctx.timeZone)}` : null,
+          fact: ctx.data.upcoming.length ? `Next: ${inSentence(relativeDayWord(ctx.data.upcoming[0].startsAt, ctx.now, ctx.timeZone, "en-GB"))} at ${clock(ctx.data.upcoming[0].startsAt, ctx.timeZone)}` : null,
         },
         ctx.offered.courses && ctx.data.course && {
           icon: BookOpen,
