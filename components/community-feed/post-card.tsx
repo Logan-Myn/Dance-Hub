@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useMemo } from "react";
+import { prefetchComments } from "@/lib/feed/comment-cache";
 import { MessageCircle } from "lucide-react";
 import { InitialsAvatar } from "@/components/ds/initials-avatar";
 import { fullDateTime, timeAgo } from "@/lib/feed/time-ago";
@@ -60,6 +61,10 @@ export const PostCard = memo(function PostCard({
 
   return (
     <article
+      // Start loading the replies before the click, so the thread opens with them.
+      onPointerEnter={post.commentsCount > 0 ? () => prefetchComments(post.id) : undefined}
+      onPointerDown={post.commentsCount > 0 ? () => prefetchComments(post.id) : undefined}
+      onFocusCapture={post.commentsCount > 0 ? () => prefetchComments(post.id) : undefined}
       className={cn(
         "group relative grid grid-cols-[36px_minmax(0,1fr)] gap-x-3 p-3.5 pb-2 sm:grid-cols-[40px_minmax(0,1fr)] sm:gap-x-3.5 sm:px-[18px] sm:pb-2.5 sm:pt-4",
         "transition-[border-color,box-shadow] duration-200 has-[a.post-link:focus-visible]:outline has-[a.post-link:focus-visible]:outline-2 has-[a.post-link:focus-visible]:outline-offset-2 has-[a.post-link:focus-visible]:outline-brand",

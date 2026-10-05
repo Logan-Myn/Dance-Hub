@@ -15,6 +15,7 @@ import { formatDistanceToNow } from "date-fns";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useEffect, useRef } from "react";
+import { loadComments, peekComments, rememberComments } from "@/lib/feed/comment-cache";
 import Comment from "./Comment";
 import {
   DropdownMenu,
@@ -154,7 +155,15 @@ export default function ThreadView({
   const [editedContent, setEditedContent] = useState(thread.content);
   const isOwner = user?.id === thread.user_id;
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [localComments, setLocalComments] = useState(thread.comments || []);
+  // Replies we already have: from the parent, or fetched ahead of time when
+  // the pointer reached the post (lib/feed/comment-cache).
+  type Replies = NonNullable<typeof thread.comments>;
+  const [localComments, setLocalComments] = useState<Replies>(() =>
+    thread.comments?.length ? thread.comments : ((peekComments(thread.id) as Replies | undefined) ?? [])
+  );
+  const [commentsLoaded, setCommentsLoaded] = useState(
+    () => !!thread.comments?.length || peekComments(thread.id) !== undefined || (thread.comments_count ?? 0) === 0
+  );
   const [userProfile, setUserProfile] = useState<any>(null);
   const [showAllComments, setShowAllComments] = useState(false);
   const replyRef = useRef<HTMLTextAreaElement>(null);
@@ -199,23 +208,24 @@ export default function ThreadView({
       return;
     }
 
+    // Shares a request the post card already started; replies shown from the
+    // cache are refreshed quietly.
     let cancelled = false;
     let done = false;
     async function fetchComments() {
       try {
-        const response = await fetch(`/api/threads/${thread.id}/comments`);
-        if (!response.ok || cancelled) return;
-        const comments = await response.json();
-        if (cancelled || !Array.isArray(comments)) return;
-        setLocalComments(comments);
+        const comments = await loadComments(thread.id);
+        if (cancelled || !comments) return;
+        setLocalComments(comments as Replies);
         // Only tell the parent when there is something new to store.
         if (comments.length > 0) {
-          onThreadUpdate?.(thread.id, { comments });
+          onThreadUpdate?.(thread.id, { comments: comments as Replies });
         }
       } catch (error) {
         console.error("Error fetching comments:", error);
       } finally {
         done = true;
+        if (!cancelled) setCommentsLoaded(true);
       }
     }
 
@@ -228,6 +238,11 @@ export default function ThreadView({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id]);
+
+  // Keep the reply cache in step with replies added, edited or removed here.
+  useEffect(() => {
+    if (commentsLoaded && thread.id) rememberComments(thread.id, localComments);
+  }, [commentsLoaded, localComments, thread.id]);
 
   // No sync from props for likes - we use optimistic updates only
   // The initial state is set from props when the component mounts
@@ -760,7 +775,20 @@ export default function ThreadView({
           </div>
 
           <section aria-label="Replies" className="flex flex-col gap-[18px] pb-3 pt-[18px]">
-            {organizedComments.length === 0 ? (
+            {!commentsLoaded && organizedComments.length === 0 ? (
+              <div aria-busy="true" aria-label="Loading replies" className="flex flex-col gap-[18px]">
+                {Array.from({ length: Math.min(replyCount, 3) }).map((_, i) => (
+                  <div key={i} className="flex gap-3">
+                    <span className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-surface-2" />
+                    <span className="flex flex-1 flex-col gap-2 pt-1">
+                      <span className="h-3 w-28 animate-pulse rounded bg-surface-2" />
+                      <span className="h-3 w-[85%] animate-pulse rounded bg-surface-2" />
+                      <span className="h-3 w-[60%] animate-pulse rounded bg-surface-2" />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : organizedComments.length === 0 ? (
               <p className="text-[15px] text-ink-2">No replies yet. Be the first to answer.</p>
             ) : (
               <>

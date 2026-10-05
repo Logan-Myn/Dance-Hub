@@ -17,6 +17,9 @@ import { cn } from "@/lib/utils";
 
 const GRACE = 15 * 60_000;
 const endMs = (b: ViewerBooking) => new Date(b.startsAt).getTime() + b.durationMinutes * 60_000;
+/** Past lessons shown before "Show all". */
+const PAST_SHOWN = 3;
+
 export const isPastBooking = (b: ViewerBooking, now: Date) => b.status === "completed" || now.getTime() > endMs(b) + GRACE;
 
 function DateTileLarge({ iso, timeZone }: { iso: string; timeZone: string }) {
@@ -46,11 +49,14 @@ export function YourLessons({
 }) {
   const router = useRouter();
   const upcoming = bookings.filter((b) => !isPastBooking(b, now)).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-  const past = bookings.filter((b) => isPastBooking(b, now));
+  // Most recent first; only the last few show until the viewer asks for all.
+  const past = bookings.filter((b) => isPastBooking(b, now)).sort((a, b) => b.startsAt.localeCompare(a.startsAt));
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [openNotes, setOpenNotes] = useState<string | null>(null);
+  const [allPast, setAllPast] = useState(false);
   if (!upcoming.length && !past.length) return null;
+  const shownPast = allPast ? past : past.slice(0, PAST_SHOWN);
 
   const cancel = async (b: ViewerBooking) => {
     setBusy(true);
@@ -160,9 +166,14 @@ export function YourLessons({
         );
       })}
 
+      {past.length > 0 && upcoming.length > 0 && (
+        <h3 className="mt-2 text-[14px] font-semibold text-ink-2">
+          Past lessons <span className="font-normal tabular-nums text-ink-3">{past.length}</span>
+        </h3>
+      )}
       {past.length > 0 && (
         <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
-          {past.map((b) => (
+          {shownPast.map((b) => (
             <div key={b.id}>
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5">
                 <div className="min-w-0">
@@ -196,6 +207,17 @@ export function YourLessons({
               )}
             </div>
           ))}
+          {past.length > PAST_SHOWN && (
+            <button
+              type="button"
+              aria-expanded={allPast}
+              onClick={() => setAllPast((a) => !a)}
+              className="flex w-full items-center justify-center gap-1.5 px-4 py-3 text-[14px] font-semibold text-brand-ink transition-colors hover:bg-surface-2"
+            >
+              {allPast ? "Show fewer" : `Show all ${past.length} past lessons`}
+              <ChevronDown className={cn("h-4 w-4 transition-transform", allPast && "rotate-180")} aria-hidden="true" />
+            </button>
+          )}
         </div>
       )}
     </section>
