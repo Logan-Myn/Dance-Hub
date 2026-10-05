@@ -472,17 +472,29 @@ export function SubscriptionsEditor({
   const monthlyNum = Number(price) || 0;
   const yearlyNum = Number(yearlyPrice) || 0;
   const yearlySaving = Math.round((monthlyNum * 12 - yearlyNum) * 100) / 100;
+  // What the server stores: the yearly plan only exists on a paid membership
+  // with a yearly price, so compare against that, not the raw switch.
+  const yearlyStored = isMembershipEnabled && isYearlyEnabled && yearlyNum > 0;
   const priceDirty =
     isMembershipEnabled !== initialMembershipEnabled ||
-    monthlyNum !== Number(initialMembershipPrice || 0) ||
-    isYearlyEnabled !== initialYearlyEnabled ||
-    (isYearlyEnabled && yearlyNum !== Number(initialYearlyPrice || 0)) ||
-    (isYearlyEnabled && yearlyBenefits !== (initialYearlyBenefits || ""));
+    (isMembershipEnabled && monthlyNum !== Number(initialMembershipPrice || 0)) ||
+    yearlyStored !== initialYearlyEnabled ||
+    (yearlyStored && (yearlyNum !== Number(initialYearlyPrice || 0) || yearlyBenefits !== (initialYearlyBenefits || "")));
   const [savingPrice, setSavingPrice] = [isSavingPrice, setIsSavingPrice];
   const savePrice = async () => {
+    if (isMembershipEnabled && !(monthlyNum > 0)) {
+      toast.error("Set a monthly price, or choose a free membership.");
+      return;
+    }
+    if (isMembershipEnabled && isYearlyEnabled && !(yearlyNum > 0)) {
+      toast.error("Set a yearly price, or turn the yearly plan off.");
+      return;
+    }
     setSavingPrice(true);
     try {
       await handlePriceUpdate();
+      // Mirror what was stored so the save bar clears.
+      if (!yearlyStored) setIsYearlyEnabled(false);
     } finally {
       setSavingPrice(false);
     }

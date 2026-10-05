@@ -32,7 +32,6 @@ export interface AdminMember {
   lastActive: string | null;
   posts: number;
   replies: number;
-  liveClasses: number;
   privateLessons: number;
   lessonsDone: number;
 }
@@ -173,11 +172,11 @@ export function MembersClient({
     }
   };
 
+  const ariaSort = (key: SortKey) => (sort.key === key ? (sort.dir === 1 ? "ascending" : "descending") : undefined);
   const sortButton = (key: SortKey, label: string) => (
     <button
       type="button"
       onClick={() => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "name" ? 1 : -1 }))}
-      aria-sort={sort.key === key ? (sort.dir === 1 ? "ascending" : "descending") : undefined}
       className="inline-flex items-center gap-1 font-semibold text-ink-2 hover:text-ink"
     >
       {label}
@@ -264,16 +263,16 @@ export function MembersClient({
                   className="h-4 w-4 accent-[rgb(var(--ds-brand))]"
                 />
               </th>
-              <th scope="col" className="px-3 py-2.5">
+              <th scope="col" aria-sort={ariaSort("name")} className="px-3 py-2.5">
                 {sortButton("name", "Member")}
               </th>
               <th scope="col" className="hidden w-[170px] px-3 py-2.5 font-semibold text-ink-2 sm:table-cell">
                 Status
               </th>
-              <th scope="col" className="hidden w-[130px] px-3 py-2.5 md:table-cell">
+              <th scope="col" aria-sort={ariaSort("joined")} className="hidden w-[130px] px-3 py-2.5 md:table-cell">
                 {sortButton("joined", "Joined")}
               </th>
-              <th scope="col" className="hidden w-[130px] px-3 py-2.5 lg:table-cell">
+              <th scope="col" aria-sort={ariaSort("last")} className="hidden w-[130px] px-3 py-2.5 lg:table-cell">
                 {sortButton("last", "Last active")}
               </th>
               <th scope="col" className="hidden w-[120px] px-3 py-2.5 pr-4 font-semibold text-ink-2 lg:table-cell">
@@ -422,8 +421,6 @@ export function MembersClient({
                 <dd className="text-right tabular-nums text-ink">
                   {open.posts} {open.posts === 1 ? "post" : "posts"}, {open.replies} {open.replies === 1 ? "reply" : "replies"}
                 </dd>
-                <dt className="text-ink-2">Live classes joined</dt>
-                <dd className="text-right tabular-nums text-ink">{open.liveClasses}</dd>
                 {showCourses && (
                   <>
                     <dt className="text-ink-2">Course lessons done</dt>

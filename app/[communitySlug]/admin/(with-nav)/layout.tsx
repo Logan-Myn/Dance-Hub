@@ -3,11 +3,6 @@ import { getOfferings } from '@/lib/offerings';
 import { attentionCount, getAttention } from '@/lib/admin/attention';
 import { AdminNav } from '@/components/community-admin/admin-nav';
 
-// The moment this request renders.
-function requestTime(): number {
-  return Date.now();
-}
-
 export default async function AdminWithNavLayout(
   props: {
     children: React.ReactNode;
@@ -21,7 +16,7 @@ export default async function AdminWithNavLayout(
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 
-  const attention = await getAttention(community, new Date(requestTime()));
+  const attention = await getAttention(community);
   const showEmails = process.env.NEXT_PUBLIC_BROADCASTS_ENABLED === 'true' || !!community.is_broadcast_vip;
 
   return (

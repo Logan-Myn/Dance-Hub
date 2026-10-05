@@ -25,7 +25,6 @@ const member: AdminMember = {
   lastActive: null,
   posts: 2,
   replies: 3,
-  liveClasses: 1,
   privateLessons: 0,
   lessonsDone: 4,
 };

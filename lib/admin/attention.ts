@@ -23,8 +23,13 @@ interface Counts {
   next_class_at: string | null;
 }
 
-/** Things the owner should act on, from the database only (no payment-provider calls). */
-export const getAttention = cache(async (community: CommunityRow, now: Date): Promise<AttentionItem[]> => {
+/**
+ * Things the owner should act on, from the database only (no payment-provider
+ * calls). Cached per request on the community row, so the sidebar count and
+ * the Overview share one query.
+ */
+export const getAttention = cache(async (community: CommunityRow): Promise<AttentionItem[]> => {
+  const now = new Date();
   const offered = getOfferings(community);
   const today = now.toISOString().slice(0, 10);
   const c = await queryOne<Counts>`
@@ -34,9 +39,11 @@ export const getAttention = cache(async (community: CommunityRow, now: Date): Pr
            AND subscription_status IN ('past_due', 'unpaid')) AS failed,
       (SELECT COUNT(*)::int FROM private_lessons
          WHERE community_id = ${community.id} AND is_active = true) AS lesson_types,
-      (SELECT COUNT(*)::int FROM teacher_availability_slots
-         WHERE community_id = ${community.id} AND is_active = true
-           AND availability_date >= ${today}::date) AS open_slots,
+      (SELECT COUNT(*)::int FROM teacher_availability_slots tas
+         WHERE tas.community_id = ${community.id} AND tas.is_active = true
+           AND tas.availability_date >= ${today}::date
+           AND NOT EXISTS (SELECT 1 FROM lesson_bookings lb
+                           WHERE lb.availability_slot_id = tas.id AND lb.lesson_status <> 'canceled')) AS open_slots,
       (SELECT COUNT(*)::int FROM threads
          WHERE community_id = ${community.id} AND COALESCE(comments_count, 0) = 0
            AND user_id <> ${community.created_by}
@@ -53,7 +60,8 @@ export const getAttention = cache(async (community: CommunityRow, now: Date): Pr
   const items: AttentionItem[] = [];
   const paid = !!community.membership_enabled && Number(community.membership_price ?? 0) > 0;
 
-  if (!community.stripe_account_id && (paid || offered.privateLessons)) {
+  // Only when someone could actually pay: a paid membership, or lesson types to book.
+  if (!community.stripe_account_id && (paid || (offered.privateLessons && (c?.lesson_types ?? 0) > 0))) {
     items.push({
       id: "payouts",
       severity: "critical",

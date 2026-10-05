@@ -119,7 +119,12 @@ export function ThreadCategoriesEditor({ communitySlug, initialCategories }: Thr
                     maxLength={40}
                     className={cn(FIELD_INPUT, "h-9 min-w-[160px] flex-1 py-0")}
                   />
-                  <Switch checked={!!c.creatorOnly} onChange={(v) => change(c.id, { creatorOnly: v })} label="Only you can post" />
+                  <Switch
+                    checked={!!c.creatorOnly}
+                    onChange={(v) => change(c.id, { creatorOnly: v })}
+                    label="Only you can post"
+                    ariaLabel={`Only you can post in ${c.name || "this topic"}`}
+                  />
                   <span className="ml-auto flex items-center">
                     <button type="button" className={ICON_BTN} aria-label={`Move ${c.name || "topic"} up`} disabled={i === 0} onClick={() => move(i, -1)}>
                       <ArrowUp className="h-4 w-4" aria-hidden="true" />

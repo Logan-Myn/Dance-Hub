@@ -53,6 +53,12 @@ function formatUrl(url: string): string {
   return `https://${url}`;
 }
 
+// Opening dates arrive in different string forms; compare the moment, not the text.
+function sameInstant(a: string | null, b: string | null): boolean {
+  const t = (d: string | null) => (d ? new Date(d).getTime() : null);
+  return t(a) === t(b);
+}
+
 function normalizeStatus(status: string): CommunityStatus {
   if (status === "pre_registration" || status === "inactive") return status;
   return "active";
@@ -205,6 +211,8 @@ export function GeneralSettingsForm({
 
       toast.dismiss(loadingToast);
       toast.success("Changes saved");
+      // The stored name is trimmed; match it so the save bar clears.
+      setName(trimmedName);
 
       // If the slug has changed, navigate to the new URL — the admin route
       // is nested under /[communitySlug], so we must redirect.
@@ -282,7 +290,7 @@ export function GeneralSettingsForm({
     description !== initialDescription ||
     JSON.stringify(links) !== JSON.stringify(initialCustomLinks) ||
     communityStatus !== normalizeStatus(initialStatus) ||
-    (openingDate || "") !== (initialOpeningDate ?? "");
+    sameInstant(openingDate || null, initialOpeningDate) === false;
 
   function discard() {
     setName(initialName);

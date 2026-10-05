@@ -84,6 +84,7 @@ export default function OfferingsClient({ slug, initial, facts }: { slug: string
         <Switch
           checked={enabled}
           label={enabled ? "On" : "Off"}
+          ariaLabel={title}
           disabled={busy === key}
           onChange={(v) => (v ? void save(key, true) : setConfirming(key))}
           className="col-start-2 row-start-2 justify-self-start sm:col-start-3 sm:row-start-1 sm:justify-self-end"

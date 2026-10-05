@@ -8,6 +8,7 @@ export function Switch({
   onChange,
   label,
   hideLabel = false,
+  ariaLabel,
   disabled = false,
   id,
   className,
@@ -16,6 +17,8 @@ export function Switch({
   onChange: (checked: boolean) => void;
   label: string;
   hideLabel?: boolean;
+  /** Accessible name when the visible label alone doesn't say what it controls. */
+  ariaLabel?: string;
   disabled?: boolean;
   id?: string;
   className?: string;
@@ -26,7 +29,7 @@ export function Switch({
       type="button"
       role="switch"
       aria-checked={checked}
-      aria-label={hideLabel ? label : undefined}
+      aria-label={ariaLabel ?? (hideLabel ? label : undefined)}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(

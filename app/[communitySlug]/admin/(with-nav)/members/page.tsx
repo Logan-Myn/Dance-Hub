@@ -44,19 +44,25 @@ export default async function MembersPage(
       cm.current_period_end::text AS "periodEnd",
       cm.cancelled_at::text AS "cancelledAt",
       cm.feed_visit_at::text AS "lastActive",
-      (SELECT COUNT(*)::int FROM threads t WHERE t.community_id = cm.community_id AND t.user_id = cm.user_id) AS posts,
-      (SELECT COUNT(*)::int FROM comments c JOIN threads t ON t.id = c.thread_id
-         WHERE t.community_id = cm.community_id AND c.user_id = cm.user_id) AS replies,
-      -- live_class_participants.student_id is the profile id (uuid), not the auth id.
-      (SELECT COUNT(DISTINCT lp.live_class_id)::int FROM live_class_participants lp JOIN live_classes lc ON lc.id = lp.live_class_id
-         WHERE lc.community_id = cm.community_id AND lp.student_id = p.id) AS "liveClasses",
-      (SELECT COUNT(*)::int FROM lesson_bookings lb
-         WHERE lb.community_id = cm.community_id AND lb.student_id = cm.user_id AND lb.payment_status = 'succeeded') AS "privateLessons",
-      (SELECT COUNT(*)::int FROM lesson_completions lc2
-         JOIN lessons l ON l.id = lc2.lesson_id JOIN chapters ch ON ch.id = l.chapter_id JOIN courses co ON co.id = ch.course_id
-         WHERE co.community_id = cm.community_id AND co.slug <> ${REPLAYS_COURSE_SLUG} AND lc2.user_id = cm.user_id) AS "lessonsDone"
+      COALESCE(tp.n, 0) AS posts,
+      COALESCE(tr.n, 0) AS replies,
+      COALESCE(tb.n, 0) AS "privateLessons",
+      COALESCE(tc.n, 0) AS "lessonsDone"
     FROM community_members cm
     LEFT JOIN profiles p ON p.auth_user_id = cm.user_id
+    -- Per-member counts, each table read once for the whole community.
+    LEFT JOIN (SELECT user_id, COUNT(*)::int AS n FROM threads WHERE community_id = ${community.id} GROUP BY user_id) tp
+      ON tp.user_id = cm.user_id
+    LEFT JOIN (SELECT c.user_id, COUNT(*)::int AS n FROM comments c JOIN threads t ON t.id = c.thread_id
+               WHERE t.community_id = ${community.id} GROUP BY c.user_id) tr
+      ON tr.user_id = cm.user_id
+    LEFT JOIN (SELECT student_id, COUNT(*)::int AS n FROM lesson_bookings
+               WHERE community_id = ${community.id} AND payment_status = 'succeeded' GROUP BY student_id) tb
+      ON tb.student_id = cm.user_id
+    LEFT JOIN (SELECT lc.user_id, COUNT(*)::int AS n FROM lesson_completions lc
+               JOIN lessons l ON l.id = lc.lesson_id JOIN chapters ch ON ch.id = l.chapter_id JOIN courses co ON co.id = ch.course_id
+               WHERE co.community_id = ${community.id} AND co.slug <> ${REPLAYS_COURSE_SLUG} GROUP BY lc.user_id) tc
+      ON tc.user_id = cm.user_id
     WHERE cm.community_id = ${community.id}
       AND cm.user_id <> ${community.created_by}
       AND COALESCE(cm.role, 'member') <> 'admin'

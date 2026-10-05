@@ -164,7 +164,7 @@ export default async function AdminDashboardPage(
     getRecentFailedPayments(community.stripe_account_id ?? null, now),
   ]);
   const [attention, upcoming, bookings] = await Promise.all([
-    getAttention(community, now),
+    getAttention(community),
     getNextSevenDays(community, now),
     getRecentBookings(community.id),
   ]);

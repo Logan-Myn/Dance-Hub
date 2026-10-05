@@ -237,7 +237,7 @@ export default function CreatePrivateLessonModal({
               </div>
 
               <div>
-                <Label htmlFor="max_bookings_per_month">Bookings per member each month</Label>
+                <Label htmlFor="max_bookings_per_month">Bookings each month, all students together</Label>
                 <Select
                   value={formData.max_bookings_per_month?.toString() || "unlimited"}
                   onValueChange={(value) => handleInputChange("max_bookings_per_month", value === "unlimited" ? null : parseInt(value))}

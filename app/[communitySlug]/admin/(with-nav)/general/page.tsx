@@ -73,7 +73,7 @@ export default async function GeneralSettingsPage(
       initialCustomLinks={initialCustomLinks}
       currentSlug={community.slug}
       initialStatus={community.status ?? 'active'}
-      initialOpeningDate={community.opening_date}
+      initialOpeningDate={community.opening_date ? new Date(community.opening_date).toISOString() : null}
       canChangeOpeningDate={canChangeOpeningDate}
       hasPreRegistrations={hasPreRegistrations}
     />
