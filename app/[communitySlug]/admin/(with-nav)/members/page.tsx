@@ -47,8 +47,9 @@ export default async function MembersPage(
       (SELECT COUNT(*)::int FROM threads t WHERE t.community_id = cm.community_id AND t.user_id = cm.user_id) AS posts,
       (SELECT COUNT(*)::int FROM comments c JOIN threads t ON t.id = c.thread_id
          WHERE t.community_id = cm.community_id AND c.user_id = cm.user_id) AS replies,
-      (SELECT COUNT(*)::int FROM live_class_participants lp JOIN live_classes lc ON lc.id = lp.live_class_id
-         WHERE lc.community_id = cm.community_id AND lp.student_id = cm.user_id) AS "liveClasses",
+      -- live_class_participants.student_id is the profile id (uuid), not the auth id.
+      (SELECT COUNT(DISTINCT lp.live_class_id)::int FROM live_class_participants lp JOIN live_classes lc ON lc.id = lp.live_class_id
+         WHERE lc.community_id = cm.community_id AND lp.student_id = p.id) AS "liveClasses",
       (SELECT COUNT(*)::int FROM lesson_bookings lb
          WHERE lb.community_id = cm.community_id AND lb.student_id = cm.user_id AND lb.payment_status = 'succeeded') AS "privateLessons",
       (SELECT COUNT(*)::int FROM lesson_completions lc2
