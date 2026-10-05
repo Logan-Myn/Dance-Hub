@@ -1,6 +1,12 @@
 import { requireCommunityManagerPage } from '@/lib/community-auth';
 import { queryOne } from '@/lib/db';
+import Link from 'next/link';
+import { Tag } from 'lucide-react';
 import { PromoCodesManager } from '@/components/admin/PromoCodesManager';
+import { Screen, ScreenHead } from '@/components/community-admin/ui';
+import { EmptyState } from '@/components/ds/empty-state';
+import { BTN_PRIMARY } from '@/components/community-feed/feed-header';
+import { communityPath } from '@/lib/safe-redirect';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -26,21 +32,23 @@ export default async function PromoCodesPage(props: { params: Promise<{ communit
   const ready = Boolean(community.stripe_account_id && community.stripe_price_id && community.membership_enabled);
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-1 duration-500">
-      <header className="mb-10">
-        <h1 className="font-display text-4xl sm:text-5xl leading-[1.05] text-foreground">Promo Codes</h1>
-        <p className="mt-2 text-muted-foreground">
-          Create codes that give new members a discount when they join.
-        </p>
-      </header>
-
+    <Screen>
+      <ScreenHead title="Promo codes" sub="Discounts on membership for new members. They enter the code when they join." />
       {ready ? (
         <PromoCodesManager communitySlug={communitySlug} yearlyEnabled={Boolean(community.yearly_enabled)} />
       ) : (
-        <p className="text-sm text-muted-foreground">
-          Set up payments and a membership price before creating promo codes.
-        </p>
+        <EmptyState
+          icon={<Tag className="h-7 w-7" />}
+          title="Set a membership price first"
+          actions={
+            <Link href={communityPath(communitySlug, '/admin/subscriptions')} className={BTN_PRIMARY}>
+              Go to pricing and payouts
+            </Link>
+          }
+        >
+          Promo codes give a discount on a paid membership. Connect payouts and set a price, then come back here.
+        </EmptyState>
       )}
-    </div>
+    </Screen>
   );
 }

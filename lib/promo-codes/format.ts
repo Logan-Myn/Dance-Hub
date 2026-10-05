@@ -43,3 +43,26 @@ export function buildPreview(args: {
   const joiner = args.duration === 'once' ? 'first payment' : `for ${durationLabel}`;
   return { discountLabel, durationLabel, label: `${discountLabel} ${joiner}` };
 }
+
+/** The whole code in one sentence, for the owner: "20% off the first 3 months, monthly plan only, up to 10 uses, until 31 Dec". */
+export function describePromo(args: {
+  discountType: DiscountType;
+  discountValue: number;
+  duration: PromoDuration;
+  durationInMonths: number | null;
+  appliesToPlan?: 'both' | 'monthly' | 'yearly' | null;
+  maxRedemptions?: number | null;
+  expiresAt?: string | null;
+}): string {
+  const discount = formatDiscountLabel({ discountType: args.discountType, discountValue: args.discountValue, currency: 'eur' });
+  const n = Number(args.durationInMonths);
+  const span = args.duration === 'once' ? 'the first payment' : n === 1 ? 'the first month' : `the first ${n} months`;
+  const parts = [discount === 'Free' ? `Free for ${span}` : `${discount} ${span}`];
+  if (args.appliesToPlan === 'monthly') parts.push('monthly plan only');
+  if (args.appliesToPlan === 'yearly') parts.push('yearly plan only');
+  if (args.maxRedemptions) parts.push(`up to ${args.maxRedemptions} ${args.maxRedemptions === 1 ? 'use' : 'uses'}`);
+  if (args.expiresAt) {
+    parts.push(`until ${new Date(args.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}`);
+  }
+  return parts.join(', ');
+}

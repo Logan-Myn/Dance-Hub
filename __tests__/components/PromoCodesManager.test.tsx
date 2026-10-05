@@ -9,11 +9,11 @@ beforeEach(() => {
 
 it('shows the plan scope selector when yearly is enabled', async () => {
   render(<PromoCodesManager communitySlug="salsa" yearlyEnabled />);
-  expect(await screen.findByText(/which plan can use this code/i)).toBeInTheDocument();
+  expect(await screen.findByText(/which plan can use it/i)).toBeInTheDocument();
 });
 
 it('hides the plan scope selector when yearly is disabled', async () => {
   render(<PromoCodesManager communitySlug="salsa" yearlyEnabled={false} />);
   expect(await screen.findByText(/your codes/i)).toBeInTheDocument();
-  expect(screen.queryByText(/which plan can use this code/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/which plan can use it/i)).not.toBeInTheDocument();
 });
