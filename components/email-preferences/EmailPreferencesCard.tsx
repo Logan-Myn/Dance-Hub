@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
+import { Card } from '@/components/community-admin/ui';
+import { Skeleton } from '@/components/ds/skeleton';
+import { Switch } from '@/components/ds/switch';
 import { toast } from 'react-hot-toast';
+import { cn } from '@/lib/utils';
 
 interface CommunityRow {
   communityId: string;
@@ -42,7 +43,7 @@ export function EmailPreferencesCard() {
         setCommunities(communitiesData.communities);
       } catch (err) {
         console.error(err);
-        if (!cancelled) toast.error('Could not load email preferences');
+        if (!cancelled) toast.error("Couldn't load your email preferences. Reload the page.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -65,7 +66,7 @@ export function EmailPreferencesCard() {
       if (!res.ok) throw new Error('Failed');
     } catch {
       setPlatform(platform);
-      toast.error('Failed to update preference');
+      toast.error("Couldn't save that. Try again.");
     }
   }
 
@@ -83,85 +84,80 @@ export function EmailPreferencesCard() {
       if (!res.ok) throw new Error('Failed');
     } catch {
       setCommunities(previous);
-      toast.error('Failed to update preference');
+      toast.error("Couldn't save that. Try again.");
     }
   }
 
+  const title = (
+    <h2 id="email-prefs-h" className="font-display text-[17px] font-semibold text-ink">
+      Email preferences
+    </h2>
+  );
+
   if (loading || !platform) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Email preferences</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        </CardContent>
+      <Card as="section" aria-labelledby="email-prefs-h" className="flex flex-col gap-3 p-5 sm:p-6" aria-busy="true">
+        {title}
+        <Skeleton className="h-10" />
+        <Skeleton className="h-10" />
       </Card>
     );
   }
 
+  const row = "flex items-center justify-between gap-4 py-3";
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Email preferences</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-8">
-        <section className="space-y-4">
-          <h3 className="text-sm font-semibold text-foreground">DanceHub emails</h3>
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label htmlFor="marketing">DanceHub product updates</Label>
-              <p className="text-xs text-muted-foreground">
-                Occasional emails from us about new features and tips.
-              </p>
-            </div>
-            <Switch
-              id="marketing"
-              checked={platform.marketing_emails}
-              onCheckedChange={(v) => togglePlatform('marketing_emails', v)}
-            />
+    <Card as="section" aria-labelledby="email-prefs-h" className="flex flex-col gap-5 p-5 sm:p-6">
+      {title}
+      <div>
+        <h3 className="text-[13px] font-semibold text-ink-2">From Dance-Hub</h3>
+        <div className={row}>
+          <div className="min-w-0">
+            <p className="text-[14.5px] font-medium text-ink">Product updates</p>
+            <p className="text-[13px] text-ink-3">Now and then: new features and tips.</p>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Account, billing, and booking confirmation emails are always sent.
-          </p>
-        </section>
+          <Switch
+            checked={platform.marketing_emails}
+            onChange={(v) => togglePlatform('marketing_emails', v)}
+            label="Product updates"
+            hideLabel
+          />
+        </div>
+        <p className="text-[12.5px] text-ink-3">Account, payment and booking emails are always sent.</p>
+      </div>
 
-        <section className="space-y-4">
-          <h3 className="text-sm font-semibold text-foreground">Community emails</h3>
-          {communities.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              You&apos;re not a member of any communities yet.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {communities.map((c) => (
-                <div key={c.communityId} className="flex items-center justify-between">
-                  <Label htmlFor={`community-${c.communityId}`}>{c.name}</Label>
-                  <Switch
-                    id={`community-${c.communityId}`}
-                    checked={c.broadcastsEnabled && platform.teacher_broadcast}
-                    disabled={!platform.teacher_broadcast}
-                    onCheckedChange={(v) => toggleCommunity(c.communityId, v)}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="pt-2 flex items-center justify-between border-t">
-            <div className="space-y-1">
-              <Label htmlFor="all-broadcasts">Receive emails from all communities</Label>
-              <p className="text-xs text-muted-foreground">
-                Master switch. Turn off to silence every community at once.
-              </p>
-            </div>
-            <Switch
-              id="all-broadcasts"
-              checked={platform.teacher_broadcast}
-              onCheckedChange={(v) => togglePlatform('teacher_broadcast', v)}
-            />
+      <div>
+        <h3 className="text-[13px] font-semibold text-ink-2">From your communities</h3>
+        <div className={cn(row, "border-b border-line")}>
+          <div className="min-w-0">
+            <p className="text-[14.5px] font-medium text-ink">All community emails</p>
+            <p className="text-[13px] text-ink-3">Turn off to silence every community at once.</p>
           </div>
-        </section>
-      </CardContent>
+          <Switch
+            checked={platform.teacher_broadcast}
+            onChange={(v) => togglePlatform('teacher_broadcast', v)}
+            label="All community emails"
+            hideLabel
+          />
+        </div>
+        {communities.length === 0 ? (
+          <p className="pt-3 text-[14px] text-ink-2">You&apos;re not a member of any communities yet.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {communities.map((c) => (
+              <li key={c.communityId} className={row}>
+                <span className="min-w-0 truncate text-[14.5px] text-ink">{c.name}</span>
+                <Switch
+                  checked={c.broadcastsEnabled && platform.teacher_broadcast}
+                  disabled={!platform.teacher_broadcast}
+                  onChange={(v) => toggleCommunity(c.communityId, v)}
+                  label={`Emails from ${c.name}`}
+                  hideLabel
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </Card>
   );
 }

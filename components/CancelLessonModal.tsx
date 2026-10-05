@@ -2,16 +2,9 @@
 
 import * as React from "react";
 import toast from "react-hot-toast";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { AppDialog } from "@/components/ds/app-dialog";
+import { BTN_GHOST, BTN_PRIMARY } from "@/components/community-feed/feed-header";
+import { cn } from "@/lib/utils";
 
 interface Props {
   isOpen: boolean;
@@ -70,12 +63,12 @@ export function CancelLessonModal({
       toast.success(
         body.refunded_amount_cents > 0
           ? `Lesson canceled. ${amountDisplay} will be refunded.`
-          : `Lesson canceled.`
+          : "Lesson canceled."
       );
       onCancelled();
       onClose();
     } catch (err: any) {
-      toast.error(err?.message || "Could not cancel lesson");
+      toast.error(err?.message || "Couldn't cancel the lesson. Try again.");
     } finally {
       setSubmitting(false);
     }
@@ -83,35 +76,35 @@ export function CancelLessonModal({
 
   const description = refundsFully
     ? role === "teacher"
-      ? `This will refund ${refundDisplay} to the student. Refunds typically take 5–10 days to appear.`
-      : `${refundDisplay} will be refunded to your card. Refunds typically take 5–10 days to appear.`
-    : `No refund will be issued per the teacher's cancellation policy. You will not be charged again.`;
+      ? `The student gets ${refundDisplay} back and an email. Refunds usually take 5 to 10 days to show up.`
+      : `${refundDisplay} goes back to your card. Refunds usually take 5 to 10 days to show up.`
+    : "No refund, under the teacher's cancellation policy. You won't be charged again.";
 
   return (
-    <AlertDialog
+    <AppDialog
       open={isOpen}
       onOpenChange={(o) => {
-        if (!o) onClose();
+        if (!o && !submitting) onClose();
       }}
-    >
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Cancel {lessonTitle}?</AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={submitting}>Keep lesson</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleConfirm}
+      title={`Cancel ${lessonTitle}?`}
+      width={460}
+      footer={
+        <>
+          <button type="button" className={BTN_GHOST} disabled={submitting} onClick={onClose}>
+            Keep lesson
+          </button>
+          <button
+            type="button"
+            className={cn(BTN_PRIMARY, !refundsFully && "bg-live hover:bg-live/90")}
             disabled={submitting}
-            className={
-              refundsFully ? undefined : "bg-destructive text-destructive-foreground"
-            }
+            onClick={handleConfirm}
           >
-            {submitting ? "Canceling..." : "Cancel lesson"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+            {submitting ? "Canceling…" : "Cancel lesson"}
+          </button>
+        </>
+      }
+    >
+      <p className="text-[15px] text-ink-2">{description}</p>
+    </AppDialog>
   );
 }

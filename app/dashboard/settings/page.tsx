@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import Link from "next/link";
 import { uploadFileToStorage, STORAGE_FOLDERS } from "@/lib/storage-client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "react-hot-toast";
-import { User2, Mail, Camera, AtSign, RefreshCw } from "lucide-react";
+import { Camera, ChevronLeft, Loader2, RotateCcw } from "lucide-react";
 import { EmailPreferencesCard } from "@/components/email-preferences/EmailPreferencesCard";
+import { BTN_GHOST, BTN_PRIMARY, BTN_SECONDARY } from "@/components/community-feed/feed-header";
+import { Card } from "@/components/community-admin/ui";
+import { FIELD_INPUT, FIELD_LABEL } from "@/components/ds/app-dialog";
+import { InitialsAvatar } from "@/components/ds/initials-avatar";
+import { Skeleton } from "@/components/ds/skeleton";
+import { cn } from "@/lib/utils";
 
 interface Profile {
   id: string;
@@ -105,10 +107,10 @@ export default function SettingsPage() {
         throw new Error(data.error || 'Failed to update profile');
       }
 
-      toast.success('Profile updated successfully');
+      toast.success('Profile saved');
     } catch (error) {
       console.error('Error updating profile:', error);
-      toast.error('Failed to update profile');
+      toast.error("Couldn't save your profile. Try again.");
     } finally {
       setIsSaving(false);
     }
@@ -120,13 +122,13 @@ export default function SettingsPage() {
 
     // Check file type
     if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file');
+      toast.error('Choose an image file, like a JPG or PNG.');
       return;
     }
 
     // Check file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image size should be less than 5MB');
+      toast.error('Choose an image under 5 MB.');
       return;
     }
 
@@ -150,13 +152,13 @@ export default function SettingsPage() {
       }
 
       setProfile(prev => prev ? { ...prev, avatar_url: publicUrl } : null);
-      toast.success('Avatar updated successfully');
+      toast.success('Photo updated');
 
       // Clear the input
       e.target.value = '';
     } catch (error: any) {
       console.error('Error uploading avatar:', error);
-      toast.error(error.message || 'Failed to upload avatar');
+      toast.error(error.message || "Couldn't upload the photo. Try again.");
     } finally {
       setIsUploadingAvatar(false);
     }
@@ -204,9 +206,9 @@ export default function SettingsPage() {
         body: JSON.stringify({ timezone: tz }),
       });
       if (!res.ok) throw new Error();
-      toast.success('Timezone updated');
+      toast.success('Time zone saved');
     } catch {
-      toast.error('Failed to save timezone');
+      toast.error("Couldn't save the time zone. Try again.");
     } finally {
       setIsSavingTimezone(false);
     }
@@ -236,11 +238,11 @@ export default function SettingsPage() {
         throw new Error(data.error || 'Failed to send verification email');
       }
 
-      toast.success('Verification email sent. Please check your new email to confirm the change.');
+      toast.success('Check your new inbox. The change happens once you confirm it there.');
       setNewEmail('');
     } catch (error: any) {
       console.error('Error updating email:', error);
-      toast.error(error.message || 'Failed to send verification email');
+      toast.error(error.message || "Couldn't send the confirmation email. Try again.");
     } finally {
       setIsChangingEmail(false);
     }
@@ -265,10 +267,10 @@ export default function SettingsPage() {
         throw new Error(data.error || 'Failed to send reset email');
       }
 
-      toast.success('Password reset email sent. Please check your email to reset your password.');
+      toast.success('Reset link sent. Check your inbox.');
     } catch (error: any) {
       console.error('Error resetting password:', error);
-      toast.error(error.message || 'Failed to send reset email');
+      toast.error(error.message || "Couldn't send the reset link. Try again.");
     } finally {
       setIsResettingPassword(false);
     }
@@ -276,229 +278,170 @@ export default function SettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      <div className="mx-auto flex max-w-[720px] flex-col gap-5 px-4 py-8 sm:px-6" aria-busy="true">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-64 rounded-2xl" />
+        <Skeleton className="h-40 rounded-2xl" />
       </div>
     );
   }
 
+  const cardTitle = "font-display text-[17px] font-semibold text-ink";
+  const help = "mt-1.5 text-[13px] text-ink-3";
+
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold mb-4">Settings</h1>
-        <p className="text-gray-600">Manage your account settings and profile</p>
-      </div>
+    <div className="min-h-screen bg-canvas">
+      <div className="mx-auto flex max-w-[720px] flex-col gap-5 px-4 pb-16 pt-6 sm:px-6 sm:pt-9">
+        <div>
+          <Link href="/dashboard" className={cn(BTN_GHOST, "-ml-2.5 h-8 px-2.5 text-[13.5px]")}>
+            <ChevronLeft aria-hidden="true" />
+            Dashboard
+          </Link>
+          <h1 className="mt-2 font-display text-[28px] font-semibold leading-tight tracking-[-0.01em] text-ink sm:text-[30px]">Settings</h1>
+          <p className="mt-1 text-[15px] text-ink-2">Your profile, sign-in details and the emails you get.</p>
+        </div>
 
-      <form onSubmit={handleUpdateProfile}>
-        <Card>
-          <CardHeader>
-            <CardTitle>Profile Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Avatar Upload */}
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <Avatar className="h-20 w-20">
-                  <AvatarImage src={profile?.avatar_url || user?.image || undefined} alt="Profile" />
-                  <AvatarFallback className="text-lg uppercase">
-                    {getUserInitial()}
-                  </AvatarFallback>
-                </Avatar>
-                <Label
-                  htmlFor="avatar-upload"
-                  className={`absolute bottom-0 right-0 p-1 bg-white rounded-full shadow-lg cursor-pointer hover:bg-gray-100 ${
-                    isUploadingAvatar ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                >
-                  {isUploadingAvatar ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-900 border-t-transparent" />
-                  ) : (
-                    <Camera className="h-4 w-4" />
-                  )}
-                  <Input
-                    id="avatar-upload"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleAvatarUpload}
-                    disabled={isUploadingAvatar}
-                  />
-                </Label>
-              </div>
-              <div>
-                <h3 className="font-medium">Profile Picture</h3>
-                <p className="text-sm text-gray-500">
-                  {isUploadingAvatar 
-                    ? 'Uploading...' 
-                    : 'Click the camera icon to upload a new photo'}
-                </p>
+        <Card as="section" aria-labelledby="profile-h" className="p-5 sm:p-6">
+          <form onSubmit={handleUpdateProfile} className="flex flex-col gap-4">
+            <h2 id="profile-h" className={cardTitle}>
+              Profile
+            </h2>
+            <div className="flex items-center gap-4">
+              <InitialsAvatar id={user?.id ?? "me"} name={getDisplayedName() || getUserInitial()} imageUrl={profile?.avatar_url || user?.image || null} size={72} />
+              <div className="flex flex-col gap-1">
+                <label className={cn(BTN_SECONDARY, "h-9 cursor-pointer self-start", isUploadingAvatar && "pointer-events-none opacity-60")}>
+                  {isUploadingAvatar ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Camera aria-hidden="true" />}
+                  {isUploadingAvatar ? "Uploading…" : "Change photo"}
+                  <input id="avatar-upload" type="file" accept="image/*" className="sr-only" onChange={handleAvatarUpload} disabled={isUploadingAvatar} />
+                </label>
+                <span className="text-[12.5px] text-ink-3">JPG or PNG, up to 5 MB.</span>
               </div>
             </div>
-
-            {/* Full Name */}
-            <div className="space-y-2">
-              <Label htmlFor="full-name">Full Name</Label>
-              <div className="relative">
-                <User2 className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="full-name"
-                  value={profile?.full_name || ''}
-                  onChange={(e) => {
-                    const newFullName = e.target.value;
-                    setProfile(prev => 
-                      prev ? { ...prev, full_name: newFullName } : null
-                    );
-                  }}
-                  className="pl-10"
-                  placeholder="Enter your full name"
-                />
-              </div>
-              <p className="text-sm text-gray-500">
-                Your full name is only visible to you
-              </p>
+            <div>
+              <label htmlFor="full-name" className={FIELD_LABEL}>
+                Full name
+              </label>
+              <input
+                id="full-name"
+                autoComplete="name"
+                value={profile?.full_name || ''}
+                onChange={(e) => {
+                  const newFullName = e.target.value;
+                  setProfile((prev) => (prev ? { ...prev, full_name: newFullName } : null));
+                }}
+                className={FIELD_INPUT}
+              />
+              <p className={help}>Only you see your full name.</p>
             </div>
-
-            {/* Display Name */}
-            <div className="space-y-2">
-              <Label htmlFor="display-name">Display Name</Label>
+            <div>
+              <label htmlFor="display-name" className={FIELD_LABEL}>
+                Display name
+              </label>
               <div className="relative">
-                <AtSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
+                <input
                   id="display-name"
                   value={profile?.display_name || ''}
                   onChange={(e) => handleDisplayNameChange(e.target.value)}
-                  className="pl-10 pr-24"
-                  placeholder={formatDisplayName(profile?.full_name ?? '') ?? "Enter your display name"}
+                  placeholder={formatDisplayName(profile?.full_name ?? '') ?? ''}
+                  className={cn(FIELD_INPUT, "pr-24")}
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={resetDisplayName}
-                  className="absolute right-2 top-2 h-8 px-2 text-gray-500 hover:text-gray-700"
-                >
-                  <RefreshCw className="h-4 w-4 mr-1" />
-                  Reset
-                </Button>
+                {profile?.display_name && (
+                  <button
+                    type="button"
+                    onClick={resetDisplayName}
+                    className="absolute right-1.5 top-1/2 inline-flex h-8 -translate-y-1/2 items-center gap-1 rounded-lg px-2 text-[13px] font-semibold text-ink-2 hover:bg-surface-2 hover:text-ink"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                    Reset
+                  </button>
+                )}
               </div>
-              <p className="text-sm text-gray-500">
-                This is how you'll appear across the platform. Leave empty to use "{formatDisplayName(profile?.full_name ?? '')}"
+              <p className={help}>
+                How you appear to others on Dance-Hub. Leave it empty to use &quot;{formatDisplayName(profile?.full_name ?? '')}&quot;.
               </p>
             </div>
-
-            {/* Email Change Form */}
-            <div className="space-y-2">
-              <Label htmlFor="current-email">Current Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="current-email"
-                  value={user?.email || ''}
-                  disabled
-                  className="pl-10 bg-gray-50"
-                />
-              </div>
-              
-              {isGoogleUser ? (
-                <p className="text-sm text-gray-500 mt-2">
-                  Your email is managed by Google.
-                </p>
-              ) : (
-                <>
-                  <div className="space-y-4 mt-4">
-                    <div>
-                      <Label htmlFor="new-email">New Email</Label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                        <Input
-                          id="new-email"
-                          type="email"
-                          value={newEmail}
-                          onChange={(e) => setNewEmail(e.target.value)}
-                          className="pl-10"
-                          placeholder="Enter new email address"
-                        />
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={handleEmailChange}
-                      disabled={isChangingEmail || !newEmail}
-                      className="bg-black hover:bg-gray-800 text-white"
-                    >
-                      {isChangingEmail ? 'Sending Verification...' : 'Change Email'}
-                    </Button>
-                  </div>
-                  <p className="text-sm text-gray-500 mt-2">
-                    You'll need to verify your new email address before the change takes effect
-                  </p>
-                </>
-              )}
-            </div>
-
-            {/* Password Reset Section */}
-            {!isGoogleUser && (
-              <div className="space-y-2">
-                <Label>Password</Label>
-                <Card className="border border-gray-200">
-                  <CardContent className="pt-6">
-                    <div className="space-y-4">
-                      <p className="text-sm text-gray-500">
-                        Need to change your password? Click below to receive a password reset email.
-                      </p>
-                      <Button
-                        type="button"
-                        onClick={handlePasswordReset}
-                        disabled={isResettingPassword}
-                        className="bg-black hover:bg-gray-800 text-white w-full"
-                      >
-                        {isResettingPassword ? 'Sending Reset Email...' : 'Reset Password'}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                disabled={isSaving}
-                className="bg-black hover:bg-gray-800 text-white"
-              >
-                {isSaving ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </div>
-          </CardContent>
+            <button type="submit" disabled={isSaving} className={cn(BTN_PRIMARY, "self-end")}>
+              {isSaving ? "Saving…" : "Save profile"}
+            </button>
+          </form>
         </Card>
-      </form>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Timezone</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-gray-500">
-            Lesson and class times are shown in your timezone.
-          </p>
-          <div className="space-y-1">
-            <Label htmlFor="timezone-select">Your timezone</Label>
+        <Card as="section" aria-labelledby="email-h" className="flex flex-col gap-4 p-5 sm:p-6">
+          <h2 id="email-h" className={cardTitle}>
+            Email
+          </h2>
+          <div>
+            <p className={FIELD_LABEL}>Current email</p>
+            <p className="rounded-[10px] border border-line bg-surface-2 px-3 py-2.5 text-[15px] text-ink-2">{user?.email}</p>
+          </div>
+          {isGoogleUser ? (
+            <p className="text-[14px] text-ink-2">Your email is managed by Google.</p>
+          ) : (
+            <div>
+              <label htmlFor="new-email" className={FIELD_LABEL}>
+                New email
+              </label>
+              <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+                <input
+                  id="new-email"
+                  type="email"
+                  autoComplete="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  className={FIELD_INPUT}
+                />
+                <button type="button" onClick={handleEmailChange} disabled={isChangingEmail || !newEmail} className={cn(BTN_SECONDARY, "h-auto shrink-0")}>
+                  {isChangingEmail ? "Sending…" : "Change email"}
+                </button>
+              </div>
+              <p className={help}>We send a link to the new address. The change happens once you confirm it there.</p>
+            </div>
+          )}
+        </Card>
+
+        {!isGoogleUser && (
+          <Card as="section" aria-labelledby="password-h" className="flex flex-wrap items-center gap-4 p-5 sm:p-6">
+            <div className="min-w-0 flex-1">
+              <h2 id="password-h" className={cardTitle}>
+                Password
+              </h2>
+              <p className="mt-1 text-[14px] text-ink-2">We email you a link to choose a new password.</p>
+            </div>
+            <button type="button" onClick={handlePasswordReset} disabled={isResettingPassword} className={BTN_SECONDARY}>
+              {isResettingPassword ? "Sending…" : "Send a reset link"}
+            </button>
+          </Card>
+        )}
+
+        <Card as="section" aria-labelledby="tz-h" className="flex flex-col gap-3 p-5 sm:p-6">
+          <div>
+            <h2 id="tz-h" className={cardTitle}>
+              Time zone
+            </h2>
+            <p className="mt-1 text-[14px] text-ink-2">Lesson and class times are shown in this time zone.</p>
+          </div>
+          <div>
+            <label htmlFor="timezone-select" className={FIELD_LABEL}>
+              Your time zone
+            </label>
             <select
               id="timezone-select"
               value={selectedTimezone}
-              onChange={e => handleTimezoneChange(e.target.value)}
+              onChange={(e) => handleTimezoneChange(e.target.value)}
               disabled={isSavingTimezone}
-              className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              className={cn(FIELD_INPUT, "h-10 py-0")}
             >
-              {Intl.supportedValuesOf('timeZone').map(tz => (
-                <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
+              {Intl.supportedValuesOf('timeZone').map((tz) => (
+                <option key={tz} value={tz}>
+                  {tz.replace(/_/g, ' ')}
+                </option>
               ))}
             </select>
           </div>
-        </CardContent>
-      </Card>
+        </Card>
 
-      <EmailPreferencesCard />
+        <EmailPreferencesCard />
+      </div>
     </div>
   );
 }

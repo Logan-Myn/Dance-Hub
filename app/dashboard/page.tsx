@@ -1,31 +1,25 @@
 "use client";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Calendar,
-  Clock,
-  Video,
-  Settings,
-  Users,
-  CheckCircle,
-  AlertCircle
-} from "lucide-react";
+import { AlertCircle, Compass, Settings, Users, Video } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import useSWR from 'swr';
 import { fetcher } from '@/lib/fetcher';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { isToday, isTomorrow, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { formatInTz, tzOffsetLabel } from '@/lib/timezone';
 import { useUserTimezone } from '@/hooks/useUserTimezone';
 import { LessonBookingWithDetails } from "@/types/private-lessons";
-import { cn } from "@/lib/utils";
 import { CancelLessonModal } from "@/components/CancelLessonModal";
 import { CommunityCard } from "@/components/dashboard/CommunityCard";
 import { NextLessonCard } from "@/components/dashboard/NextLessonCard";
+import { StartCommunityLink } from "@/components/StartCommunityLink";
+import { BTN_GHOST, BTN_PRIMARY, BTN_SECONDARY } from "@/components/community-feed/feed-header";
+import { EmptyState } from "@/components/ds/empty-state";
+import { InitialsAvatar } from "@/components/ds/initials-avatar";
+import { Skeleton } from "@/components/ds/skeleton";
+import { cn } from "@/lib/utils";
 
 interface Community {
   id: string;
@@ -75,36 +69,30 @@ export default function DashboardPage() {
 
   // Fetch bookings and profile
   useEffect(() => {
-    if (user) {
-      fetchBookings();
-      fetchProfile();
-    }
-  }, [user]);
-
-  const fetchProfile = async () => {
-    try {
-      const response = await fetch(`/api/profile?userId=${user?.id}`);
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data);
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch(`/api/profile?userId=${user.id}`);
+        if (response.ok && !cancelled) setProfile(await response.json());
+      } catch (error) {
+        console.error('Error fetching profile:', error);
       }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    }
-  };
-
-  const fetchBookings = async () => {
-    try {
-      const response = await fetch('/api/bookings');
-      if (!response.ok) return;
-      const data = await response.json();
-      setBookings(data);
-    } catch (error) {
-      console.error('Error fetching bookings:', error);
-    } finally {
-      setIsLoadingBookings(false);
-    }
-  };
+    })();
+    (async () => {
+      try {
+        const response = await fetch('/api/bookings');
+        if (response.ok && !cancelled) setBookings(await response.json());
+      } catch (error) {
+        console.error('Error fetching bookings:', error);
+      } finally {
+        if (!cancelled) setIsLoadingBookings(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -125,31 +113,29 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="relative">
-          <div className="h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+      <div className="mx-auto flex max-w-[960px] flex-col gap-6 px-4 py-8 sm:px-6" aria-busy="true">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-14 w-14 rounded-full" />
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-7 w-64" />
+            <Skeleton className="h-4 w-40" />
+          </div>
+        </div>
+        <Skeleton className="h-28 rounded-2xl" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Skeleton className="h-56 rounded-2xl" />
+          <Skeleton className="h-56 rounded-2xl" />
         </div>
       </div>
     );
   }
 
+  // Greeting and dates in the viewer's saved time zone, so they agree.
   const getGreeting = () => {
-    const hour = currentTime.getHours();
+    const hour = Number(formatInTz(currentTime, userTimezone, 'H'));
     if (hour < 12) return 'Good morning';
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
-  };
-
-  const getUserInitials = () => {
-    const name = profile?.display_name || profile?.full_name || user?.name;
-    if (name) {
-      const parts = name.split(' ');
-      if (parts.length >= 2) {
-        return (parts[0][0] + parts[1][0]).toUpperCase();
-      }
-      return name.substring(0, 2).toUpperCase();
-    }
-    return user?.email ? user.email.substring(0, 2).toUpperCase() : 'U';
   };
 
   const getUserDisplayName = () => {
@@ -163,13 +149,15 @@ export default function DashboardPage() {
   // lesson_status only flips to 'completed' / 'canceled' on explicit action,
   // so we also need to consider scheduled_at + duration to know if a lesson
   // has already ended. Otherwise past lessons keep showing as 'Upcoming'.
+  // The page's clock (ticks every minute), not a fresh Date.now() per render.
+  const nowMs = currentTime.getTime();
   const GRACE_MS = 15 * 60_000;
   const isLessonOver = (booking: LessonBookingWithDetails) => {
     if (['completed', 'canceled'].includes(booking.lesson_status)) return true;
     if (!booking.scheduled_at) return false;
     const startMs = new Date(booking.scheduled_at).getTime();
     const endMs = startMs + (booking.duration_minutes ?? 60) * 60_000;
-    return Date.now() > endMs + GRACE_MS;
+    return nowMs > endMs + GRACE_MS;
   };
 
   function expectedRefundCents(
@@ -184,7 +172,7 @@ export default function DashboardPage() {
     if (!scheduledAtIso) return Math.round(pricePaid * 100);
     const scheduledMs = new Date(scheduledAtIso).getTime();
     const cutoffMs = scheduledMs - cutoffHours * 3600_000;
-    const beforeCutoff = Date.now() <= cutoffMs;
+    const beforeCutoff = nowMs <= cutoffMs;
     if (beforeCutoff || latePolicy === 'refund') {
       return Math.round(pricePaid * 100);
     }
@@ -210,216 +198,144 @@ export default function DashboardPage() {
     const scheduledAt = booking.scheduled_at ? new Date(booking.scheduled_at) : null;
     if (scheduledAt) {
       const fifteenMinutesBefore = new Date(scheduledAt.getTime() - 15 * 60 * 1000);
-      return Date.now() >= fifteenMinutesBefore.getTime();
+      return nowMs >= fifteenMinutesBefore.getTime();
     }
     return true;
   };
 
+  const dayKey = (d: Date) => formatInTz(d, userTimezone, 'yyyy-MM-dd');
   const formatLessonDate = (dateString: string | undefined) => {
     if (!dateString) return 'Flexible timing';
     const date = new Date(dateString);
-    if (isToday(date)) return `Today at ${formatInTz(date, userTimezone, 'h:mm a')}`;
-    if (isTomorrow(date)) return `Tomorrow at ${formatInTz(date, userTimezone, 'h:mm a')}`;
-    return formatInTz(date, userTimezone, 'EEE, MMM d · h:mm a');
+    const today = dayKey(currentTime);
+    const tomorrow = dayKey(new Date(currentTime.getTime() + 86_400_000));
+    const time = formatInTz(date, userTimezone, 'HH:mm');
+    if (dayKey(date) === today) return `Today at ${time}`;
+    if (dayKey(date) === tomorrow) return `Tomorrow at ${time}`;
+    return `${formatInTz(date, userTimezone, 'EEE d MMM')}, ${time}`;
   };
 
   const getTimeUntil = (dateString: string | undefined) => {
     if (!dateString) return null;
     const date = new Date(dateString);
     const now = new Date();
-    if (date <= now) return 'Starting now';
+    if (date <= now) return 'starting now';
     return formatDistanceToNow(date, { addSuffix: true });
   };
 
-  return (
-    <div className="min-h-screen">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+  const displayName = getUserDisplayName();
+  const owned = communities?.filter((c) => c.created_by === user.id) ?? [];
+  const joined = communities?.filter((c) => c.created_by !== user.id) ?? [];
+  const ordered = [...owned, ...joined];
 
-        {/* Header with Greeting */}
-        <header className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <Avatar className="h-14 w-14 ring-2 ring-primary/20 ring-offset-2 ring-offset-background">
-              <AvatarImage src={profile?.avatar_url || user?.image || undefined} />
-              <AvatarFallback className="bg-primary/10 text-primary text-lg font-display font-semibold">
-                {getUserInitials()}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <h1 className="font-display text-2xl md:text-3xl font-semibold text-foreground">
-                {getGreeting()}, {getUserDisplayName()}
+  return (
+    <div className="min-h-screen bg-canvas">
+      <div className="mx-auto flex max-w-[960px] flex-col gap-8 px-4 pb-16 pt-6 sm:px-6 sm:pt-9">
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <InitialsAvatar id={user.id} name={displayName} imageUrl={profile?.avatar_url || user?.image || null} size={56} />
+            <div className="min-w-0">
+              <h1 className="truncate font-display text-[26px] font-semibold leading-tight tracking-[-0.01em] text-ink sm:text-[30px]">
+                {getGreeting()}, {displayName.split(' ')[0]}
               </h1>
-              <p className="text-muted-foreground text-sm flex items-center gap-1.5 mt-0.5">
-                <Calendar className="h-3.5 w-3.5" />
-                {formatInTz(currentTime, userTimezone, 'EEEE, MMMM d')}
-              </p>
+              <p className="mt-0.5 text-[14.5px] text-ink-2">{formatInTz(currentTime, userTimezone, 'EEEE d MMMM')}</p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full hover:bg-muted"
-            asChild
-          >
-            <Link href="/dashboard/settings">
-              <Settings className="h-5 w-5 text-muted-foreground" />
-            </Link>
-          </Button>
+          <Link href="/dashboard/settings" className={BTN_SECONDARY}>
+            <Settings aria-hidden="true" />
+            Settings
+          </Link>
         </header>
 
-        {/* Next Lesson — first thing students see when they have one
-            coming up. Compact strip; disappears entirely when there's no
-            upcoming lesson. */}
         {nextLesson && (
           <NextLessonCard
             booking={nextLesson}
             canJoinVideo={canJoinVideo(nextLesson)}
             timeUntil={getTimeUntil(nextLesson.scheduled_at)}
             formattedDate={formatLessonDate(nextLesson.scheduled_at)}
+            timeZone={userTimezone}
             onCancel={() => setCancelTarget(nextLesson)}
           />
         )}
 
-        {/* Upcoming Lessons List. Sits right under the next-lesson strip so
-            scheduling info stays grouped. Hidden when there's only one
-            upcoming lesson (already shown above) to avoid repeating it. */}
         {upcomingLessons.length > 1 && (
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-display text-lg font-semibold text-foreground">
-                Upcoming Lessons
-              </h3>
-              <Badge variant="secondary" className="font-normal">
-                {upcomingLessons.length} scheduled
-              </Badge>
+          <section aria-labelledby="upcoming-h" className="flex flex-col gap-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 id="upcoming-h" className="font-display text-[19px] font-semibold text-ink">
+                Upcoming lessons
+              </h2>
+              <span className="text-[13px] text-ink-3">Times in {tzOffsetLabel(userTimezone)}</span>
             </div>
-
-            <div className="bg-card rounded-2xl border border-border/50 shadow-sm divide-y divide-border/50 overflow-hidden">
-              {upcomingLessons.slice(1).map((booking, index) => (
-                <div
-                  key={booking.id}
-                  className={cn(
-                    "flex items-center justify-between p-4",
-                    "transition-colors duration-200",
-                    "hover:bg-muted/30"
-                  )}
-                  style={{ animationDelay: `${index * 50}ms` }}
-                >
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className="hidden sm:flex h-10 w-10 rounded-xl bg-primary/10 items-center justify-center flex-shrink-0">
-                      <Video className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-foreground truncate">
-                        {booking.lesson_title}
-                      </p>
-                      <p className="text-sm text-muted-foreground flex items-center gap-2">
-                        <span>{formatLessonDate(booking.scheduled_at)}</span>
-                        <span className="text-border">·</span>
-                        <span>
-                          {booking.viewer_role === 'teacher'
-                            ? `with ${booking.student_name || booking.student_email}`
-                            : booking.community_name}
-                        </span>
-                        <span className="text-xs text-muted-foreground/60">
-                          {tzOffsetLabel(userTimezone)}
-                        </span>
-                      </p>
-                    </div>
+            <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
+              {upcomingLessons.slice(1).map((booking) => (
+                <li key={booking.id} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:flex-nowrap">
+                  <span aria-hidden="true" className="hidden h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-brand-soft text-brand-ink sm:grid">
+                    <Video className="h-[18px] w-[18px]" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <strong className="block truncate text-[15px] font-semibold text-ink">{booking.lesson_title}</strong>
+                    <span className="text-[13px] tabular-nums text-ink-3">
+                      {formatLessonDate(booking.scheduled_at)},{" "}
+                      {booking.viewer_role === 'teacher' ? `with ${booking.student_name || booking.student_email}` : booking.community_name}
+                    </span>
                   </div>
-
-                  <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-                    {canJoinVideo(booking) ? (
-                      <Button size="sm" asChild className="rounded-xl">
-                        <Link href={`/video-session/${booking.id}`}>
-                          Join
-                        </Link>
-                      </Button>
-                    ) : (
-                      <Badge variant="secondary" className="font-normal">
-                        <Clock className="h-3 w-3 mr-1" />
-                        Soon
-                      </Badge>
+                  <div className="flex shrink-0 gap-2">
+                    {canJoinVideo(booking) && (
+                      <Link href={`/video-session/${booking.id}`} className={cn(BTN_PRIMARY, "h-9")}>
+                        Join
+                      </Link>
                     )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCancelTarget(booking)}
-                      className="rounded-xl"
-                    >
+                    <button type="button" onClick={() => setCancelTarget(booking)} className={cn(BTN_GHOST, "h-9")}>
                       Cancel
-                    </Button>
+                    </button>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           </section>
         )}
 
-        {/* Your Communities. If user has zero, show the dashed empty state
-            inside the same section so the page anchor stays consistent. */}
-        <section>
-          <h3 className="font-display text-lg font-semibold text-foreground mb-4">
-            Your Communities
-          </h3>
-          {communities && communities.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {communities.map((community) => (
-                <CommunityCard
-                  key={community.id}
-                  community={community}
-                  isAdmin={community.created_by === user.id}
-                />
+        <section aria-labelledby="communities-h" className="flex flex-col gap-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 id="communities-h" className="font-display text-[19px] font-semibold text-ink">
+              Your communities
+            </h2>
+            {ordered.length > 0 && (
+              <Link href="/discovery" className="text-[13.5px] font-semibold text-brand-ink hover:underline hover:underline-offset-[3px]">
+                Find more
+              </Link>
+            )}
+          </div>
+          {ordered.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {ordered.map((community) => (
+                <CommunityCard key={community.id} community={community} isAdmin={community.created_by === user.id} />
               ))}
             </div>
           ) : !error ? (
-            <div className="rounded-2xl border-2 border-dashed border-border/60 p-8 text-center">
-              <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                <Users className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <h2 className="font-display text-lg font-semibold text-foreground mb-1">
-                Join a community
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                Discover dance communities and start your journey
-              </p>
-            </div>
+            <EmptyState
+              icon={<Users className="h-7 w-7" />}
+              title="You're not in a community yet"
+              actions={
+                <>
+                  <Link href="/discovery" className={BTN_PRIMARY}>
+                    <Compass aria-hidden="true" />
+                    Find a community
+                  </Link>
+                  <StartCommunityLink className={BTN_SECONDARY}>Create your own</StartCommunityLink>
+                </>
+              }
+            >
+              Join a teacher&apos;s community to take classes and courses, or start one for your own students.
+            </EmptyState>
           ) : null}
         </section>
 
-        {/* Past/Completed Lessons Summary */}
-        {bookings.some(b => b.lesson_status === 'completed') && (
-          <section>
-            <h3 className="font-display text-lg font-semibold text-foreground mb-3">
-              Recent Activity
-            </h3>
-            <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                  <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
-                </div>
-                <div>
-                  <p className="font-medium text-foreground">
-                    {bookings.filter(b => b.lesson_status === 'completed').length} lessons completed
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Keep up the great work!
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Error state */}
         {error && (
-          <section className="rounded-2xl bg-destructive/10 border border-destructive/20 p-4">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-destructive" />
-              <p className="text-sm text-destructive">
-                Unable to load your communities. Please try again.
-              </p>
-            </div>
-          </section>
+          <p role="alert" className="flex items-center gap-3 rounded-2xl border border-live/25 bg-live-soft px-4 py-3 text-[14px] text-live">
+            <AlertCircle className="h-5 w-5 shrink-0" aria-hidden="true" />
+            Couldn&apos;t load your communities. Reload the page to try again.
+          </p>
         )}
       </div>
 

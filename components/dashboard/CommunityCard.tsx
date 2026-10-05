@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
+import { Settings } from "lucide-react";
+import { Pill } from "@/components/ds/pill";
+import { communityPath } from "@/lib/safe-redirect";
 
 interface CommunityCardProps {
   community: {
@@ -16,60 +18,59 @@ interface CommunityCardProps {
   isAdmin: boolean;
 }
 
+/** A community the viewer belongs to (or owns). The whole card opens it. */
 export function CommunityCard({ community, isAdmin }: CommunityCardProps) {
   const focalX = community.image_focal_x ?? 50;
   const focalY = community.image_focal_y ?? 50;
   const zoom = Number(community.image_zoom ?? 1);
-
   return (
-    <Link
-      href={`/${community.slug}`}
-      className="group block rounded-2xl bg-card border border-border/50 overflow-hidden shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/50"
-    >
-      <div className="relative w-full aspect-[16/9] bg-muted overflow-hidden">
-        {/* Inner wrapper carries the hover zoom so it composes with the
-            focal scale applied inline on the <img> (two nested transforms
-            multiply rather than overwrite each other). */}
-        <div className="absolute inset-0 transition-transform duration-300 group-hover:scale-105">
-          {community.image_url ? (
-            <img
-              src={community.image_url}
-              alt={community.name}
-              className="w-full h-full object-cover"
-              style={{
-                objectPosition: `${focalX}% ${focalY}%`,
-                transform: `scale(${zoom})`,
-                transformOrigin: `${focalX}% ${focalY}%`,
-              }}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/80 to-accent">
-              <span className="font-display text-5xl font-semibold text-white">
-                {community.name.charAt(0).toUpperCase()}
-              </span>
-            </div>
-          )}
-        </div>
+    <article className="group relative overflow-hidden rounded-2xl border border-line bg-surface shadow-card transition-[box-shadow,border-color,transform] hover:-translate-y-px hover:border-line-strong hover:shadow-raised has-[a.card-link:focus-visible]:outline has-[a.card-link:focus-visible]:outline-2 has-[a.card-link:focus-visible]:outline-offset-2 has-[a.card-link:focus-visible]:outline-brand">
+      <div className="relative aspect-[16/9] w-full overflow-hidden bg-surface-3">
+        {community.image_url ? (
+          <img
+            src={community.image_url}
+            alt=""
+            className="h-full w-full object-cover"
+            style={{
+              objectPosition: `${focalX}% ${focalY}%`,
+              transform: zoom !== 1 ? `scale(${zoom})` : undefined,
+              transformOrigin: `${focalX}% ${focalY}%`,
+            }}
+          />
+        ) : (
+          <div className="grid h-full w-full place-items-center bg-brand-soft">
+            <span aria-hidden="true" className="font-display text-[44px] font-semibold text-brand-ink">
+              {community.name.charAt(0).toUpperCase()}
+            </span>
+          </div>
+        )}
       </div>
-
-      <div className="p-4 space-y-1">
-        <h3 className="font-display text-lg font-semibold text-foreground line-clamp-1">
-          {community.name}
-        </h3>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>
+      <div className="flex items-start gap-2 p-4">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-display text-[17px] font-semibold text-ink">
+            <Link
+              href={communityPath(community.slug)}
+              className="card-link outline-none after:absolute after:inset-0 after:content-[''] group-hover:text-brand-ink"
+            >
+              {community.name}
+            </Link>
+          </h3>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-[13.5px] text-ink-2">
             {community.members_count} {community.members_count === 1 ? "member" : "members"}
-          </span>
-          {isAdmin && (
-            <>
-              <span aria-hidden>·</span>
-              <Badge variant="secondary" className="font-normal text-xs px-1.5 py-0">
-                Admin
-              </Badge>
-            </>
-          )}
+            {isAdmin && <Pill variant="brand">Owner</Pill>}
+          </p>
         </div>
+        {isAdmin && (
+          <Link
+            href={communityPath(community.slug, "/admin")}
+            aria-label={`Admin for ${community.name}`}
+            title="Admin"
+            className="relative z-[1] grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            <Settings className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        )}
       </div>
-    </Link>
+    </article>
   );
 }
