@@ -21,8 +21,9 @@ export default async function MembersPage(
     searchParams: Promise<{ filter?: string }>;
   }
 ) {
-  const [params, searchParams] = await Promise.all([props.params, props.searchParams]);
+  const params = await props.params;
   await requireCommunityManagerPage(params.communitySlug);
+  const searchParams = await props.searchParams;
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 
