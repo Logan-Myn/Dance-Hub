@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { BTN_GHOST, BTN_PRIMARY } from "@/components/community-feed/feed-header";
 import UserAccountNav from "@/components/UserAccountNav";
 import NotificationsButton from "@/components/NotificationsButton";
 import { useAuth } from "@/contexts/AuthContext";
@@ -49,34 +49,34 @@ export default function Navbar({ initialUser, initialProfile }: NavbarProps = {}
   const showLoadingPlaceholder = isAuthLoading && !initialUser && initialUser !== null;
 
   return (
-    <nav className="border-b py-4 px-6">
-      <div className="container mx-auto flex justify-between items-center">
-        <Link href="/" className="text-xl font-bold">
-          DanceHub
+    <nav className="border-b border-line bg-surface">
+      <div className="mx-auto flex h-[60px] max-w-[1240px] items-center justify-between gap-3 px-4 sm:px-8">
+        <Link href="/" aria-label="Dance-Hub home" className="flex items-center gap-2.5 font-display text-[17px] font-semibold text-ink">
+          <span aria-hidden="true" className="grid h-[30px] w-[30px] place-items-center rounded-lg bg-brand text-[13px] font-bold tracking-tight text-white">
+            DH
+          </span>
+          Dance-Hub
         </Link>
 
-        <div className="flex gap-4 items-center">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {showLoadingPlaceholder ? (
             <div className="w-[200px]" />
           ) : user ? (
             <>
-              <Link href="/dashboard">
-                <Button variant="ghost">Dashboard</Button>
+              <Link href="/dashboard" className={BTN_GHOST}>
+                Dashboard
               </Link>
               <NotificationsButton />
               <UserAccountNav user={user} profile={profile || null} />
             </>
           ) : (
             <>
-              <Button
-                variant="ghost"
-                onClick={() => showAuthModal("signin")}
-              >
-                Sign In
-              </Button>
-              <Button onClick={() => showAuthModal("signup")}>
-                Sign Up
-              </Button>
+              <button type="button" className={BTN_GHOST} onClick={() => showAuthModal("signin")}>
+                Sign in
+              </button>
+              <button type="button" className={BTN_PRIMARY} onClick={() => showAuthModal("signup")}>
+                Sign up
+              </button>
             </>
           )}
         </div>

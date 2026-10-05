@@ -7,8 +7,6 @@ import { StartCommunityLink } from "@/components/StartCommunityLink";
 
 export const dynamic = "force-dynamic";
 
-const VIOLET = "#7c3aed"; // violet-600
-
 export default async function LandingPage() {
   // Hero video poster: kick off the fetch before MuxPlayer hydrates so the
   // image isn't gated behind the JS bundle.
@@ -19,38 +17,10 @@ export default async function LandingPage() {
 
   return (
     <>
-      <div
-        style={{
-          background: "linear-gradient(to right, #7c3aed, #9333ea, #c026d3)",
-          color: "white",
-          padding: "10px 20px",
-          textAlign: "center",
-          fontSize: 13,
-          letterSpacing: 0.2,
-        }}
-      >
-        <span
-          style={{
-            background: "white",
-            color: VIOLET,
-            fontWeight: 700,
-            padding: "3px 9px",
-            borderRadius: 6,
-            fontSize: 11,
-            letterSpacing: 1,
-            marginRight: 14,
-          }}
-        >
-          LAUNCH
-        </span>
-        <span style={{ opacity: 0.95 }}>
-          Run your community with <b>0% platform fees</b> for your first 15 days.
-        </span>{" "}
-        <StartCommunityLink
-          style={{ color: "white", fontWeight: 600, textDecoration: "underline", marginLeft: 8 }}
-        >
-          Start now →
-        </StartCommunityLink>
+      <div className="bg-brand-soft px-4 py-2.5 text-center text-[13px] text-brand-ink">
+        <span className="mr-2.5 inline-block rounded-md bg-brand px-2 py-0.5 text-[11.5px] font-bold text-white">Launch</span>
+        Run your community with <b className="font-semibold">0% platform fees</b> for your first 15 days.{" "}
+        <StartCommunityLink className="ml-1 font-semibold underline underline-offset-[3px] hover:text-brand">Start now</StartCommunityLink>
       </div>
       <Navbar initialUser={session?.user ?? null} initialProfile={profile} />
       <HomePageClient />
