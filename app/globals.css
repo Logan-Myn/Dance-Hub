@@ -4,33 +4,36 @@
 
 @layer base {
   :root {
-    --background: 270 60% 97%; /* Very light lavender */
-    --foreground: 270 30% 25%; /* Dark muted purple */
+    /* Old (shadcn) colour names, folded into the redesign palette at the end
+       of the redesign (Phase 7): pages and components that still use them
+       render with the same colours as the --ds-* tokens below. */
+    --background: 260 38% 97%; /* canvas */
+    --foreground: 257 35% 14%; /* ink */
 
-    --card: 270 60% 99%; /* Almost white lavender */
-    --card-foreground: 270 30% 25%;
+    --card: 0 0% 100%; /* surface */
+    --card-foreground: 257 35% 14%;
 
-    --popover: 270 60% 99%;
-    --popover-foreground: 270 30% 25%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 257 35% 14%;
 
-    --primary: 265 65% 60%; /* Vibrant Lavender */
-    --primary-foreground: 0 0% 100%; /* White */
+    --primary: 265 65% 60%; /* brand */
+    --primary-foreground: 0 0% 100%;
 
     --secondary: 275 55% 70%; /* Softer Lavender */
     --secondary-foreground: 275 30% 20%; /* Dark purple for contrast */
 
-    --muted: 270 40% 90%; /* Muted Lavender Gray */
-    --muted-foreground: 270 20% 45%; /* Darker Muted Lavender Gray */
+    --muted: 262 44% 95%; /* surface-2 */
+    --muted-foreground: 257 14% 39%; /* ink-2 */
 
     --accent: 260 70% 65%; /* Accent Purple */
     --accent-foreground: 0 0% 100%; /* White */
 
-    --destructive: 0 84% 60%;
+    --destructive: 354 69% 48%; /* live */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 270 40% 80%; /* Lavender Border */
-    --input: 270 40% 85%; /* Light Lavender Input */
-    --ring: 265 65% 60%; /* Primary color for ring */
+    --border: 263 32% 90%; /* line */
+    --input: 262 30% 83%; /* line-strong */
+    --ring: 265 65% 60%; /* brand */
 
     --radius: 0.5rem;
 

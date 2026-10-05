@@ -14,7 +14,7 @@ export function CompletionSummary({ accountId, onClose, onSetupPricing }: Comple
     {
       icon: CheckCircle,
       title: "Account Verified",
-      description: "Your Stripe account has been successfully created and verified"
+      description: "Your payout account is set up and verified"
     },
     {
       icon: CreditCard,
@@ -105,7 +105,7 @@ export function CompletionSummary({ accountId, onClose, onSetupPricing }: Comple
 
       {/* Account Info */}
       <div className="text-sm text-gray-500 pt-4 border-t">
-        <p>Stripe Account ID: <code className="bg-gray-100 px-2 py-1 rounded text-xs">{accountId}</code></p>
+        <p>Payout account: <code className="rounded bg-surface-2 px-2 py-1 text-xs">{accountId}</code></p>
         <p className="mt-1">
           You can manage your account settings and view detailed analytics in your{' '}
           <a 
