@@ -1,110 +1,69 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { useRouter } from 'next/navigation';
+import React, { useId, useState } from "react";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
+import { Check, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import toast from 'react-hot-toast';
-import { Textarea } from "@/components/ui/textarea";
-import { UploadCloud, X } from 'lucide-react';
-import { uploadFileToStorage, STORAGE_FOLDERS } from '@/lib/storage-client';
-import { BannerCropper, type BannerCropValue } from '@/components/admin/BannerCropper';
-import { communityPath } from '@/lib/safe-redirect';
+import { uploadFileToStorage, STORAGE_FOLDERS } from "@/lib/storage-client";
+import { BannerCropper, type BannerCropValue } from "@/components/admin/BannerCropper";
+import { BTN_GHOST, BTN_PRIMARY, BTN_SECONDARY } from "@/components/community-feed/feed-header";
+import { FIELD_INPUT, FIELD_LABEL } from "@/components/ds/app-dialog";
+import { useNameAvailability } from "@/hooks/use-name-availability";
+import { communityPath } from "@/lib/safe-redirect";
+import { cn } from "@/lib/utils";
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export default function OnboardingForm() {
-  const [communityName, setCommunityName] = useState('');
-  const [description, setDescription] = useState('');
+  const [communityName, setCommunityName] = useState("");
+  const [description, setDescription] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [crop, setCrop] = useState<BannerCropValue>({ focalX: 50, focalY: 50, zoom: 1 });
-  const [nameError, setNameError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const { user } = useAuth();
   const router = useRouter();
+  const availability = useNameAvailability(communityName);
+  const ids = { name: useId(), nameHelp: useId(), desc: useId(), descHelp: useId(), cover: useId() };
+  const nameProblem = availability.status === "taken" || availability.status === "invalid";
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const takeFile = (file: File | undefined) => {
     if (!file) return;
-
-    // Check file size (5MB limit)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image size should be less than 5MB");
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose an image file, like a JPG or PNG.");
       return;
     }
-
-    setImageFile(file);
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
+    if (file.size > MAX_IMAGE_BYTES) {
+      toast.error("Choose an image under 5 MB.");
+      return;
     }
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setImageFile(file);
     setPreviewUrl(URL.createObjectURL(file));
     setCrop({ focalX: 50, focalY: 50, zoom: 1 });
   };
 
   const removeImage = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
     setImageFile(null);
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
+    setPreviewUrl(null);
     setCrop({ focalX: 50, focalY: 50, zoom: 1 });
-  };
-
-  // Function to generate slug from name
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)+/g, '');
-  };
-
-  // Function to check name and slug availability
-  const checkAvailability = async (name: string) => {
-    const slug = generateSlug(name);
-
-    try {
-      const response = await fetch(
-        `/api/community/check-availability?name=${encodeURIComponent(name)}&slug=${encodeURIComponent(slug)}`
-      );
-
-      if (!response.ok) {
-        console.error('Error checking availability');
-        return false;
-      }
-
-      const data = await response.json();
-
-      if (!data.available) {
-        setNameError(data.reason);
-        return false;
-      }
-
-      setNameError(null);
-      return true;
-    } catch (error) {
-      console.error('Error checking availability:', error);
-      return false;
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || isLoading) return;
+    if (nameProblem) {
+      document.getElementById(ids.name)?.focus();
+      return;
+    }
 
     setIsLoading(true);
-
     try {
-      // Check availability before proceeding
-      const isAvailable = await checkAvailability(communityName);
-      if (!isAvailable) {
-        setIsLoading(false);
-        return;
-      }
-
-      let imageUrl = '';
-
-      // Upload image if one is selected
+      let imageUrl = "";
       if (imageFile) {
         setIsUploading(true);
         try {
@@ -114,140 +73,166 @@ export default function OnboardingForm() {
         }
       }
 
-      const response = await fetch('/api/community/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      // The server checks the name and address again, so a name taken a
+      // moment ago is still refused with its reason.
+      const response = await fetch("/api/community/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: communityName,
-          description: description,
-          imageUrl: imageUrl,
+          description,
+          imageUrl,
           createdBy: user.id,
           ...(imageUrl ? { focalX: crop.focalX, focalY: crop.focalY, zoom: crop.zoom } : {}),
         }),
       });
-
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Couldn't create the community. Try again.");
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create community');
-      }
-
-      if (data.warning) {
-        toast.success('Community created successfully, but there was a minor issue.');
-        console.warn(data.warning);
-      } else {
-        toast.success('Community created successfully!');
-      }
-
-      // Redirect to the newly created community page
+      if (data.warning) console.warn(data.warning);
+      toast.success("Community created");
       router.push(communityPath(data.slug));
     } catch (error) {
-      console.error('Error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to create community');
+      console.error("Error:", error);
+      toast.error(error instanceof Error ? error.message : "Couldn't create the community. Try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
+  const fileInput = (
+    <input
+      id={ids.cover}
+      type="file"
+      accept="image/*"
+      className="sr-only"
+      disabled={isUploading || isLoading}
+      onChange={(e) => {
+        takeFile(e.target.files?.[0]);
+        e.target.value = "";
+      }}
+    />
+  );
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor={ids.name} className={FIELD_LABEL}>
           Community name
         </label>
-        <Input
+        <input
+          id={ids.name}
           type="text"
           value={communityName}
-          onChange={async (e) => {
-            const newName = e.target.value;
-            setCommunityName(newName);
-            if (newName.length > 2) {
-              await checkAvailability(newName);
-            } else {
-              setNameError(null);
-            }
-          }}
-          placeholder="Enter your community name"
+          onChange={(e) => setCommunityName(e.target.value)}
+          placeholder="For example: Bachata with Maria"
+          maxLength={80}
           required
-          className={`w-full ${nameError ? 'border-red-500' : ''}`}
+          autoComplete="off"
+          aria-invalid={nameProblem || undefined}
+          aria-describedby={ids.nameHelp}
+          className={FIELD_INPUT}
         />
-        {nameError && (
-          <p className="mt-1 text-sm text-red-500">{nameError}</p>
-        )}
+        <p id={ids.nameHelp} aria-live="polite" className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
+          {availability.slug && (
+            <span className="text-ink-3">
+              Your address: <span className="font-medium text-ink-2">dance-hub.io/{availability.slug}</span>
+            </span>
+          )}
+          {availability.status === "checking" && <span className="text-ink-3">Checking…</span>}
+          {availability.status === "available" && (
+            <span className="inline-flex items-center gap-1 font-semibold text-ok">
+              <Check className="h-3.5 w-3.5" aria-hidden="true" />
+              Available
+            </span>
+          )}
+          {(availability.status === "taken" || availability.status === "invalid") && (
+            <span className="font-medium text-live">{availability.message}</span>
+          )}
+          {availability.status === "idle" && <span className="text-ink-3">At least 3 characters. You can change it later.</span>}
+        </p>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor={ids.desc} className={FIELD_LABEL}>
           Description
         </label>
-        <Textarea
+        <textarea
+          id={ids.desc}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Tell us about your community"
+          placeholder="One or two sentences: what you teach and who it's for."
           required
-          className="w-full min-h-[100px]"
+          rows={3}
+          aria-describedby={ids.descHelp}
+          className={cn(FIELD_INPUT, "resize-y")}
         />
+        <p id={ids.descHelp} className="mt-1.5 text-[13px] text-ink-3">
+          Shown under your name on the community and About pages.
+        </p>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Community photo
-        </label>
+        <p className={FIELD_LABEL}>
+          Cover image <span className="font-normal text-ink-3">optional</span>
+        </p>
         {previewUrl && imageFile ? (
-          <div className="space-y-2">
-            <div className="relative">
-              <BannerCropper key={previewUrl} imageUrl={previewUrl} onChange={setCrop} />
-              <button
-                type="button"
-                onClick={removeImage}
-                className="absolute -top-2 -right-2 p-1 bg-red-100 rounded-full hover:bg-red-200 transition-colors z-10"
-                aria-label="Remove image"
-              >
-                <X className="h-4 w-4 text-red-500" />
+          <div className="flex flex-col gap-2.5">
+            <BannerCropper key={previewUrl} imageUrl={previewUrl} onChange={setCrop} />
+            <p className="text-[13px] text-ink-3">Drag and zoom to choose what shows in the banner.</p>
+            <div className="flex flex-wrap gap-2">
+              <label htmlFor={ids.cover} className={cn(BTN_SECONDARY, "h-9 cursor-pointer")}>
+                <ImagePlus aria-hidden="true" />
+                Replace image
+                {fileInput}
+              </label>
+              <button type="button" onClick={removeImage} className={cn(BTN_GHOST, "h-9")}>
+                <Trash2 aria-hidden="true" />
+                Remove
               </button>
             </div>
-            <p className="text-xs text-gray-500">
-              Drag and zoom to choose what shows in the banner. {imageFile.name}
-            </p>
           </div>
         ) : (
-          <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg">
-            <div className="w-full max-w-2xl space-y-1 text-center">
-              <div className="flex flex-col items-center">
-                <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
-                <div className="flex text-sm text-gray-600">
-                  <label htmlFor="file-upload" className="relative cursor-pointer rounded-md font-medium text-blue-600 hover:text-blue-500">
-                    <span>Upload a file</span>
-                    <input
-                      id="file-upload"
-                      name="file-upload"
-                      type="file"
-                      accept="image/*"
-                      className="sr-only"
-                      onChange={handleImageUpload}
-                      disabled={isUploading}
-                    />
-                  </label>
-                  <p className="pl-1">or drag and drop</p>
-                </div>
-              </div>
-              <p className="text-xs text-gray-500">
-                PNG, JPG, GIF up to 5MB. Wide images (around 1600x400) work best.
-              </p>
-            </div>
-          </div>
+          <label
+            htmlFor={ids.cover}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragOver={(e) => e.preventDefault()}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              takeFile(e.dataTransfer.files?.[0]);
+            }}
+            className={cn(
+              "flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-[1.5px] border-dashed px-5 py-7 text-center transition-colors",
+              dragOver ? "border-brand bg-brand-soft" : "border-line-strong bg-surface-2 hover:border-brand-line hover:bg-brand-soft"
+            )}
+          >
+            <span aria-hidden="true" className="grid h-11 w-11 place-items-center rounded-xl bg-surface text-brand-ink shadow-card">
+              <ImagePlus className="h-5 w-5" />
+            </span>
+            <span className="text-[14.5px] text-ink">
+              <span className="font-semibold text-brand-ink">Choose an image</span> or drop it here
+            </span>
+            <span className="text-[12.5px] text-ink-3">JPG, PNG or GIF up to 5 MB. Wide images work best, around 1600 by 400.</span>
+            {fileInput}
+          </label>
         )}
       </div>
 
-      <Button 
-        type="submit" 
-        disabled={isLoading || isUploading} 
-        className="w-full"
-      >
-        {isLoading ? 'Creating your community...' : 'Create Community'}
-      </Button>
+      <button type="submit" disabled={isLoading || isUploading || nameProblem} className={cn(BTN_PRIMARY, "mt-1 h-11 w-full text-[15px]")}>
+        {isLoading ? (
+          <>
+            <Loader2 className="animate-spin" aria-hidden="true" />
+            Creating your community…
+          </>
+        ) : (
+          "Create community"
+        )}
+      </button>
     </form>
   );
 }
