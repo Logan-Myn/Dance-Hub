@@ -15,6 +15,10 @@ export interface ComposerHandle {
   open: (opts?: { categoryId?: string; title?: string; body?: string }) => void;
 }
 
+// One duration for the card's height, so the bar folding away and the form
+// unfolding read as a single motion. Even ease in and out (no fast start).
+const OPEN_MS = 560;
+
 const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
 export const Composer = forwardRef<ComposerHandle, {
@@ -26,13 +30,26 @@ export const Composer = forwardRef<ComposerHandle, {
   onPosted: (thread: Record<string, unknown>, categoryName: string | null) => void;
 }>(function Composer({ communityId, categories, viewer, isOwner, ownerName, onPosted }, ref) {
   const [open, setOpenState] = useState(false);
-  // The rich-text editor mounts on first open (it can't render on the server)
-  // and stays mounted, so later opens animate with it in place.
+  // The rich-text editor can't render on the server. It mounts while the
+  // browser is idle after the page loads (or on first open, if that comes
+  // first), so opening is only an animation, not editor setup mid-motion.
   const [editorReady, setEditorReady] = useState(false);
   const setOpen = (next: boolean) => {
     if (next) setEditorReady(true);
     setOpenState(next);
   };
+  useEffect(() => {
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(() => setEditorReady(true), { timeout: 2500 });
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const t = setTimeout(() => setEditorReady(true), 1200);
+    return () => clearTimeout(t);
+  }, []);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -65,8 +82,12 @@ export const Composer = forwardRef<ComposerHandle, {
     },
   }));
 
+  // Focus the title once the form has finished opening: focusing inside a
+  // container that's still growing makes the browser nudge it mid-motion.
   useEffect(() => {
-    if (open) titleRef.current?.focus({ preventScroll: true });
+    if (!open) return;
+    const t = setTimeout(() => titleRef.current?.focus({ preventScroll: true }), OPEN_MS);
+    return () => clearTimeout(t);
   }, [open]);
 
   const close = () => {
@@ -119,7 +140,7 @@ export const Composer = forwardRef<ComposerHandle, {
     <div
       id="write-post"
       className={cn(
-        "rounded-2xl border bg-surface shadow-card transition-[border-color,box-shadow] duration-300",
+        "rounded-2xl border bg-surface shadow-card transition-[border-color,box-shadow] duration-500",
         open ? "border-brand-line shadow-[0_0_0_4px_rgb(var(--ds-brand)/0.12),0_10px_28px_-12px_rgba(30,23,48,.22)]" : "border-line"
       )}
     >
@@ -127,8 +148,12 @@ export const Composer = forwardRef<ComposerHandle, {
           changes in one continuous motion. */}
       <div
         className={cn(
-          "grid transition-[grid-template-rows,opacity] duration-[420ms] ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none",
-          open ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
+          "grid motion-reduce:transition-none",
+          // Opening: the bar fades out quickly while its row folds away.
+          // Closing: it fades back in over the second half.
+          open
+            ? "grid-rows-[0fr] opacity-0 [transition:grid-template-rows_560ms_cubic-bezier(.65,0,.35,1),opacity_180ms_ease-out]"
+            : "grid-rows-[1fr] opacity-100 [transition:grid-template-rows_560ms_cubic-bezier(.65,0,.35,1),opacity_260ms_ease-in_240ms]"
         )}
       >
       <div className="min-h-0 overflow-hidden" inert={open} aria-hidden={open}>
@@ -156,7 +181,7 @@ export const Composer = forwardRef<ComposerHandle, {
           beat later. It stays mounted so it can animate, inert while closed. */}
       <div
         className={cn(
-          "grid transition-[grid-template-rows] duration-[420ms] ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none",
+          "grid [transition:grid-template-rows_560ms_cubic-bezier(.65,0,.35,1)] motion-reduce:transition-none",
           open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
         )}
       >
@@ -167,8 +192,12 @@ export const Composer = forwardRef<ComposerHandle, {
           aria-hidden={!open}
           noValidate
           className={cn(
-            "flex flex-col gap-3 px-[18px] pb-3.5 pt-4 transition-[opacity,transform] ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none",
-            open ? "translate-y-0 opacity-100 delay-[80ms] duration-[380ms]" : "-translate-y-1 opacity-0 duration-150"
+            "flex flex-col gap-3 px-[18px] pb-3.5 pt-4 motion-reduce:transition-none",
+            // The contents settle in after the card has started to open, and
+            // leave quickly when it closes.
+            open
+              ? "translate-y-0 opacity-100 [transition:opacity_420ms_ease-out_160ms,transform_520ms_cubic-bezier(.2,.7,.2,1)_100ms]"
+              : "-translate-y-1.5 opacity-0 [transition:opacity_160ms_ease-in,transform_200ms_ease-in]"
           )}
           onSubmit={(e) => {
             e.preventDefault();

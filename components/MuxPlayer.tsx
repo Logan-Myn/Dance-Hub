@@ -61,6 +61,17 @@ function MuxPlayerForVideo({
   // is playable. When the player fails, ask whether the video is simply
   // still processing and, if so, show that instead of the player's error,
   // then bring the player back once it's ready.
+  // `hotkeys` is a read-only token list on the player element, so React
+  // can't set it as a prop (it throws and takes the page down). Set the
+  // attribute instead.
+  const hotkeysRef = useCallback(
+    (el: HTMLElement | null) => {
+      if (!el) return;
+      if (hotkeys) el.setAttribute('hotkeys', hotkeys);
+      else el.removeAttribute('hotkeys');
+    },
+    [hotkeys]
+  );
   const [phase, setPhase] = useState<Phase>('player');
   const [playerKey, setPlayerKey] = useState(0);
   // The player stays invisible until it has loaded the video or we know why
@@ -124,7 +135,7 @@ function MuxPlayerForVideo({
           forwardSeekOffset={seekOffset}
           backwardSeekOffset={seekOffset}
           autoPlay={autoPlay}
-          hotkeys={hotkeys}
+          ref={hotkeysRef}
           onEnded={onEnded}
           accentColor={playbackRates ? '#8E57DB' : undefined}
           className={mirrored ? 'mux-mirrored' : undefined}
