@@ -14,10 +14,7 @@ interface MuxPlayerProps {
   /** Classroom extras (all optional; other players keep Mux's defaults). */
   playbackRates?: number[];
   seekOffset?: number;
-  mirrored?: boolean;
   autoPlay?: boolean;
-  /** Mux keyboard shortcuts to turn off, e.g. "nom" frees the M key. */
-  hotkeys?: string;
   onEnded?: () => void;
 }
 
@@ -51,9 +48,7 @@ function MuxPlayerForVideo({
   maxResolution = '720p',
   playbackRates,
   seekOffset,
-  mirrored = false,
   autoPlay,
-  hotkeys,
   onEnded,
 }: MuxPlayerProps) {
   // Videos are attached to a lesson as soon as the upload lands (so a long
@@ -61,17 +56,6 @@ function MuxPlayerForVideo({
   // is playable. When the player fails, ask whether the video is simply
   // still processing and, if so, show that instead of the player's error,
   // then bring the player back once it's ready.
-  // `hotkeys` is a read-only token list on the player element, so React
-  // can't set it as a prop (it throws and takes the page down). Set the
-  // attribute instead.
-  const hotkeysRef = useCallback(
-    (el: HTMLElement | null) => {
-      if (!el) return;
-      if (hotkeys) el.setAttribute('hotkeys', hotkeys);
-      else el.removeAttribute('hotkeys');
-    },
-    [hotkeys]
-  );
   const [phase, setPhase] = useState<Phase>('player');
   const [playerKey, setPlayerKey] = useState(0);
   // The player stays invisible until it has loaded the video or we know why
@@ -135,10 +119,8 @@ function MuxPlayerForVideo({
           forwardSeekOffset={seekOffset}
           backwardSeekOffset={seekOffset}
           autoPlay={autoPlay}
-          ref={hotkeysRef}
           onEnded={onEnded}
           accentColor={playbackRates ? '#8E57DB' : undefined}
-          className={mirrored ? 'mux-mirrored' : undefined}
           style={{
             position: 'absolute',
             inset: 0,

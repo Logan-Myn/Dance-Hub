@@ -19,7 +19,8 @@ Branch: `redesign/phase-3-classroom` (stacked on phase 2)
 **Course page**
 - Breadcrumb, header, owner "Course settings" and "Edit content" / "Done editing".
 - Lesson index: progress, collapsible chapters with done counts, lesson state circles, Video / Reading / Free preview. Under 1024px it is a "Lessons 4/15" button that opens a bottom sheet.
-- Player: Mux's own controls stay (the audio language menu lives there), plus speeds 0.5 to 1.25, 5 second seek, Mirror (button and M key), "Mirrored" chip, end overlay with Watch again and Complete and continue. Mux's M (mute) shortcut is turned off for this player.
+- Player: Mux's own controls stay (the audio language menu lives there), plus speeds 0.5 to 1.25, 5 second seek, end overlay with Watch again and Complete and continue.
+- Mirror (flip the video left to right) was built from the prototype, then removed after Logan's review (2026-10-05): teachers usually teach with their back to the camera, so the video already matches the student's side.
 - Lesson header ("{chapter}, lesson 3 of 15"), Mark complete / Completed (replays: Mark as watched / Watched).
 - Notes (server-sanitized HTML), "Stuck on this lesson?" box that opens the feed composer with a title, Previous / Up next with Complete and continue, Next lesson, Complete course, Back to Classroom, and a finish card with "Start {next course}".
 - Owner editing: drag-and-drop reorder kept (restyled), inline add lesson / add chapter, inline delete confirms (no more window.confirm or the delete modal), notes editor, add / replace video, audio languages, Free preview switch and Copy preview link.

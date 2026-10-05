@@ -236,7 +236,3 @@ body:has([data-phone-tabbar]) {
   --toast-offset: 80px;
 }
 
-/* Classroom: "Mirror" flips the video so members can dance along. */
-mux-player.mux-mirrored::part(video) {
-  transform: scaleX(-1);
-}

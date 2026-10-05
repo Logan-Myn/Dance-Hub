@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
   Circle,
-  FlipHorizontal2,
   Link2,
   Lock,
   MessageCircleQuestion,
@@ -103,7 +102,6 @@ export function LessonPanel({
   uploading: boolean;
   coursePublished: boolean;
 }) {
-  const [mirrored, setMirrored] = useState(false);
   const [ended, setEnded] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [autoPlay, setAutoPlay] = useState(false);
@@ -114,20 +112,6 @@ export function LessonPanel({
   const [busy, setBusy] = useState(false);
   const locked = preview && !lesson.is_preview;
   const canTrack = !preview;
-
-  // M flips the video (Mux keeps Space and the arrows).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "m" && e.key !== "M") return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const t = e.target as HTMLElement | null;
-      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-      if (!lesson.playbackId) return;
-      setMirrored((m) => !m);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [lesson.playbackId]);
 
   const saveNotes = async () => {
     setSavingNotes(true);
@@ -199,17 +183,9 @@ export function LessonPanel({
               metadata={{ video_title: lesson.title }}
               playbackRates={RATES}
               seekOffset={5}
-              hotkeys="nom"
-              mirrored={mirrored}
               autoPlay={autoPlay}
               onEnded={() => setEnded(true)}
             />
-            {mirrored && (
-              <span className="pointer-events-none absolute right-3 top-3 z-[2] inline-flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1.5 text-[12px] font-bold leading-none text-white">
-                <FlipHorizontal2 className="h-3.5 w-3.5" aria-hidden="true" />
-                Mirrored
-              </span>
-            )}
             {ended && (
               <div className="absolute inset-0 z-[3] flex flex-col items-center justify-center gap-3.5 bg-[rgba(12,8,18,.82)] p-5 text-center backdrop-blur-[4px] motion-safe:animate-scrim-in">
                 <h3 className="font-display text-[22px] font-semibold text-white">{isReplays ? "End of the class" : "Lesson finished"}</h3>
@@ -240,26 +216,11 @@ export function LessonPanel({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 border-t border-white/[.06] bg-[#1D1626] px-3 py-2 text-[12.5px] text-[#B9B0C9]">
-            <button
-              type="button"
-              aria-pressed={mirrored}
-              onClick={() => setMirrored((m) => !m)}
-              className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-semibold transition-colors",
-                mirrored ? "bg-brand/40 text-white" : "text-[#F4F0FA] hover:bg-white/10"
-              )}
-            >
-              <FlipHorizontal2 className="h-4 w-4" aria-hidden="true" />
-              Mirror
-            </button>
             <span className="hidden sm:inline">
               <kbd className={KBD}>Space</kbd> play
             </span>
             <span className="hidden sm:inline">
               <kbd className={KBD}>←</kbd> <kbd className={KBD}>→</kbd> 5 s
-            </span>
-            <span className="hidden sm:inline">
-              <kbd className={KBD}>M</kbd> mirror
             </span>
             <span className="ml-auto">Speed is in the player&apos;s menu</span>
           </div>
