@@ -20,7 +20,11 @@ interface NextLessonCardProps {
 export function NextLessonCard({ booking, canJoinVideo, timeUntil, formattedDate, timeZone, onCancel }: NextLessonCardProps) {
   return (
     <section aria-labelledby="next-lesson" className="flex flex-wrap items-center gap-4 rounded-2xl border border-brand-line bg-surface p-4 shadow-card sm:flex-nowrap sm:p-5">
-      {booking.scheduled_at && <DateTile date={booking.scheduled_at} timeZone={timeZone} className="hidden sm:flex" />}
+      {booking.scheduled_at && (
+        <div className="hidden shrink-0 sm:block">
+          <DateTile date={booking.scheduled_at} timeZone={timeZone} />
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-semibold text-brand-ink">
           Next lesson{timeUntil ? <span className="font-medium text-ink-3">, {timeUntil}</span> : null}

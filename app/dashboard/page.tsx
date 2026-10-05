@@ -231,7 +231,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-canvas">
       <div className="mx-auto flex max-w-[960px] flex-col gap-8 px-4 pb-16 pt-6 sm:px-6 sm:pt-9">
-        <header className="flex flex-wrap items-center justify-between gap-4">
+        <header className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-4">
             <InitialsAvatar id={user.id} name={displayName} imageUrl={profile?.avatar_url || user?.image || null} size={56} />
             <div className="min-w-0">
@@ -241,9 +241,9 @@ export default function DashboardPage() {
               <p className="mt-0.5 text-[14.5px] text-ink-2">{formatInTz(currentTime, userTimezone, 'EEEE d MMMM')}</p>
             </div>
           </div>
-          <Link href="/dashboard/settings" className={BTN_SECONDARY}>
+          <Link href="/dashboard/settings" className={cn(BTN_SECONDARY, "w-10 px-0 sm:w-auto sm:px-3.5")}>
             <Settings aria-hidden="true" />
-            Settings
+            <span className="sr-only sm:not-sr-only">Settings</span>
           </Link>
         </header>
 
