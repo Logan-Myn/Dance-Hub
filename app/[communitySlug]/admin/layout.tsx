@@ -27,7 +27,7 @@ export default async function AdminLayout(
   // Chrome around the admin pages is set by the child route groups
   // (with-nav) and (focused) — this layout only enforces access.
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10 lg:py-14 font-sans pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-14">
+    <div className="mx-auto max-w-[1160px] px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-1 sm:px-6 md:pb-16 md:pt-7">
       {children}
     </div>
   );

@@ -6,7 +6,6 @@ import {
   getMonthlyRevenue,
   getRevenueChart6Months,
   buildMemberGrowthSeries,
-  computeMoMGrowth,
   getLessonRevenue,
 } from '@/lib/admin-dashboard/stats';
 import {
@@ -14,12 +13,20 @@ import {
   getRecentFailedPayments,
 } from '@/lib/admin-dashboard/activity-feed';
 import type { ActivityEvent } from '@/lib/admin-dashboard/types';
-import { DashboardKpis, type DashboardStats } from '@/components/admin/DashboardKpis';
-import { DashboardChart } from '@/components/admin/DashboardChart';
-import { DashboardActivityFeed } from '@/components/admin/DashboardActivityFeed';
+import { getAttention } from '@/lib/admin/attention';
+import { getNextSevenDays, getRecentBookings, getSetup } from '@/lib/admin/overview';
+import { OverviewClient, type ActivityRow, type Kpi } from '@/components/community-admin/overview-client';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
+
+// The moment this request renders.
+function requestTime(): number {
+  return Date.now();
+}
+
+const euro = (n: number) => `€${n.toFixed(n % 1 ? 2 : 0)}`;
+const pct = (n: number) => `${n > 0 ? '+' : ''}${n}% vs last month`;
 
 type CountRow = { count: number };
 type JoinEvent = { user_id: string; display_name: string | null; avatar_url: string | null; joined_at: Date };
@@ -36,7 +43,7 @@ export default async function AdminDashboardPage(
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 
-  const now = new Date();
+  const now = new Date(requestTime());
   const thisMonth = getCalendarMonthRange(now, 0);
   const lastMonth = getCalendarMonthRange(now, -1);
   const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
@@ -156,30 +163,58 @@ export default async function AdminDashboardPage(
     `,
     getRecentFailedPayments(community.stripe_account_id ?? null, now),
   ]);
+  const [attention, upcoming, bookings] = await Promise.all([
+    getAttention(community, now),
+    getNextSevenDays(community, now),
+    getRecentBookings(community.id),
+  ]);
 
   const membersTotal = memberAggregateRow?.total ?? 0;
   const newMembersThisMonth = memberAggregateRow?.new_this_month ?? 0;
-  const newMembersLastMonth = memberAggregateRow?.new_last_month ?? 0;
   const cancellationsThisMonth = memberAggregateRow?.cancelled_this_month ?? 0;
   const cancellationsLastMonth = memberAggregateRow?.cancelled_last_month ?? 0;
   const threadsThisMonth = threadsRow?.count ?? 0;
   const commentsThisMonth = commentsRow?.count ?? 0;
 
-  const stats: DashboardStats = {
-    isPaid: community.membership_enabled ?? false,
-    monthlyRevenue: revenue.monthlyRevenue,
-    revenueGrowth: revenue.revenueGrowth,
-    lessonRevenueThisMonth: lessonRevenue.thisMonth,
-    lessonRevenueGrowth: lessonRevenue.growth,
-    lessonBookingsThisMonth: lessonRevenue.thisMonthCount,
-    membersTotal,
-    newMembersThisMonth,
-    newMembersGrowth: computeMoMGrowth(newMembersThisMonth, newMembersLastMonth),
-    cancellationsThisMonth,
-    cancellationsLastMonth,
-    postsThreadsThisMonth: threadsThisMonth,
-    postsCommentsThisMonth: commentsThisMonth,
-  };
+  const paid = !!community.membership_enabled && Number(community.membership_price ?? 0) > 0;
+  const kpis: Kpi[] = [];
+  if (paid) {
+    kpis.push({
+      label: 'Revenue this month',
+      value: euro(revenue.monthlyRevenue),
+      delta: pct(revenue.revenueGrowth),
+      tone: revenue.revenueGrowth > 0 ? 'good' : revenue.revenueGrowth < 0 ? 'bad' : 'flat',
+      trend: revenue.revenueGrowth > 0 ? 'up' : revenue.revenueGrowth < 0 ? 'down' : undefined,
+    });
+  }
+  kpis.push({
+    label: 'Active members',
+    value: String(membersTotal),
+    delta: newMembersThisMonth ? `+${newMembersThisMonth} this month` : 'No new members this month',
+    tone: newMembersThisMonth ? 'good' : 'flat',
+    trend: newMembersThisMonth ? 'up' : undefined,
+  });
+  kpis.push({
+    label: 'Private lessons',
+    value: euro(lessonRevenue.thisMonth),
+    delta: `${lessonRevenue.thisMonthCount} ${lessonRevenue.thisMonthCount === 1 ? 'booking' : 'bookings'} this month`,
+    tone: 'flat',
+  });
+  if (paid) {
+    kpis.push({
+      label: 'Cancellations',
+      value: String(cancellationsThisMonth),
+      delta: `${cancellationsLastMonth} last month`,
+      tone: cancellationsThisMonth < cancellationsLastMonth ? 'good' : cancellationsThisMonth > cancellationsLastMonth ? 'bad' : 'flat',
+    });
+  } else {
+    kpis.push({
+      label: 'Posts this month',
+      value: String(threadsThisMonth),
+      delta: `${commentsThisMonth} ${commentsThisMonth === 1 ? 'reply' : 'replies'}`,
+      tone: 'flat',
+    });
+  }
 
   const growth = buildMemberGrowthSeries({
     now,
@@ -211,22 +246,50 @@ export default async function AdminDashboardPage(
     threadId: r.id,
     categoryName: r.category_name,
   }));
+  // Cached results come back with dates as strings.
+  const failed = failedPayments.map((e) => ({ ...e, at: new Date(e.at) }));
 
-  const events = mergeActivityEvents([joins, cancels, posts, failedPayments], 10);
+  const slug = params.communitySlug;
+  const fromEvents: ActivityRow[] = mergeActivityEvents([joins, cancels, posts, failed], 12).map((e, i) => {
+    const at = e.at.toISOString();
+    switch (e.type) {
+      case 'join':
+        return { key: `j${i}`, kind: 'members', icon: 'join', at, name: e.displayName, avatarId: e.userId, avatarUrl: e.avatarUrl, title: `${e.displayName} joined`, detail: null, href: null };
+      case 'cancel':
+        return { key: `c${i}`, kind: 'members', icon: 'leave', at, name: e.displayName, avatarId: e.userId, avatarUrl: e.avatarUrl, title: `${e.displayName} left`, detail: null, href: null };
+      case 'post':
+        return {
+          key: `p${i}`, kind: 'posts', icon: 'post', at, name: e.displayName, avatarId: e.userId, avatarUrl: e.avatarUrl,
+          title: `${e.displayName} posted${e.categoryName ? ` in ${e.categoryName}` : ''}`, detail: null, href: `/${slug}?thread=${e.threadId}`,
+        };
+      default:
+        return {
+          key: `f${i}`, kind: 'payments', icon: 'failed', at, name: e.displayName, avatarId: e.userId ?? e.displayName, avatarUrl: null,
+          title: `Payment failed for ${e.displayName}`, detail: `${euro(e.amount)} declined. It's retried automatically.`, href: `/${slug}/admin/members?filter=failed`,
+        };
+    }
+  });
+  const fromBookings: ActivityRow[] = bookings.map((b) => ({
+    key: `b${b.id}`, kind: 'lessons', icon: 'lesson', at: b.at, name: b.studentName, avatarId: b.studentName, avatarUrl: null,
+    title: `${b.studentName} booked ${b.lessonTitle}`, detail: `Paid ${euro(b.pricePaid)}`, href: `/${slug}/private-lessons`,
+  }));
+  const activity = [...fromEvents, ...fromBookings].sort((x, y) => y.at.localeCompare(x.at)).slice(0, 14);
+  const setup = await getSetup(community, membersTotal, now);
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-1 duration-500 space-y-8">
-      <header>
-        <h1 className="font-display text-4xl sm:text-5xl leading-[1.05] text-foreground">
-          Dashboard
-        </h1>
-      </header>
-
-      <DashboardKpis stats={stats} />
-
-      <DashboardChart isPaid={stats.isPaid} revenue={revenueChart} growth={growth} />
-
-      <DashboardActivityFeed events={events} communitySlug={params.communitySlug} />
-    </div>
+    <OverviewClient
+      slug={slug}
+      communityName={community.name}
+      serverNow={now.getTime()}
+      attention={attention}
+      setup={setup}
+      kpis={kpis}
+      paid={paid}
+      revenue={revenueChart}
+      growth={growth}
+      activity={activity}
+      upcoming={upcoming}
+      memberCount={membersTotal}
+    />
   );
 }

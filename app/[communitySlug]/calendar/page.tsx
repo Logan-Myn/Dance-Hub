@@ -72,7 +72,7 @@ export default async function CommunityCalendarPage(
 
   return (
     <>
-      {access === 'banner' && <OfferingOffBanner />}
+      {access === 'banner' && <OfferingOffBanner slug={params.communitySlug} />}
       <CalendarClient
         slug={params.communitySlug}
         teacherName={owner?.name ?? 'the teacher'}

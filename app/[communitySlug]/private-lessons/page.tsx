@@ -73,7 +73,7 @@ export default async function CommunityPrivateLessonsPage(
 
   return (
     <>
-      {access === 'banner' && <OfferingOffBanner />}
+      {access === 'banner' && <OfferingOffBanner slug={params.communitySlug} />}
       <LessonsClient
         slug={params.communitySlug}
         teacher={{

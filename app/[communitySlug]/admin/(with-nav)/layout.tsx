@@ -1,5 +1,12 @@
 import { getCommunityBySlug } from '@/lib/community-data';
-import { AdminNav } from '@/components/admin/AdminNav';
+import { getOfferings } from '@/lib/offerings';
+import { attentionCount, getAttention } from '@/lib/admin/attention';
+import { AdminNav } from '@/components/community-admin/admin-nav';
+
+// The moment this request renders.
+function requestTime(): number {
+  return Date.now();
+}
 
 export default async function AdminWithNavLayout(
   props: {
@@ -10,18 +17,22 @@ export default async function AdminWithNavLayout(
   const params = await props.params;
   const { children } = props;
 
-  // Auth + ownership is already enforced in the parent admin/layout.tsx,
-  // but we still need the community name + slug to render the nav.
+  // Auth + ownership is already enforced in the parent admin/layout.tsx.
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 
+  const attention = await getAttention(community, new Date(requestTime()));
+  const showEmails = process.env.NEXT_PUBLIC_BROADCASTS_ENABLED === 'true' || !!community.is_broadcast_vip;
+
   return (
-    <div className="flex flex-col md:flex-row gap-3 lg:gap-4">
+    <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[224px_minmax(0,1fr)] md:gap-9">
       <AdminNav
-        communitySlug={params.communitySlug}
-        communityName={community.name}
+        slug={params.communitySlug}
+        offerings={getOfferings(community)}
+        attention={attentionCount(attention)}
+        showEmails={showEmails}
       />
-      <div className="flex-1 min-w-0">{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }

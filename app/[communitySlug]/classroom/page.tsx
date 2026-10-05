@@ -54,7 +54,7 @@ export default async function ClassroomPage(
 
   return (
     <>
-      {access === 'banner' && <OfferingOffBanner />}
+      {access === 'banner' && <OfferingOffBanner slug={params.communitySlug} />}
       <ClassroomPageClient
         communitySlug={params.communitySlug}
         teacherName={owner?.name ?? 'the teacher'}

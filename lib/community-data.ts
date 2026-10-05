@@ -30,6 +30,7 @@ export interface CommunityRow {
   offers_live_classes?: boolean | null;
   offers_courses?: boolean | null;
   offers_private_lessons?: boolean | null;
+  is_broadcast_vip?: boolean | null;
 }
 
 // cache() dedupes calls within a single server render pass. Layout and

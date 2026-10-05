@@ -96,7 +96,7 @@ export default async function CourseDetailPage(
 
   return (
     <>
-      {access === 'banner' && <OfferingOffBanner />}
+      {access === 'banner' && <OfferingOffBanner slug={params.communitySlug} />}
       <CourseDetailClient
         communitySlug={params.communitySlug}
         courseSlug={params.courseSlug}
