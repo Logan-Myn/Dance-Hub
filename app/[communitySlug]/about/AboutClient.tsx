@@ -81,6 +81,7 @@ export default function AboutClient({
   pricing,
   join: joinState,
   isOwner,
+  startEditing = false,
   viewerZone,
   serverNow,
 }: {
@@ -94,6 +95,8 @@ export default function AboutClient({
   pricing: AboutCtx["pricing"];
   join: JoinState;
   isOwner: boolean;
+  /** Admin links open the page straight in edit mode. */
+  startEditing?: boolean;
   viewerZone: string | null;
   serverNow: number;
 }) {
@@ -104,7 +107,7 @@ export default function AboutClient({
 
   const [blocks, setBlocks] = useState(initialBlocks);
   const [finalCta, setFinalCta] = useState<FinalCtaText>(initialFinalCta);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(startEditing);
   const [previewing, setPreviewing] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [addAt, setAddAt] = useState<number | null>(null);

@@ -48,9 +48,9 @@ export default function NextStepWrapper({ children }: NextStepWrapperProps) {
     <NextStep
       steps={tourSteps}
       onStepChange={(stepIndex, tourName) => {
-        if (tourName !== "onboarding") return;
+        if (!tourName?.startsWith("onboarding")) return;
 
-        const onboarding = tourSteps.find((t) => t.tour === "onboarding");
+        const onboarding = tourSteps.find((t) => t.tour === tourName);
         const step = onboarding?.steps[stepIndex];
         const selector = step?.selector;
         if (!selector) return;
@@ -84,12 +84,12 @@ export default function NextStepWrapper({ children }: NextStepWrapperProps) {
         waitAndReposition();
       }}
       onComplete={(tourName) => {
-        if (tourName === "onboarding") {
+        if (tourName?.startsWith("onboarding")) {
           markTourCompleted(extractCommunitySlug(pathname));
         }
       }}
       onSkip={(_step, tourName) => {
-        if (tourName === "onboarding") {
+        if (tourName?.startsWith("onboarding")) {
           markTourCompleted(extractCommunitySlug(pathname));
         }
       }}

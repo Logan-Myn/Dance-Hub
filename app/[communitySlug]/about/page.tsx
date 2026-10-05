@@ -40,9 +40,10 @@ export async function generateMetadata(props: { params: Promise<{ communitySlug:
 export default async function AboutPage(
   props: {
     params: Promise<{ communitySlug: string }>;
+    searchParams: Promise<{ edit?: string }>;
   }
 ) {
-  const params = await props.params;
+  const [params, searchParams] = await Promise.all([props.params, props.searchParams]);
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) notFound();
 
@@ -117,6 +118,7 @@ export default async function AboutPage(
         accessEndDate: membership?.subscriptionStatus === 'canceling' ? membership.currentPeriodEnd : null,
       }}
       isOwner={isOwner}
+      startEditing={isOwner && searchParams.edit === '1'}
       viewerZone={chosenZone(viewerProfile?.timezone)}
       serverNow={now}
     />

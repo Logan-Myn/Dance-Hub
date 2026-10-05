@@ -1,12 +1,13 @@
 import { Tour } from 'nextstepjs';
+import type { Offerings } from './offerings';
 
-export const tourSteps: Tour[] = [
+const baseTours: Tour[] = [
   {
     tour: 'onboarding',
     steps: [
       {
         icon: '👋',
-        title: 'Welcome to Your Community!',
+        title: 'Welcome to your community',
         content: 'Congratulations on creating your dance community! Let me show you around the key features to help you get started.',
         selector: '#community-header',
         side: 'bottom',
@@ -39,8 +40,8 @@ export const tourSteps: Tour[] = [
       },
       {
         icon: '🧭',
-        title: 'Navigate Your Community',
-        content: 'Use these tabs to move between discussions, classroom, private lessons, calendar, and the community info page.',
+        title: 'Find your way around',
+        content: 'Use these tabs to move between the community feed, your classroom, private lessons, the calendar and your About page.',
         selector: '#navigation-tab-buttons',
         side: 'bottom',
         showControls: true,
@@ -50,7 +51,7 @@ export const tourSteps: Tour[] = [
       },
       {
         icon: '🎓',
-        title: 'Your Classroom',
+        title: 'Your classroom',
         content: 'The Classroom tab is where you can share structured learning content, tutorials, and courses for your students.',
         selector: '#tab-classroom',
         side: 'bottom',
@@ -61,7 +62,7 @@ export const tourSteps: Tour[] = [
       },
       {
         icon: '🕺',
-        title: 'Private Lessons',
+        title: 'Private lessons',
         content: 'The Private Lessons tab is where you can offer and manage one-on-one sessions for your community members.',
         selector: '#tab-private-lessons',
         side: 'bottom',
@@ -83,7 +84,7 @@ export const tourSteps: Tour[] = [
       },
       {
         icon: '📅',
-        title: 'Calendar & Live Classes',
+        title: 'Calendar and live classes',
         content: 'Use the Calendar tab to schedule and run live group classes for your members. Recurring weekly slots and one-off classes both live here.',
         selector: '#tab-calendar',
         side: 'bottom',
@@ -94,8 +95,8 @@ export const tourSteps: Tour[] = [
       },
       {
         icon: 'ℹ️',
-        title: 'Community Information',
-        content: 'The About tab contains your community description, rules, and other important information for new members.',
+        title: 'Your About page',
+        content: 'The About page is what visitors see before they join. It fills itself from what you offer, and you can add a welcome video and your story.',
         selector: '#tab-about',
         side: 'bottom',
         showControls: true,
@@ -105,7 +106,7 @@ export const tourSteps: Tour[] = [
       },
       {
         icon: '⚙️',
-        title: 'Manage Community',
+        title: 'Manage your community',
         content: 'Click here to open the admin dashboard, where you can configure every part of your community.',
         selector: '#manage-community-button',
         side: 'top',
@@ -116,8 +117,8 @@ export const tourSteps: Tour[] = [
       },
       {
         icon: '🎨',
-        title: 'General Settings',
-        content: 'In the General section, you can update your community name, description, and branding to reflect your teaching style. You can also add custom links to share external resources with your community.',
+        title: 'Community details',
+        content: 'Change your community name, description and cover image here, and add links to your website or social profiles.',
         selector: '#settings-general',
         side: 'left',
         showControls: true,
@@ -127,8 +128,8 @@ export const tourSteps: Tour[] = [
       },
       {
         icon: '💳',
-        title: 'Subscription Settings',
-        content: 'Set up your subscription pricing and billing options to monetize your community and teaching content.',
+        title: 'Pricing and payouts',
+        content: 'Choose a free or paid membership, set your prices, and connect the bank account your payouts go to.',
         selector: '#settings-subscriptions',
         side: 'left',
         showControls: true,
@@ -138,8 +139,8 @@ export const tourSteps: Tour[] = [
       },
       {
         icon: '🏷️',
-        title: 'Thread Categories',
-        content: 'Organize your community discussions with custom thread categories. Create as many as you need (techniques, events, music, anything that fits your community). They appear as filter pills above your feed.',
+        title: 'Post topics',
+        content: 'Topics organise the feed, like Questions, Practice clips or Events. Members pick one when they post, and they show as filters above the feed.',
         selector: '#settings-thread_categories',
         side: 'left',
         showControls: true,
@@ -149,7 +150,7 @@ export const tourSteps: Tour[] = [
       },
       {
         icon: '👥',
-        title: 'Track Your Growth',
+        title: 'Watch your community grow',
         content: 'Keep an eye on your member count here. Watch it grow as more dancers discover your community!',
         selector: '#member-count',
         side: 'top',
@@ -161,3 +162,31 @@ export const tourSteps: Tour[] = [
     ],
   },
 ];
+
+// Steps that point at a tab for an offering; the tab isn't there when it's off.
+const OFFERING_SELECTORS: Record<keyof Offerings, string[]> = {
+  courses: ['#tab-classroom'],
+  privateLessons: ['#tab-private-lessons', '#manage-private-lessons'],
+  liveClasses: ['#tab-calendar'],
+};
+
+const KEYS = ['liveClasses', 'courses', 'privateLessons'] as const;
+
+/** The onboarding tour to start for these offerings ("onboarding" when all are on). */
+export function onboardingTourName(o: Offerings): string {
+  const mask = KEYS.map((k) => (o[k] ? '1' : '0')).join('');
+  return mask === '111' ? 'onboarding' : `onboarding-${mask}`;
+}
+
+const onboarding = baseTours.find((t) => t.tour === 'onboarding')!;
+const variants: Tour[] = [];
+for (let n = 0; n < 7; n++) {
+  const o = { liveClasses: !!(n & 4), courses: !!(n & 2), privateLessons: !!(n & 1) };
+  const hidden = KEYS.filter((k) => !o[k]).flatMap((k) => OFFERING_SELECTORS[k]);
+  variants.push({
+    tour: onboardingTourName(o),
+    steps: onboarding.steps.filter((s) => !s.selector || !hidden.includes(s.selector)),
+  });
+}
+
+export const tourSteps: Tour[] = [...baseTours, ...variants];

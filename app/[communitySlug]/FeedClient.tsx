@@ -39,6 +39,7 @@ import { isNewPost } from "@/lib/feed/visits";
 import { sortPosts, type FeedSort } from "@/lib/feed/posts";
 import { registerPageSearch } from "@/lib/feed/search-slot";
 import type { Offerings } from "@/lib/offerings";
+import { onboardingTourName } from "@/lib/tourSteps";
 import type { MembershipStatus } from "@/lib/community-data";
 import { communityPath } from "@/lib/safe-redirect";
 
@@ -163,16 +164,17 @@ export default function FeedClient({
   const { startNextStep, currentTour } = useNextStep();
   const tourScheduled = useRef(false);
   useEffect(() => {
-    if (!isCreator || tourScheduled.current || currentTour === "onboarding") return;
+    if (!isCreator || tourScheduled.current || currentTour?.startsWith("onboarding")) return;
     try {
       if (localStorage.getItem(`onboarding-tour-completed-${slug}`)) return;
     } catch {
       return;
     }
     tourScheduled.current = true;
-    const timer = setTimeout(() => startNextStep("onboarding"), 1500);
+    const tour = onboardingTourName(offerings);
+    const timer = setTimeout(() => startNextStep(tour), 1500);
     return () => clearTimeout(timer);
-  }, [isCreator, slug, startNextStep, currentTour]);
+  }, [isCreator, slug, startNextStep, currentTour, offerings]);
 
   // ?thread=<id> opens that post (links from notifications and the admin)
   // until it is closed.
