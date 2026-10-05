@@ -37,18 +37,5 @@ export default async function ThreadCategoriesPage(
     ? (community.thread_categories as ThreadCategory[])
     : [];
 
-  return (
-    <div className="animate-in fade-in slide-in-from-bottom-1 duration-500">
-      <header className="mb-10">
-        <h1 className="font-display text-4xl sm:text-5xl leading-[1.05] text-foreground">
-          Thread Categories
-        </h1>
-      </header>
-
-      <ThreadCategoriesEditor
-        communitySlug={params.communitySlug}
-        initialCategories={categories}
-      />
-    </div>
-  );
+  return <ThreadCategoriesEditor communitySlug={params.communitySlug} initialCategories={categories} />;
 }

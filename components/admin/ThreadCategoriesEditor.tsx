@@ -3,178 +3,160 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
-import { Plus } from "lucide-react";
-import { TagIcon } from "@heroicons/react/24/outline";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { DraggableCategory } from "@/components/DraggableCategory";
-import { Button } from "@/components/ui/button";
+import { ArrowDown, ArrowUp, Eye, Lock, Plus, Trash2 } from "lucide-react";
+import { BTN_PRIMARY } from "@/components/community-feed/feed-header";
+import { Card, Screen, ScreenHead } from "@/components/community-admin/ui";
+import { FIELD_INPUT } from "@/components/ds/app-dialog";
+import { EmptyState } from "@/components/ds/empty-state";
+import { SaveBar } from "@/components/ds/save-bar";
+import { Switch } from "@/components/ds/switch";
 import { CATEGORY_ICONS } from "@/lib/constants";
 import type { ThreadCategory } from "@/types/community";
+import { cn } from "@/lib/utils";
+
+const ICON_BTN = "grid h-8 w-8 place-items-center rounded-lg text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-40";
 
 interface ThreadCategoriesEditorProps {
   communitySlug: string;
   initialCategories: ThreadCategory[];
 }
 
-export function ThreadCategoriesEditor({
-  communitySlug,
-  initialCategories,
-}: ThreadCategoriesEditorProps) {
+/**
+ * Post topics. The API replaces the whole `thread_categories` array, so edits
+ * stay local until Save; the save bar shows while there are changes.
+ */
+export function ThreadCategoriesEditor({ communitySlug, initialCategories }: ThreadCategoriesEditorProps) {
   const router = useRouter();
+  const [saved, setSaved] = useState<ThreadCategory[]>(initialCategories);
   const [categories, setCategories] = useState<ThreadCategory[]>(initialCategories);
+  const [saving, setSaving] = useState(false);
+  const dirty = JSON.stringify(saved) !== JSON.stringify(categories);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  // Ported verbatim from CommunitySettingsModal.tsx lines 919-987. The API
-  // surface is a single PUT /api/community/[slug]/categories that replaces the
-  // entire JSONB `thread_categories` array on the communities row, so add /
-  // remove / edit / reorder all mutate local state first and the user commits
-  // with the "Save Categories" button.
-  const handleAddCategory = () => {
-    const newCategory: ThreadCategory = {
-      id: crypto.randomUUID(),
-      name: "",
-      iconType:
-        CATEGORY_ICONS[Math.floor(Math.random() * CATEGORY_ICONS.length)].label,
-      color: "#000000",
-    };
-    setCategories([...categories, newCategory]);
+  const add = () => {
+    const preset = CATEGORY_ICONS[categories.length % CATEGORY_ICONS.length];
+    const id = crypto.randomUUID();
+    setCategories([...categories, { id, name: "", iconType: preset.label, color: preset.color }]);
+    requestAnimationFrame(() => document.getElementById(`topic-${id}`)?.focus());
+  };
+  const change = (id: string, patch: Partial<ThreadCategory>) => setCategories(categories.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  const move = (i: number, dir: -1 | 1) => {
+    const next = [...categories];
+    const j = i + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[i], next[j]] = [next[j], next[i]];
+    setCategories(next);
   };
 
-  const handleRemoveCategory = (id: string) => {
-    setCategories(categories.filter((cat) => cat.id !== id));
-  };
-
-  const handleCategoryChange = (
-    id: string,
-    field: keyof ThreadCategory,
-    value: string | boolean
-  ) => {
-    setCategories(
-      categories.map((cat) =>
-        cat.id === id ? { ...cat, [field]: value } : cat
-      )
-    );
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-
-    if (active.id !== over.id) {
-      setCategories((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
-      });
+  const save = async () => {
+    if (categories.some((c) => !c.name.trim())) {
+      toast.error("Give every topic a name, or delete the empty one.");
+      return;
     }
-  };
-
-  const handleSaveCategories = async () => {
+    setSaving(true);
     try {
-      const response = await fetch(
-        `/api/community/${communitySlug}/categories`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ categories }),
-        }
-      );
-
-      if (!response.ok) throw new Error("Failed to update categories");
-
-      toast.success("Categories updated successfully");
-      // Refresh so the RSC re-reads `communities.thread_categories` and the
-      // persisted order survives navigation away and back.
+      const clean = categories.map((c) => ({ ...c, name: c.name.trim() }));
+      const response = await fetch(`/api/community/${communitySlug}/categories`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categories: clean }),
+      });
+      if (!response.ok) throw new Error();
+      setSaved(clean);
+      setCategories(clean);
+      toast.success("Topics saved");
       router.refresh();
-    } catch (error) {
-      console.error("Error updating categories:", error);
-      toast.error("Failed to update categories");
+    } catch {
+      toast.error("Couldn't save the topics. Try again.");
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <div id="settings-thread_categories" className="space-y-6">
-      {/* Header with Add button */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Organize your community discussions with custom categories
-        </p>
-        <Button
-          onClick={handleAddCategory}
-          variant="outline"
-          size="sm"
-          className="rounded-xl border-border/50 hover:bg-primary/5 hover:border-primary/30 transition-all"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Category
-        </Button>
-      </div>
-
-      {/* Categories List */}
-      <div className="bg-card rounded-2xl border border-border/50 overflow-hidden">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={categories.map((cat) => cat.id)}
-            strategy={verticalListSortingStrategy}
+    <Screen>
+      <ScreenHead
+        title="Post topics"
+        sub="The topics members pick when they post. Your colors show on every post and filter."
+        actions={
+          <button type="button" className={BTN_PRIMARY} onClick={add}>
+            <Plus aria-hidden="true" />
+            Add topic
+          </button>
+        }
+      />
+      <div id="settings-thread_categories">
+        {categories.length === 0 ? (
+          <EmptyState
+            icon={<Plus className="h-7 w-7" />}
+            title="No topics yet"
+            actions={
+              <button type="button" className={BTN_PRIMARY} onClick={add}>
+                <Plus aria-hidden="true" />
+                Add topic
+              </button>
+            }
           >
-            {categories.length > 0 ? (
-              <div className="divide-y divide-border/50">
-                {categories.map((category) => (
-                  <DraggableCategory
-                    key={category.id}
-                    category={category}
-                    onRemove={handleRemoveCategory}
-                    onChange={handleCategoryChange}
+            Topics help members find posts, like Questions, Practice clips or Events. Members can still post without one.
+          </EmptyState>
+        ) : (
+          <Card as="section" aria-label="Topics">
+            <ul className="divide-y divide-line">
+              {categories.map((c, i) => (
+                <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-2.5 px-4 py-3 sm:px-5">
+                  <input
+                    type="color"
+                    value={c.color || "#8E57DB"}
+                    onChange={(e) => change(c.id, { color: e.target.value })}
+                    aria-label={`Color for ${c.name || "this topic"}`}
+                    className="h-9 w-9 shrink-0 cursor-pointer rounded-lg border border-line bg-surface p-1"
                   />
-                ))}
-              </div>
-            ) : (
-              <div className="p-12 text-center">
-                <TagIcon className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-                <p className="text-muted-foreground">
-                  No categories yet. Add some to help organize threads.
-                </p>
-              </div>
-            )}
-          </SortableContext>
-        </DndContext>
+                  <input
+                    id={`topic-${c.id}`}
+                    value={c.name}
+                    onChange={(e) => change(c.id, { name: e.target.value })}
+                    placeholder="Topic name"
+                    aria-label="Topic name"
+                    maxLength={40}
+                    className={cn(FIELD_INPUT, "h-9 min-w-[160px] flex-1 py-0")}
+                  />
+                  <Switch checked={!!c.creatorOnly} onChange={(v) => change(c.id, { creatorOnly: v })} label="Only you can post" />
+                  <span className="ml-auto flex items-center">
+                    <button type="button" className={ICON_BTN} aria-label={`Move ${c.name || "topic"} up`} disabled={i === 0} onClick={() => move(i, -1)}>
+                      <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <button type="button" className={ICON_BTN} aria-label={`Move ${c.name || "topic"} down`} disabled={i === categories.length - 1} onClick={() => move(i, 1)}>
+                      <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(ICON_BTN, "hover:bg-live-soft hover:text-live")}
+                      aria-label={`Delete ${c.name || "topic"}`}
+                      onClick={() => setCategories(categories.filter((x) => x.id !== c.id))}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-line bg-surface-2 px-5 py-3.5">
+              <span className="mr-1 inline-flex w-full items-center gap-1.5 text-[12.5px] font-semibold text-ink-3 sm:w-auto">
+                <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                How members see them
+              </span>
+              {categories.map((c) => (
+                <span key={c.id} className="inline-flex h-[30px] items-center gap-[7px] rounded-full border border-line bg-surface px-[11px] text-[13.5px] font-medium text-ink-2">
+                  <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color || "#8E57DB" }} />
+                  {c.name || "Untitled"}
+                  {c.creatorOnly && <Lock className="h-3 w-3 text-ink-3" aria-label="Only you can post" />}
+                </span>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
-
-      {/* Save Button */}
-      {categories.length > 0 && (
-        <Button
-          onClick={handleSaveCategories}
-          className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm hover:shadow-md transition-all duration-200"
-        >
-          Save Categories
-        </Button>
-      )}
-    </div>
+      <p className="text-[13.5px] text-ink-3">Deleting a topic keeps its posts.</p>
+      <SaveBar show={dirty} saving={saving} onSave={save} onDiscard={() => setCategories(saved)} saveLabel="Save topics" />
+    </Screen>
   );
 }
