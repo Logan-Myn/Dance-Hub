@@ -182,7 +182,7 @@ export default async function AdminDashboardPage(
     kpis.push({
       label: 'Revenue this month',
       value: euro(revenue.monthlyRevenue),
-      delta: pct(revenue.revenueGrowth),
+      delta: revenue.monthlyRevenue === 0 && revenue.revenueGrowth === 0 ? 'No payments yet this month' : pct(revenue.revenueGrowth),
       tone: revenue.revenueGrowth > 0 ? 'good' : revenue.revenueGrowth < 0 ? 'bad' : 'flat',
       trend: revenue.revenueGrowth > 0 ? 'up' : revenue.revenueGrowth < 0 ? 'down' : undefined,
     });
