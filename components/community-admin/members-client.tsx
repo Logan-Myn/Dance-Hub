@@ -246,10 +246,10 @@ export function MembersClient({
       </div>
 
       <Card className="overflow-hidden">
-        <table className="w-full text-left text-[14px]">
+        <table className="w-full table-fixed text-left text-[14px]">
           <thead className="border-b border-line bg-surface-2 text-[13px]">
             <tr>
-              <th scope="col" className="w-10 py-2.5 pl-4 pr-1">
+              <th scope="col" className="w-11 py-2.5 pl-4 pr-1">
                 <input
                   type="checkbox"
                   aria-label="Select everyone shown"
@@ -267,16 +267,16 @@ export function MembersClient({
               <th scope="col" className="px-3 py-2.5">
                 {sortButton("name", "Member")}
               </th>
-              <th scope="col" className="hidden px-3 py-2.5 font-semibold text-ink-2 sm:table-cell">
+              <th scope="col" className="hidden w-[170px] px-3 py-2.5 font-semibold text-ink-2 sm:table-cell">
                 Status
               </th>
-              <th scope="col" className="hidden px-3 py-2.5 md:table-cell">
+              <th scope="col" className="hidden w-[130px] px-3 py-2.5 md:table-cell">
                 {sortButton("joined", "Joined")}
               </th>
-              <th scope="col" className="hidden px-3 py-2.5 lg:table-cell">
+              <th scope="col" className="hidden w-[130px] px-3 py-2.5 lg:table-cell">
                 {sortButton("last", "Last active")}
               </th>
-              <th scope="col" className="hidden px-3 py-2.5 pr-4 font-semibold text-ink-2 lg:table-cell">
+              <th scope="col" className="hidden w-[120px] px-3 py-2.5 pr-4 font-semibold text-ink-2 lg:table-cell">
                 {showCourses ? "Lessons done" : "Posts"}
               </th>
             </tr>
@@ -313,7 +313,7 @@ export function MembersClient({
                         className="h-4 w-4 accent-[rgb(var(--ds-brand))]"
                       />
                     </td>
-                    <td className="max-w-0 px-3 py-2.5">
+                    <td className="px-3 py-2.5">
                       <button type="button" onClick={() => setOpenId(m.id)} className="flex w-full min-w-0 items-center gap-2.5 text-left">
                         <InitialsAvatar id={m.userId} name={m.name} imageUrl={m.avatarUrl} size={32} />
                         <span className="min-w-0">
@@ -332,7 +332,7 @@ export function MembersClient({
                       </Pill>
                     </td>
                     <td className="hidden whitespace-nowrap px-3 py-2.5 tabular-nums text-ink-2 md:table-cell">{day(m.joinedAt, timeZone)}</td>
-                    <td className="hidden whitespace-nowrap px-3 py-2.5 text-ink-2 lg:table-cell">{m.lastActive ? timeAgo(m.lastActive, now, timeZone) : "Not yet"}</td>
+                    <td className="hidden whitespace-nowrap px-3 py-2.5 text-ink-2 lg:table-cell">{m.lastActive ? timeAgo(m.lastActive, now, timeZone) : "Not recorded"}</td>
                     <td className="hidden px-3 py-2.5 pr-4 tabular-nums text-ink-2 lg:table-cell">{showCourses ? m.lessonsDone : m.posts}</td>
                   </tr>
                 );
@@ -411,7 +411,7 @@ export function MembersClient({
               <dt className="text-ink-2">Plan</dt>
               <dd className="text-right text-ink">{open.hasSubscription ? "Paid membership" : "Free"}</dd>
               <dt className="text-ink-2">Last active</dt>
-              <dd className="text-right text-ink">{open.lastActive ? timeAgo(open.lastActive, now, timeZone) : "Not yet"}</dd>
+              <dd className="text-right text-ink">{open.lastActive ? timeAgo(open.lastActive, now, timeZone) : "Not recorded"}</dd>
             </dl>
             <section aria-labelledby="m-activity" className="flex flex-col gap-2.5 border-t border-line pt-4">
               <h3 id="m-activity" className="text-[13px] font-semibold text-ink-2">
