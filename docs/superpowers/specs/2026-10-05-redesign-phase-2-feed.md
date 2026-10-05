@@ -78,3 +78,4 @@ Remind me, "Add every Sunday class" (.ics), dancers-in-the-room count, clip/phot
 - The owner's header button says "Invite"; members see "Invite a friend".
 - The membership card says "Paid membership" without a price: the price a member pays can differ (promo codes, older prices) and only billing knows it.
 - Search covers posts; people are found through the author name.
+- After Logan's review (2026-10-05): a post's replies start loading when the pointer reaches it (or a finger touches it) and are kept for a minute, so the thread opens with them. While they load, placeholder rows show instead of "No replies yet".

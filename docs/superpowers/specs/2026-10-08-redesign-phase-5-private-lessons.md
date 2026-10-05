@@ -35,3 +35,4 @@ Branch: `redesign/phase-5-private-lessons` (stacked on phase 4)
 - `/book` 409s for a taken slot carry `code: "slot_taken"` (no change to how payments work); other refusals (monthly limit, hidden lesson) show the server's message.
 - A time paid for during the visit stays hidden until the booking is recorded, so it can't be paid twice by mistake.
 - In-person lessons don't show "Join lesson".
+- After Logan's review (2026-10-05): past lessons show the 3 most recent, then "Show all N past lessons", under a "Past lessons" heading when there are upcoming ones too.
