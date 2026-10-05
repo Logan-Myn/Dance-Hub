@@ -14,10 +14,10 @@ export default async function AdminFocusedLayout(
     <div className="space-y-6">
       <Link
         href={`/${params.communitySlug}/admin/subscriptions`}
-        className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+        className="inline-flex items-center gap-2 text-sm font-medium text-ink-2 hover:text-ink transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to Subscriptions
+        Back to pricing and payouts
       </Link>
       <div>{children}</div>
     </div>

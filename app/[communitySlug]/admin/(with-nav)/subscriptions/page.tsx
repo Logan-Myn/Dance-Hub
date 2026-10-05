@@ -37,24 +37,16 @@ export default async function SubscriptionsPage(
   if (!community) return null;
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-1 duration-500">
-      <header className="mb-10">
-        <h1 className="font-display text-4xl sm:text-5xl leading-[1.05] text-foreground">
-          Subscriptions
-        </h1>
-      </header>
-
-      <SubscriptionsEditor
-        communityId={community.id}
-        communitySlug={params.communitySlug}
-        initialStripeAccountId={community.stripe_account_id}
-        initialMembershipEnabled={community.membership_enabled ?? false}
-        initialMembershipPrice={community.membership_price ?? 0}
-        initialYearlyEnabled={community.yearly_enabled ?? false}
-        initialYearlyPrice={community.yearly_price ?? 0}
-        initialYearlyBenefits={community.yearly_benefits ?? ""}
-        communityCreatedAt={community.created_at}
-      />
-    </div>
+    <SubscriptionsEditor
+      communityId={community.id}
+      communitySlug={params.communitySlug}
+      initialStripeAccountId={community.stripe_account_id}
+      initialMembershipEnabled={community.membership_enabled ?? false}
+      initialMembershipPrice={community.membership_price ?? 0}
+      initialYearlyEnabled={community.yearly_enabled ?? false}
+      initialYearlyPrice={community.yearly_price ?? 0}
+      initialYearlyBenefits={community.yearly_benefits ?? ""}
+      communityCreatedAt={community.created_at}
+    />
   );
 }

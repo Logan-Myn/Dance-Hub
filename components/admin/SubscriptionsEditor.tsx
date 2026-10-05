@@ -3,11 +3,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
-import { Loader2, TrendingUp } from "lucide-react";
-import { CreditCardIcon } from "@heroicons/react/24/outline";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { AlertTriangle, Banknote, CheckCircle2, Loader2, TrendingUp } from "lucide-react";
+import { BTN_GHOST, BTN_PRIMARY, BTN_SECONDARY } from "@/components/community-feed/feed-header";
+import { Card, Screen, ScreenHead } from "@/components/community-admin/ui";
+import { FIELD_INPUT, FIELD_LABEL } from "@/components/ds/app-dialog";
+import { Pill } from "@/components/ds/pill";
+import { SaveBar } from "@/components/ds/save-bar";
+import { Skeleton } from "@/components/ds/skeleton";
+import { Switch } from "@/components/ds/switch";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { PayoutScheduleForm } from "@/components/admin/PayoutScheduleForm";
 import { communityPath } from "@/lib/safe-redirect";
@@ -123,6 +127,7 @@ export function SubscriptionsEditor({
   const [isYearlyEnabled, setIsYearlyEnabled] = useState(initialYearlyEnabled);
   const [yearlyPrice, setYearlyPrice] = useState(initialYearlyPrice);
   const [yearlyBenefits, setYearlyBenefits] = useState(initialYearlyBenefits);
+  const [isSavingPrice, setIsSavingPrice] = useState(false);
 
   // Live Stripe state — fetched client-side on mount + whenever stripeAccountId
   // changes (ported from modal lines 299-358). Server-side RSC cannot cache
@@ -252,7 +257,7 @@ export function SubscriptionsEditor({
         setPayoutData(data);
       } catch (error) {
         console.error("Error fetching payout data:", error);
-        toast.error("Failed to fetch payout data");
+        toast.error("Couldn't load your payouts. Reload the page.");
       } finally {
         setIsLoadingPayouts(false);
       }
@@ -275,7 +280,7 @@ export function SubscriptionsEditor({
         setBankAccount(data);
       } catch (error) {
         console.error("Error fetching bank account:", error);
-        toast.error("Failed to fetch bank account details");
+        toast.error("Couldn't load your bank account. Reload the page.");
       } finally {
         setIsLoadingBank(false);
       }
@@ -305,20 +310,18 @@ export function SubscriptionsEditor({
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to access Stripe dashboard");
+        throw new Error(error.error || "Couldn't open your payout account. Try again.");
       }
 
       const { url, requiresOnboarding, accountType, message } =
         await response.json();
 
       if (requiresOnboarding) {
-        toast.success(
-          "Completing Stripe setup first, then you can manage your bank account"
-        );
+        toast.success("Finish setting up payouts first, then you can manage your bank account");
       } else if (message) {
         toast.success(message);
       } else if (accountType === "custom") {
-        toast.success("Opening Stripe Dashboard to manage your bank account");
+        toast.success("Opening your payout account");
       }
 
       window.location.href = url;
@@ -327,7 +330,7 @@ export function SubscriptionsEditor({
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to access Stripe dashboard"
+          : "Couldn't open your payout account. Try again."
       );
     } finally {
       setIsUpdatingIban(false);
@@ -338,12 +341,12 @@ export function SubscriptionsEditor({
   // (modal lines 564-616).
   const handleSubmitIbanUpdate = useCallback(async () => {
     if (!stripeAccountId || !newIban || !newAccountHolderName) {
-      toast.error("Please fill in all required fields");
+      toast.error("Fill in the IBAN and the account holder name.");
       return;
     }
 
     if (!session) {
-      toast.error("You must be logged in to update bank account");
+      toast.error("Sign in again to change your bank account.");
       return;
     }
 
@@ -379,7 +382,7 @@ export function SubscriptionsEditor({
       setNewIban("");
       setNewAccountHolderName("");
 
-      toast.success(message || "Bank account updated successfully!");
+      toast.success(message || "Bank account replaced");
     } catch (error) {
       console.error("Error updating IBAN:", error);
       toast.error(
@@ -415,7 +418,7 @@ export function SubscriptionsEditor({
       window.location.href = url;
     } catch (error) {
       console.error("Error creating update link:", error);
-      toast.error("Failed to open verification form");
+      toast.error("Couldn't open the verification form. Try again.");
     }
   }, [stripeAccountId]);
 
@@ -454,7 +457,7 @@ export function SubscriptionsEditor({
         throw new Error(data.error || "Failed to update price");
       }
 
-      toast.success("Membership settings updated successfully");
+      toast.success("Prices saved");
       router.refresh();
     } catch (error) {
       console.error("Error updating price:", error);
@@ -464,517 +467,373 @@ export function SubscriptionsEditor({
     }
   }, [communitySlug, price, isMembershipEnabled, isYearlyEnabled, yearlyPrice, yearlyBenefits, router]);
 
-  // --- Render helpers ported from modal ---
+  // --- Render ---
 
-  const renderStripeConnectionStatus = () => (
-    <div className="space-y-6">
-      {/* Custom Onboarding Option - Fluid Movement style */}
-      <div className="bg-primary/5 border border-primary/20 rounded-2xl p-8">
-        <div className="text-center space-y-5">
-          <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
-            <CreditCardIcon className="h-7 w-7 text-primary" />
-          </div>
-          <div>
-            <h4 className="font-display text-xl font-semibold text-foreground">
-              Complete Stripe Setup
-            </h4>
-            <p className="text-sm text-muted-foreground mt-3 max-w-md mx-auto">
-              To enable paid memberships, you&apos;ll need to complete Stripe
-              onboarding. This secure process requires business information,
-              identity verification, and bank details.
-            </p>
-          </div>
-          <Button
-            onClick={handleStartCustomOnboarding}
-            className="w-full max-w-sm h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm hover:shadow-md transition-all duration-200"
-          >
-            <CreditCardIcon className="mr-2 h-5 w-5" />
-            Start Stripe Setup
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderMembershipSettings = () => (
-    <div className="space-y-6">
-      {/* Stripe Requirements Alert - Fluid Movement style */}
-      {stripeAccountId && !stripeAccountStatus.isEnabled && (
-        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-5">
-          <div className="flex gap-4">
-            <div className="flex-shrink-0">
-              <div className="h-10 w-10 rounded-xl bg-yellow-500/20 flex items-center justify-center">
-                <svg
-                  className="h-5 w-5 text-yellow-600"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-            </div>
-            <div className="flex-1">
-              <h3 className="font-display text-base font-semibold text-yellow-800 dark:text-yellow-200">
-                Complete Stripe Setup Required
-              </h3>
-              <p className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                Complete your Stripe account setup to enable subscriptions and
-                receive payments.
-              </p>
-              {stripeAccountStatus.details?.requirements && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {stripeAccountStatus.details.requirements.currentlyDue.length >
-                    0 && (
-                    <span className="px-3 py-1 text-xs font-medium rounded-full bg-yellow-500/20 text-yellow-800">
-                      {
-                        stripeAccountStatus.details.requirements.currentlyDue
-                          .length
-                      }{" "}
-                      requirement(s) due
-                    </span>
-                  )}
-                  {stripeAccountStatus.details.requirements.pastDue.length >
-                    0 && (
-                    <span className="px-3 py-1 text-xs font-medium rounded-full bg-destructive/20 text-destructive">
-                      {stripeAccountStatus.details.requirements.pastDue.length}{" "}
-                      past due
-                    </span>
-                  )}
-                </div>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCompleteVerification}
-                className="mt-4 rounded-lg bg-yellow-500/20 text-yellow-800 border-yellow-500/30 hover:bg-yellow-500/30 transition-all"
-              >
-                Complete Stripe Setup
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Membership Toggle Card */}
-      <div className="bg-card rounded-2xl p-6 border border-border/50 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h4 className="font-display text-lg font-semibold text-foreground">
-              Paid Membership
-            </h4>
-            <p className="text-sm text-muted-foreground mt-1">
-              Enable paid membership for your community
-            </p>
-          </div>
-          <Switch
-            checked={isMembershipEnabled}
-            onCheckedChange={setIsMembershipEnabled}
-            disabled={!stripeAccountStatus.isEnabled}
-          />
-        </div>
-
-        {isMembershipEnabled && (
-          <div className="space-y-4 pt-4 border-t border-border/50">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Monthly Membership Price
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <span className="text-muted-foreground font-medium">€</span>
-                </div>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={price || ''}
-                  onChange={(e) => setPrice(Number(e.target.value))}
-                  className="pl-8 rounded-xl border-border/50"
-                  placeholder="0.00"
-                />
-              </div>
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                Set the monthly price for your community membership
-              </p>
-            </div>
-
-            <div className="pt-4 border-t border-border/50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="block text-sm font-medium text-foreground">
-                    Offer a yearly plan
-                  </label>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Add an annual option members can pick instead of paying monthly.
-                  </p>
-                </div>
-                <Switch checked={isYearlyEnabled} onCheckedChange={setIsYearlyEnabled} />
-              </div>
-
-              {isYearlyEnabled && (
-                <div className="space-y-4 mt-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Yearly Membership Price
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <span className="text-muted-foreground font-medium">€</span>
-                      </div>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={yearlyPrice || ''}
-                        onChange={(e) => setYearlyPrice(Number(e.target.value))}
-                        className="pl-8 rounded-xl border-border/50"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <p className="mt-1.5 text-xs text-muted-foreground">
-                      Tip: pricing the year at about 10x the monthly price gives members roughly 2 months free.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      What members get with the yearly plan{' '}
-                      <span className="font-normal text-muted-foreground">(optional)</span>
-                    </label>
-                    <textarea
-                      value={yearlyBenefits}
-                      onChange={(e) => setYearlyBenefits(e.target.value)}
-                      rows={3}
-                      className="w-full rounded-xl border border-border/50 bg-background p-3 text-sm"
-                      placeholder="e.g. 2 months free plus one private class."
-                    />
-                    <p className="mt-1.5 text-xs text-muted-foreground">
-                      Shown to members when they choose a plan.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {!isMembershipEnabled && (
-          <div className="bg-muted/30 p-4 rounded-xl">
-            <p className="text-sm text-muted-foreground">
-              Your community is currently free to join. Enable paid membership
-              to start monetizing your community.
-            </p>
-          </div>
-        )}
-
-        <Button
-          onClick={handlePriceUpdate}
-          className="w-full h-11 rounded-xl bg-primary hover:bg-primary/90 transition-all"
-        >
-          Save Membership Settings
-        </Button>
-      </div>
-
-      {/* Promotional Period Info - shown only during the launch promo */}
-      {isInPromoPeriod && (
-        <div className="bg-secondary/10 border border-secondary/20 rounded-2xl p-5">
-          <div className="flex gap-4">
-            <div className="flex-shrink-0">
-              <div className="h-10 w-10 rounded-xl bg-secondary/20 flex items-center justify-center">
-                <TrendingUp className="h-5 w-5 text-secondary" />
-              </div>
-            </div>
-            <div className="flex-1">
-              <h4 className="font-display text-base font-semibold text-foreground">
-                You have 0% platform fees for your first {LAUNCH_PROMO_DAYS} days
-              </h4>
-              <p className="text-sm text-muted-foreground mt-2">
-                {promoDaysLeft === 1
-                  ? "1 day left on your launch promo."
-                  : `${promoDaysLeft} days left on your launch promo.`}
-                {" "}After that, standard tiered pricing applies (8%, then 6%, then 4% as your member count grows).
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderPayoutManagement = () => {
-    if (!stripeAccountStatus.isEnabled) {
-      return null;
+  const monthlyNum = Number(price) || 0;
+  const yearlyNum = Number(yearlyPrice) || 0;
+  const yearlySaving = Math.round((monthlyNum * 12 - yearlyNum) * 100) / 100;
+  const priceDirty =
+    isMembershipEnabled !== initialMembershipEnabled ||
+    monthlyNum !== Number(initialMembershipPrice || 0) ||
+    isYearlyEnabled !== initialYearlyEnabled ||
+    (isYearlyEnabled && yearlyNum !== Number(initialYearlyPrice || 0)) ||
+    (isYearlyEnabled && yearlyBenefits !== (initialYearlyBenefits || ""));
+  const [savingPrice, setSavingPrice] = [isSavingPrice, setIsSavingPrice];
+  const savePrice = async () => {
+    setSavingPrice(true);
+    try {
+      await handlePriceUpdate();
+    } finally {
+      setSavingPrice(false);
     }
+  };
+  const discardPrice = () => {
+    setIsMembershipEnabled(initialMembershipEnabled);
+    setPrice(initialMembershipPrice);
+    setIsYearlyEnabled(initialYearlyEnabled);
+    setYearlyPrice(initialYearlyPrice);
+    setYearlyBenefits(initialYearlyBenefits);
+  };
+  const requirements = stripeAccountStatus.details?.requirements;
+  const dueCount = (requirements?.currentlyDue.length ?? 0) + (requirements?.pastDue.length ?? 0);
+  const euro = (n: number) => `€${n.toFixed(n % 1 ? 2 : 0)}`;
 
-    return (
-      <div className="space-y-6 pt-6 border-t border-border/50">
-        {/* Payout Management Section - Fluid Movement style */}
-        <div className="bg-card rounded-2xl p-6 border border-border/50 space-y-6">
-          <h3 className="font-display text-lg font-semibold text-foreground">
-            Payout Management
-          </h3>
-          {isLoadingPayouts ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : payoutData ? (
-            <div className="space-y-6">
-              {/* Current Balance */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-primary/5 rounded-xl p-4 border border-primary/10">
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Available
-                  </p>
-                  <p className="font-display text-2xl font-bold text-foreground">
-                    {formatCurrency(
-                      payoutData.balance.available,
-                      payoutData.balance.currency
-                    )}
-                  </p>
-                </div>
-                <div className="bg-secondary/10 rounded-xl p-4 border border-secondary/10">
-                  <p className="text-sm text-muted-foreground mb-1">Pending</p>
-                  <p className="font-display text-2xl font-bold text-foreground">
-                    {formatCurrency(
-                      payoutData.balance.pending,
-                      payoutData.balance.currency
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              {/* Recent Payouts */}
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-3">
-                  Recent Payouts
-                </h4>
-                <div className="space-y-3">
-                  {payoutData.payouts.length > 0 ? (
-                    payoutData.payouts.map((payout) => (
-                      <div
-                        key={payout.id}
-                        className="bg-muted/30 p-4 rounded-xl border border-border/50 hover:border-border transition-colors"
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold text-foreground">
-                              {formatCurrency(payout.amount, payout.currency)}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {new Date(
-                                payout.arrivalDate
-                              ).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <span
-                            className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                              payout.status === "paid"
-                                ? "bg-primary/10 text-primary"
-                                : payout.status === "pending"
-                                ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300"
-                                : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {payout.status}
-                          </span>
-                        </div>
-                        {payout.bankAccount && (
-                          <p className="text-sm text-muted-foreground mt-2">
-                            To: •••• {payout.bankAccount.last4}
-                          </p>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-6 bg-muted/20 rounded-xl">
-                      No recent payouts
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-8 bg-muted/20 rounded-xl">
-              No payout information available yet.
-            </p>
-          )}
-        </div>
-
-        {/* Payout Schedule — creator picks ASAP / weekly / monthly. We seed
-            the picker with whatever Stripe currently has so it reflects the
-            true schedule even if it was changed in the Stripe dashboard. */}
-        <PayoutScheduleForm
-          communitySlug={communitySlug}
-          initialInterval={
-            ((stripeAccountStatus.details?.payoutSchedule as
-              | { interval?: string }
-              | undefined)?.interval) ?? "daily"
-          }
-          initialWeeklyAnchor={
-            ((stripeAccountStatus.details?.payoutSchedule as
-              | { weekly_anchor?: string | null }
-              | undefined)?.weekly_anchor) ?? null
-          }
-          initialMonthlyAnchor={
-            ((stripeAccountStatus.details?.payoutSchedule as
-              | { monthly_anchor?: number | null }
-              | undefined)?.monthly_anchor) ?? null
-          }
-        />
-
-        {/* Bank Account Details Section - Fluid Movement style */}
-        <div className="bg-card rounded-2xl p-6 border border-border/50 space-y-4">
-          <h3 className="font-display text-lg font-semibold text-foreground">
-            Bank Account Details
-          </h3>
-          {isLoadingBank ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : bankAccount ? (
-            <div className="space-y-4">
-              <div className="bg-muted/30 p-4 rounded-xl">
-                <p className="text-sm text-foreground">
-                  <span className="text-muted-foreground">Bank Name:</span>{" "}
-                  {bankAccount.bank_name || "N/A"}
-                </p>
-                <p className="text-sm text-foreground mt-1">
-                  <span className="text-muted-foreground">Account:</span> ••••{" "}
-                  {bankAccount.last4 || "N/A"}
-                </p>
-              </div>
-
-              {/* IBAN Update Form */}
-              {showIbanUpdateForm ? (
-                <div className="bg-primary/5 border border-primary/20 p-5 rounded-xl space-y-4">
-                  <h4 className="font-display font-semibold text-foreground">
-                    Update Bank Account
-                  </h4>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        IBAN
-                      </label>
-                      <Input
-                        type="text"
-                        placeholder="FR76 1234 5678 9012 3456 7890 123"
-                        value={newIban}
-                        onChange={(e) =>
-                          setNewIban(e.target.value.toUpperCase())
-                        }
-                        className="rounded-xl border-border/50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Account Holder Name
-                      </label>
-                      <Input
-                        type="text"
-                        placeholder="Your full name as it appears on the account"
-                        value={newAccountHolderName}
-                        onChange={(e) =>
-                          setNewAccountHolderName(e.target.value)
-                        }
-                        className="rounded-xl border-border/50"
-                      />
-                    </div>
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        onClick={handleSubmitIbanUpdate}
-                        disabled={
-                          isUpdatingIban ||
-                          !newIban ||
-                          !newAccountHolderName
-                        }
-                        className="flex-1 rounded-xl bg-primary hover:bg-primary/90"
-                      >
-                        {isUpdatingIban && (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        )}
-                        Update Bank Account
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setShowIbanUpdateForm(false);
-                          setNewIban("");
-                          setNewAccountHolderName("");
-                        }}
-                        className="rounded-xl border-border/50"
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Note: This will replace your current bank account with the
-                    new one.
-                  </p>
-                </div>
-              ) : (
-                <Button
-                  variant="outline"
-                  onClick={() => setShowIbanUpdateForm(true)}
-                  className="w-full rounded-xl border-border/50 hover:bg-primary/5 hover:border-primary/30 transition-all"
-                >
-                  Update Bank Account
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground bg-muted/20 p-4 rounded-xl">
-                No bank account information found. Please add your bank account
-                details via Stripe.
-              </p>
-              <Button
-                onClick={handleUpdateIban}
-                disabled={isUpdatingIban}
-                className="w-full rounded-xl bg-primary hover:bg-primary/90"
-              >
-                {isUpdatingIban && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Manage Bank Account
-              </Button>
-            </div>
-          )}
+  const payoutStatus = !stripeAccountId ? (
+    <div className="flex gap-3.5 rounded-xl border border-live/25 bg-live-soft p-4">
+      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-live" aria-hidden="true" />
+      <div className="min-w-0">
+        <strong className="block text-[15px] text-ink">Payouts aren&apos;t set up</strong>
+        <p className="mt-0.5 text-[14px] text-ink-2">Connect a bank account so members can pay and you get paid. You&apos;ll need:</p>
+        <ol className="mt-2 list-decimal space-y-0.5 pl-5 text-[14px] text-ink-2">
+          <li>Your legal name and date of birth</li>
+          <li>Your bank account number (IBAN)</li>
+          <li>Sometimes, a photo of your ID</li>
+        </ol>
+        <button type="button" onClick={handleStartCustomOnboarding} className={cn(BTN_PRIMARY, "mt-3.5")}>
+          <Banknote aria-hidden="true" />
+          Set up payouts
+        </button>
+      </div>
+    </div>
+  ) : !stripeAccountStatus.isEnabled ? (
+    <div className="flex gap-3.5 rounded-xl border border-warn/30 bg-warn-soft p-4">
+      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warn" aria-hidden="true" />
+      <div className="min-w-0">
+        <strong className="block text-[15px] text-ink">Payouts need a few more details</strong>
+        <p className="mt-0.5 text-[14px] text-ink-2">
+          Finish verifying your account to take payments and receive payouts.
+          {dueCount > 0 ? ` ${dueCount} ${dueCount === 1 ? "item is" : "items are"} still needed.` : ""}
+        </p>
+        {(requirements?.pastDue.length ?? 0) > 0 && (
+          <p className="mt-2">
+            <Pill variant="live">{requirements!.pastDue.length} past due</Pill>
+          </p>
+        )}
+        <div className="mt-3.5 flex flex-wrap gap-2">
+          <button type="button" onClick={handleCompleteVerification} className={BTN_PRIMARY}>
+            Finish verification
+          </button>
+          <button type="button" onClick={handleStartCustomOnboarding} className={BTN_GHOST}>
+            Open the setup steps
+          </button>
         </div>
       </div>
-    );
-  };
+    </div>
+  ) : (
+    <div className="flex gap-3.5 rounded-xl border border-ok/25 bg-ok-soft p-4">
+      <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-ok" aria-hidden="true" />
+      <div className="min-w-0">
+        <strong className="block text-[15px] text-ink">Payouts are on</strong>
+        <p className="mt-0.5 text-[14px] text-ink-2">
+          {bankAccount?.last4 ? `Money goes to your account ending in ${bankAccount.last4}.` : "Money goes to your bank account."}
+        </p>
+      </div>
+    </div>
+  );
 
-  // Optional lightweight loading indicator while the initial Stripe status
-  // fetch is in flight — avoids a flash of "Complete Stripe Setup" for
-  // communities that already have a connected account.
-  const showInitialStripeLoader =
-    stripeAccountId && isLoadingStripeStatus && !stripeAccountStatus.details;
+  // Optional lightweight loading indicator while the initial account status
+  // fetch is in flight, so a connected community doesn't flash "set up".
+  const showInitialStripeLoader = stripeAccountId && isLoadingStripeStatus && !stripeAccountStatus.details;
 
   return (
-    <div id="settings-subscriptions" className="space-y-6">
-      {showInitialStripeLoader ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    <Screen>
+      <ScreenHead title="Pricing and payouts" sub="What members pay, and how you get paid." />
+      <div id="settings-subscriptions" className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+        <Card as="section" aria-labelledby="price-h" className="flex flex-col gap-4 p-5">
+          <h2 id="price-h" className="font-display text-[17px] font-semibold text-ink">
+            Membership price
+          </h2>
+          <fieldset className="grid gap-2 sm:grid-cols-2">
+            <legend className="sr-only">Membership type</legend>
+            {(
+              [
+                [false, "Free membership", "Members join for free. You can still sell private lessons."],
+                [true, "Paid membership", "Monthly, with an optional yearly plan."],
+              ] as const
+            ).map(([paid, title, text]) => {
+              const disabled = paid && !stripeAccountStatus.isEnabled && !isMembershipEnabled;
+              return (
+                <label
+                  key={String(paid)}
+                  className={cn(
+                    "flex cursor-pointer gap-2.5 rounded-xl border p-3.5 transition-colors",
+                    isMembershipEnabled === paid ? "border-brand bg-brand-soft" : "border-line hover:border-line-strong",
+                    disabled && "cursor-not-allowed opacity-60"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="membership-model"
+                    checked={isMembershipEnabled === paid}
+                    disabled={disabled}
+                    onChange={() => setIsMembershipEnabled(paid)}
+                    className="mt-1 accent-[rgb(var(--ds-brand))]"
+                  />
+                  <span>
+                    <strong className="block text-[14.5px] text-ink">{title}</strong>
+                    <span className="text-[13px] text-ink-2">{disabled ? "Set up payouts first." : text}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </fieldset>
+
+          {isMembershipEnabled && (
+            <>
+              <div>
+                <label htmlFor="price-monthly" className={FIELD_LABEL}>
+                  Monthly price
+                </label>
+                <div className="relative max-w-[220px]">
+                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-ink-3">€</span>
+                  <input
+                    id="price-monthly"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={price || ""}
+                    onChange={(e) => setPrice(Number(e.target.value))}
+                    placeholder="0.00"
+                    className={cn(FIELD_INPUT, "pl-7 tabular-nums")}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 border-t border-line pt-4">
+                <Switch checked={isYearlyEnabled} onChange={setIsYearlyEnabled} label="Offer a yearly plan" />
+                {isYearlyEnabled && (
+                  <>
+                    <div>
+                      <label htmlFor="price-yearly" className={FIELD_LABEL}>
+                        Yearly price
+                      </label>
+                      <div className="relative max-w-[220px]">
+                        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-ink-3">€</span>
+                        <input
+                          id="price-yearly"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={yearlyPrice || ""}
+                          onChange={(e) => setYearlyPrice(Number(e.target.value))}
+                          placeholder="0.00"
+                          className={cn(FIELD_INPUT, "pl-7 tabular-nums")}
+                        />
+                      </div>
+                      <p className={cn("mt-1.5 text-[12.5px]", yearlySaving > 0 ? "text-ok" : "text-ink-3")}>
+                        {yearlyNum > 0 && monthlyNum > 0
+                          ? yearlySaving > 0
+                            ? `Members save ${euro(yearlySaving)} compared to twelve monthly payments.`
+                            : "Set it below twelve monthly payments so the yearly plan is a better deal."
+                          : "About 10 times the monthly price gives members roughly two months free."}
+                      </p>
+                    </div>
+                    <div>
+                      <label htmlFor="yearly-benefits" className={FIELD_LABEL}>
+                        Why go yearly? <span className="font-normal text-ink-3">optional</span>
+                      </label>
+                      <input
+                        id="yearly-benefits"
+                        value={yearlyBenefits}
+                        onChange={(e) => setYearlyBenefits(e.target.value)}
+                        placeholder="For example: two months free and one private lesson"
+                        maxLength={200}
+                        className={FIELD_INPUT}
+                      />
+                      <p className="mt-1.5 text-[12.5px] text-ink-3">Shown to members when they choose a plan.</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+
+          <div className="rounded-xl bg-surface-2 px-4 py-3">
+            <p className="text-[12.5px] font-semibold text-ink-3">What visitors see</p>
+            <p className="mt-1 text-[15px] tabular-nums text-ink">
+              {isMembershipEnabled && monthlyNum > 0 ? (
+                <>
+                  <strong className="font-display text-[20px]">{euro(monthlyNum)}</strong> a month
+                  {isYearlyEnabled && yearlyNum > 0 && (
+                    <span className="text-ink-2">
+                      {" "}
+                      or {euro(yearlyNum)} a year{yearlySaving > 0 ? `, save ${euro(yearlySaving)}` : ""}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <strong className="font-display text-[20px]">Free to join</strong>
+              )}
+            </p>
+          </div>
+
+          {isInPromoPeriod && (
+            <p className="flex gap-2.5 rounded-xl border border-brand-line bg-brand-soft px-4 py-3 text-[13.5px] text-ink-2">
+              <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-brand-ink" aria-hidden="true" />
+              <span>
+                <strong className="block text-ink">No platform fee for your first {LAUNCH_PROMO_DAYS} days</strong>
+                {promoDaysLeft === 1 ? "1 day left." : `${promoDaysLeft} days left.`} After that the fee goes from 8% to 6% to 4% as your community grows.
+              </span>
+            </p>
+          )}
+        </Card>
+
+        <div className="flex flex-col gap-5">
+          <Card as="section" aria-labelledby="pay-h" className="flex flex-col gap-4 p-5">
+            <h2 id="pay-h" className="font-display text-[17px] font-semibold text-ink">
+              Payouts
+            </h2>
+            {showInitialStripeLoader ? (
+              <div className="flex flex-col gap-2.5">
+                <Skeleton className="h-16" />
+                <Skeleton className="h-10" />
+              </div>
+            ) : (
+              <>
+                {payoutStatus}
+                {stripeAccountStatus.isEnabled &&
+                  (isLoadingPayouts ? (
+                    <Skeleton className="h-24" />
+                  ) : payoutData ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-xl bg-surface-2 px-4 py-3">
+                          <p className="text-[13px] text-ink-2">Available</p>
+                          <p className="font-display text-[22px] font-semibold tabular-nums text-ink">{formatCurrency(payoutData.balance.available, payoutData.balance.currency)}</p>
+                        </div>
+                        <div className="rounded-xl bg-surface-2 px-4 py-3">
+                          <p className="text-[13px] text-ink-2">On the way</p>
+                          <p className="font-display text-[22px] font-semibold tabular-nums text-ink">{formatCurrency(payoutData.balance.pending, payoutData.balance.currency)}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className={FIELD_LABEL}>Recent payouts</p>
+                        {payoutData.payouts.length > 0 ? (
+                          <ul className="divide-y divide-line rounded-xl border border-line">
+                            {payoutData.payouts.map((payout) => (
+                              <li key={payout.id} className="flex items-center gap-3 px-3.5 py-2.5 text-[14px]">
+                                <span className="min-w-0 flex-1 tabular-nums text-ink-2">
+                                  {new Date(payout.arrivalDate).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
+                                  {payout.bankAccount?.last4 ? `, to ${payout.bankAccount.last4}` : ""}
+                                </span>
+                                <span className="font-semibold tabular-nums text-ink">{formatCurrency(payout.amount, payout.currency)}</span>
+                                <Pill variant={payout.status === "paid" ? "ok" : payout.status === "pending" || payout.status === "in_transit" ? "warn" : "muted"}>
+                                  {payout.status === "paid" ? "Paid" : payout.status === "in_transit" ? "On the way" : payout.status === "pending" ? "Pending" : payout.status === "failed" ? "Failed" : payout.status}
+                                </Pill>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="rounded-xl bg-surface-2 px-4 py-3 text-[14px] text-ink-2">No payouts yet. They start once members pay.</p>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="rounded-xl bg-surface-2 px-4 py-3 text-[14px] text-ink-2">No payout information yet.</p>
+                  ))}
+              </>
+            )}
+          </Card>
+
+          {stripeAccountStatus.isEnabled && (
+            <PayoutScheduleForm
+              communitySlug={communitySlug}
+              initialInterval={((stripeAccountStatus.details?.payoutSchedule as { interval?: string } | undefined)?.interval) ?? "daily"}
+              initialWeeklyAnchor={((stripeAccountStatus.details?.payoutSchedule as { weekly_anchor?: string | null } | undefined)?.weekly_anchor) ?? null}
+              initialMonthlyAnchor={((stripeAccountStatus.details?.payoutSchedule as { monthly_anchor?: number | null } | undefined)?.monthly_anchor) ?? null}
+            />
+          )}
+
+          {stripeAccountStatus.isEnabled && (
+            <Card as="section" aria-labelledby="bank-h" className="flex flex-col gap-3.5 p-5">
+              <h2 id="bank-h" className="font-display text-[17px] font-semibold text-ink">
+                Bank account
+              </h2>
+              {isLoadingBank ? (
+                <Skeleton className="h-14" />
+              ) : bankAccount ? (
+                <>
+                  <p className="rounded-xl bg-surface-2 px-4 py-3 text-[14.5px] text-ink">
+                    {bankAccount.bank_name || "Your bank"}, account ending in {bankAccount.last4 || "unknown"}
+                  </p>
+                  {showIbanUpdateForm ? (
+                    <div className="flex flex-col gap-3 rounded-xl border border-brand-line bg-brand-soft p-4">
+                      <div>
+                        <label htmlFor="iban" className={FIELD_LABEL}>
+                          New IBAN
+                        </label>
+                        <input id="iban" placeholder="EE38 2200 2210 2014 5685" value={newIban} onChange={(e) => setNewIban(e.target.value.toUpperCase())} className={FIELD_INPUT} />
+                      </div>
+                      <div>
+                        <label htmlFor="iban-name" className={FIELD_LABEL}>
+                          Account holder name
+                        </label>
+                        <input
+                          id="iban-name"
+                          placeholder="Your full name as it appears on the account"
+                          value={newAccountHolderName}
+                          onChange={(e) => setNewAccountHolderName(e.target.value)}
+                          className={FIELD_INPUT}
+                        />
+                      </div>
+                      <p className="text-[12.5px] text-ink-3">This replaces your current bank account.</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={handleSubmitIbanUpdate} disabled={isUpdatingIban || !newIban || !newAccountHolderName} className={BTN_PRIMARY}>
+                          {isUpdatingIban && <Loader2 className="animate-spin" aria-hidden="true" />}
+                          Replace bank account
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowIbanUpdateForm(false);
+                            setNewIban("");
+                            setNewAccountHolderName("");
+                          }}
+                          className={BTN_GHOST}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setShowIbanUpdateForm(true)} className={cn(BTN_SECONDARY, "self-start")}>
+                      Change bank account
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="rounded-xl bg-surface-2 px-4 py-3 text-[14px] text-ink-2">No bank account found yet.</p>
+                  <button type="button" onClick={handleUpdateIban} disabled={isUpdatingIban} className={cn(BTN_PRIMARY, "self-start")}>
+                    {isUpdatingIban && <Loader2 className="animate-spin" aria-hidden="true" />}
+                    Add a bank account
+                  </button>
+                </>
+              )}
+            </Card>
+          )}
         </div>
-      ) : (
-        <>
-          {/* Stripe connection status - only show if setup is incomplete
-              (matches modal line 1017). */}
-          {(!stripeAccountId || !stripeAccountStatus.isEnabled) &&
-            renderStripeConnectionStatus()}
-
-          {/* Membership settings */}
-          {renderMembershipSettings()}
-
-          {/* Payout management */}
-          {renderPayoutManagement()}
-        </>
-      )}
-    </div>
+      </div>
+      <SaveBar show={priceDirty} saving={savingPrice} onSave={savePrice} onDiscard={discardPrice} saveLabel="Save prices" />
+    </Screen>
   );
 }

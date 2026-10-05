@@ -31,6 +31,6 @@ it("reveals yearly price + benefits inputs when the yearly toggle is on", async 
   // The editor shows a loading spinner while the initial Stripe-status fetch is
   // in flight; findBy* waits for that async resolution so the membership (and
   // yearly) block mounts before we assert.
-  expect(await screen.findByText(/Yearly Membership Price/)).toBeInTheDocument();
-  expect(screen.getByPlaceholderText(/2 months free plus one private class/)).toBeInTheDocument();
+  expect(await screen.findByLabelText(/Yearly price/)).toBeInTheDocument();
+  expect(screen.getByLabelText(/Why go yearly/)).toHaveValue("2 months free.");
 });

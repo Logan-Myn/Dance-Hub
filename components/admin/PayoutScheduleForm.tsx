@@ -113,17 +113,17 @@ export function PayoutScheduleForm({
   }
 
   return (
-    <section className="bg-card rounded-2xl p-6 border border-border/50 space-y-5">
+    <section aria-labelledby="sched-h" className="rounded-2xl border border-line bg-surface p-5 space-y-4">
       <div>
-        <h2 className="font-display text-lg font-semibold text-foreground">
+        <h2 id="sched-h" className="font-display text-[17px] font-semibold text-ink">
           Payout schedule
         </h2>
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="text-sm text-ink-2 mt-1">
           Choose how often your earnings are sent to your bank account.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
         {OPTIONS.map((opt) => {
           const Icon = opt.icon;
           const selected = kind === opt.kind;
@@ -133,23 +133,23 @@ export function PayoutScheduleForm({
               type="button"
               onClick={() => setKind(opt.kind)}
               className={cn(
-                "flex flex-col items-start gap-2 rounded-2xl border p-4 text-left transition-all",
+"flex flex-col items-start gap-2 rounded-2xl border p-4 text-left transition-all",
                 selected
-                  ? "border-primary bg-primary/5 shadow-sm"
-                  : "border-border/50 hover:border-border bg-background"
+                  ? "border-brand bg-brand-soft shadow-sm"
+                  : "border-line hover:border-line bg-surface"
               )}
               aria-pressed={selected}
             >
               <div
                 className={cn(
-                  "h-9 w-9 rounded-xl flex items-center justify-center",
-                  selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+"h-9 w-9 rounded-xl flex items-center justify-center",
+                  selected ? "bg-brand text-white" : "bg-surface-2 text-ink-2"
                 )}
               >
                 <Icon className="h-4 w-4" />
               </div>
-              <div className="font-medium text-foreground">{opt.title}</div>
-              <div className="text-xs text-muted-foreground leading-snug">
+              <div className="font-medium text-ink">{opt.title}</div>
+              <div className="text-xs text-ink-2 leading-snug">
                 {opt.subtitle}
               </div>
             </button>
@@ -159,7 +159,7 @@ export function PayoutScheduleForm({
 
       {kind === "weekly" && (
         <div className="max-w-xs space-y-2">
-          <label className="block text-sm font-medium text-foreground">
+          <label className="block text-sm font-medium text-ink">
             Payout day
           </label>
           <Select value={weekday} onValueChange={setWeekday}>
@@ -179,7 +179,7 @@ export function PayoutScheduleForm({
 
       {kind === "monthly" && (
         <div className="max-w-xs space-y-2">
-          <label className="block text-sm font-medium text-foreground">
+          <label className="block text-sm font-medium text-ink">
             Day of month
           </label>
           <Select
@@ -197,7 +197,7 @@ export function PayoutScheduleForm({
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-ink-2">
             Capped at the 28th so the date is the same every month.
           </p>
         </div>
@@ -211,7 +211,7 @@ export function PayoutScheduleForm({
               Saving...
             </>
           ) : (
-            "Save schedule"
+"Save schedule"
           )}
         </Button>
       </div>
