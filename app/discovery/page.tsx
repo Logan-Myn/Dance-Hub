@@ -21,7 +21,7 @@ export default async function DiscoveryPage() {
   // the ones with access today, and the busiest communities come first.
   const [profile, viewer, rows] = await Promise.all([
     userId ? getProfileForUser(userId) : Promise.resolve(null),
-    userId ? queryOne<{ timezone: string | null }>`SELECT timezone FROM profiles WHERE id = ${userId}` : Promise.resolve(null),
+    userId ? queryOne<{ timezone: string | null }>`SELECT timezone FROM profiles WHERE auth_user_id = ${userId}` : Promise.resolve(null),
     query<Row>`
       SELECT
         c.id, c.slug, c.name, c.description, c.image_url,
