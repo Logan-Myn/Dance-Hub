@@ -89,28 +89,28 @@ export default function CreatePrivateLessonModal({
     try {
       // Validation
       if (!formData.title.trim()) {
-        toast.error("Please enter a lesson title");
+        toast.error("Give the lesson a title.");
         return;
       }
       if (!formData.description.trim()) {
-        toast.error("Please enter a lesson description");
+        toast.error("Add a short description.");
         return;
       }
       // Same rules as the server: card payments start at €0.50, and a
       // member price of 0 means no discount.
       const regularPrice = parseFloat(formData.regular_price);
       if (!formData.regular_price || !(regularPrice >= 0.5)) {
-        toast.error("Regular price must be at least €0.50");
+        toast.error("The price must be at least €0.50.");
         return;
       }
       if (formData.member_price) {
         const memberPrice = parseFloat(formData.member_price);
         if (memberPrice !== 0 && !(memberPrice >= 0.5)) {
-          toast.error("Member price must be 0 (no discount) or at least €0.50");
+          toast.error("The member price must be 0 (no discount) or at least €0.50.");
           return;
         }
         if (memberPrice > regularPrice) {
-          toast.error("Member price cannot be more than the regular price");
+          toast.error("The member price can't be more than the regular price.");
           return;
         }
       }
@@ -122,7 +122,7 @@ export default function CreatePrivateLessonModal({
       };
 
       if (!session) {
-        toast.error(`You must be logged in to ${editingLesson ? 'update' : 'create'} private lessons`);
+        toast.error('Sign in again to save the lesson type.');
         return;
       }
 
@@ -138,7 +138,7 @@ export default function CreatePrivateLessonModal({
       const response = await fetch(url, {
         method,
         headers: {
-          "Content-Type": "application/json",
+"Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
       });
@@ -148,7 +148,7 @@ export default function CreatePrivateLessonModal({
         throw new Error(error.error || `Failed to ${editingLesson ? 'update' : 'create'} private lesson`);
       }
 
-      toast.success(`Private lesson ${editingLesson ? 'updated' : 'created'} successfully!`);
+      toast.success(editingLesson ? 'Lesson type saved' : 'Lesson type created');
       onSuccess();
       onClose();
       
@@ -168,7 +168,7 @@ export default function CreatePrivateLessonModal({
       });
     } catch (error) {
       console.error("Error creating private lesson:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to create private lesson");
+      toast.error(error instanceof Error ? error.message : "Couldn't save the lesson type. Try again.");
     } finally {
       setIsLoading(false);
     }
@@ -186,7 +186,7 @@ export default function CreatePrivateLessonModal({
       <ResponsiveDialogContent className="max-w-2xl">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>
-            {editingLesson ? 'Edit Private Lesson' : 'Create Private Lesson'}
+            {editingLesson ? 'Edit lesson type' : 'Add a lesson type'}
           </ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
 
@@ -194,23 +194,23 @@ export default function CreatePrivateLessonModal({
           {/* Basic Information */}
           <div className="space-y-4">
             <div>
-              <Label htmlFor="title">Lesson Title *</Label>
+              <Label htmlFor="title">Title</Label>
               <Input
                 id="title"
                 value={formData.title}
                 onChange={(e) => handleInputChange("title", e.target.value)}
-                placeholder="e.g., Beginner Salsa Fundamentals"
+                placeholder="For example: Beginner tune-up"
                 required
               />
             </div>
 
             <div>
-              <Label htmlFor="description">Description *</Label>
+              <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"
                 value={formData.description}
                 onChange={(e) => handleInputChange("description", e.target.value)}
-                placeholder="Describe what students will learn in this private lesson..."
+                placeholder="What you work on together, and who it's for."
                 rows={4}
                 required
               />
@@ -218,7 +218,7 @@ export default function CreatePrivateLessonModal({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="duration">Duration (minutes)</Label>
+                <Label htmlFor="duration">Length</Label>
                 <Select
                   value={formData.duration_minutes.toString()}
                   onValueChange={(value) => handleInputChange("duration_minutes", parseInt(value))}
@@ -237,7 +237,7 @@ export default function CreatePrivateLessonModal({
               </div>
 
               <div>
-                <Label htmlFor="max_bookings_per_month">Max Bookings per Month</Label>
+                <Label htmlFor="max_bookings_per_month">Bookings per member each month</Label>
                 <Select
                   value={formData.max_bookings_per_month?.toString() || "unlimited"}
                   onValueChange={(value) => handleInputChange("max_bookings_per_month", value === "unlimited" ? null : parseInt(value))}
@@ -263,7 +263,7 @@ export default function CreatePrivateLessonModal({
             <h3 className="text-lg font-medium">Pricing</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="regular_price">Regular Price (€) *</Label>
+                <Label htmlFor="regular_price">Price (€)</Label>
                 <Input
                   id="regular_price"
                   type="number"
@@ -277,7 +277,7 @@ export default function CreatePrivateLessonModal({
               </div>
 
               <div>
-                <Label htmlFor="member_price">Member Price (€)</Label>
+                <Label htmlFor="member_price">Member price (€)</Label>
                 <Input
                   id="member_price"
                   type="number"
@@ -285,7 +285,7 @@ export default function CreatePrivateLessonModal({
                   min="0"
                   value={formData.member_price}
                   onChange={(e) => handleInputChange("member_price", e.target.value)}
-                  placeholder="40.00 (optional)"
+                  placeholder="Optional"
                 />
                 <p className="text-sm text-gray-500 mt-1">
                   Leave empty if no member discount
@@ -315,7 +315,7 @@ export default function CreatePrivateLessonModal({
                     <SelectItem value="72">72 hours before</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-ink-2">
                   Cancellations before this cutoff are always fully refunded.
                 </p>
               </div>
@@ -331,7 +331,7 @@ export default function CreatePrivateLessonModal({
                       value="refund"
                       checked={formData.late_refund_policy === "refund"}
                       onChange={() => handleInputChange("late_refund_policy", "refund")}
-                      className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                      className="h-4 w-4 border-gray-300 text-brand-ink focus:ring-brand-line"
                     />
                     <Label htmlFor="late-refund" className="font-normal cursor-pointer">
                       Full refund
@@ -345,14 +345,14 @@ export default function CreatePrivateLessonModal({
                       value="no_refund"
                       checked={formData.late_refund_policy === "no_refund"}
                       onChange={() => handleInputChange("late_refund_policy", "no_refund")}
-                      className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                      className="h-4 w-4 border-gray-300 text-brand-ink focus:ring-brand-line"
                     />
                     <Label htmlFor="late-no-refund" className="font-normal cursor-pointer">
                       No refund
                     </Label>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-ink-2">
                   You can always cancel any booking yourself with a full refund to the student.
                 </p>
               </div>
@@ -362,12 +362,12 @@ export default function CreatePrivateLessonModal({
           {/* Requirements */}
           <div className="space-y-4">
             <div>
-              <Label htmlFor="requirements">Requirements & Notes</Label>
+              <Label htmlFor="requirements">Before the lesson <span className="font-normal text-ink-3">optional</span></Label>
               <Textarea
                 id="requirements"
                 value={formData.requirements}
                 onChange={(e) => handleInputChange("requirements", e.target.value)}
-                placeholder="What should students know or prepare before the session?"
+                placeholder="What to prepare, for example shoes or a partner."
                 rows={3}
               />
             </div>
@@ -381,7 +381,7 @@ export default function CreatePrivateLessonModal({
                 checked={formData.is_active}
                 onCheckedChange={(checked) => handleInputChange("is_active", checked)}
               />
-              <Label htmlFor="is_active">Make lesson available for booking</Label>
+              <Label htmlFor="is_active">Members can book it</Label>
             </div>
           </div>
 

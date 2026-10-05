@@ -50,8 +50,8 @@ function renderEditor() {
 
 test('labels prices in euros, the currency lessons are charged in', () => {
   renderEditor();
-  expect(screen.getByLabelText(/Regular Price \(€\)/)).toBeInTheDocument();
-  expect(screen.getByLabelText(/Member Price \(€\)/)).toBeInTheDocument();
+  expect(screen.getByLabelText(/^Price \(€\)/)).toBeInTheDocument();
+  expect(screen.getByLabelText(/Member price \(€\)/)).toBeInTheDocument();
   expect(screen.queryByText(/\(\$\)/)).not.toBeInTheDocument();
 });
 
@@ -59,7 +59,7 @@ test('clearing the member price sends member_price: null so the discount is remo
   const user = userEvent.setup();
   renderEditor();
 
-  await user.clear(screen.getByLabelText(/Member Price/));
+  await user.clear(screen.getByLabelText(/Member price/));
   await user.click(screen.getByRole('button', { name: /Update Private Lesson/ }));
 
   await waitFor(() => expect(global.fetch).toHaveBeenCalled());
@@ -73,8 +73,8 @@ describe('price checks before saving', () => {
   async function submitWith(regular: string, member: string) {
     const user = userEvent.setup();
     renderEditor();
-    const regularInput = screen.getByLabelText(/Regular Price/);
-    const memberInput = screen.getByLabelText(/Member Price/);
+    const regularInput = screen.getByLabelText(/^Price \(€\)/);
+    const memberInput = screen.getByLabelText(/Member price/);
     await user.clear(regularInput);
     await user.type(regularInput, regular);
     await user.clear(memberInput);

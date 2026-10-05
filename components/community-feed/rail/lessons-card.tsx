@@ -8,12 +8,12 @@ const where = { online: "online", in_person: "in person", both: "online or in pe
 
 /** Up to two private lessons, member price first. */
 export function LessonsCard({ slug, lessons, teacherName, isMember }: { slug: string; lessons: FeedLesson[]; teacherName: string; isMember: boolean }) {
-  const anyDiscount = isMember && lessons.some((l) => l.memberPrice != null && l.memberPrice < l.regularPrice);
+  const anyDiscount = isMember && lessons.some((l) => l.memberPrice != null && l.memberPrice > 0 && l.memberPrice < l.regularPrice);
   return (
     <RailSection title={`Private lessons with ${teacherName}`}>
       <div className="flex flex-col divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
         {lessons.map((l) => {
-          const discounted = isMember && l.memberPrice != null && l.memberPrice < l.regularPrice;
+          const discounted = isMember && l.memberPrice != null && l.memberPrice > 0 && l.memberPrice < l.regularPrice;
           return (
             <Link
               key={l.id}

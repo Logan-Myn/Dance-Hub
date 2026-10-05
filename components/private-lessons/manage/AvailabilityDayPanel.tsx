@@ -45,7 +45,7 @@ export function AvailabilityDayPanel({
 
   if (!selectedDate) {
     return (
-      <div className="rounded-2xl border-2 border-dashed border-border/60 p-10 text-center text-sm text-muted-foreground h-full flex items-center justify-center">
+      <div className="rounded-2xl border-2 border-dashed border-line p-10 text-center text-sm text-ink-2 h-full flex items-center justify-center">
         Select a day on the calendar to add or edit availability.
       </div>
     );
@@ -72,24 +72,24 @@ export function AvailabilityDayPanel({
   };
 
   return (
-    <div className="rounded-2xl border border-border/60 bg-card p-4">
+    <div className="rounded-2xl border border-line bg-surface p-4">
       <h3 className="font-display text-base font-semibold mb-3">
         {format(parseISO(selectedDate), 'EEE, MMM d')}
       </h3>
 
       <div className="space-y-2 mb-4">
         {slots.length === 0 ? (
-          <div className="text-sm text-muted-foreground italic py-2">
+          <div className="text-sm text-ink-2 italic py-2">
             No availability set for this day.
           </div>
         ) : (
           slots.map(slot => (
             <div
               key={slot.id ?? `${slot.start_time}-${slot.end_time}`}
-              className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2 text-sm"
+              className="flex items-center justify-between bg-surface-2 rounded-lg px-3 py-2 text-sm"
             >
               <div className="flex items-center gap-2">
-                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                <Clock className="h-3.5 w-3.5 text-ink-2" />
                 <span>
                   {slot.start_time} – {slot.end_time}
                 </span>
@@ -99,7 +99,7 @@ export function AvailabilityDayPanel({
                   type="button"
                   aria-label={`Delete slot ${slot.start_time}`}
                   onClick={() => onDelete(slot.id!)}
-                  className="text-muted-foreground hover:text-destructive p-1 rounded"
+                  className="text-ink-2 hover:text-live p-1 rounded"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -109,7 +109,7 @@ export function AvailabilityDayPanel({
         )}
       </div>
 
-      <div className="border-t border-border/50 pt-3 space-y-3">
+      <div className="border-t border-line pt-3 space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <div>
             <Label htmlFor="add-from" className="text-xs">From</Label>
@@ -131,7 +131,7 @@ export function AvailabilityDayPanel({
           </div>
         </div>
         {error && (
-          <div className="text-xs text-destructive">{error}</div>
+          <div className="text-xs text-live">{error}</div>
         )}
         <Button
           type="button"
