@@ -62,28 +62,20 @@ export default async function GeneralSettingsPage(
   const hasPreRegistrations = (preRegistered?.count ?? 0) > 0;
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-1 duration-500">
-      <header className="mb-10">
-        <h1 className="font-display text-4xl sm:text-5xl leading-[1.05] text-foreground">
-          General
-        </h1>
-      </header>
-
-      <GeneralSettingsForm
-        communitySlug={params.communitySlug}
-        initialName={community.name}
-        initialDescription={community.description ?? ''}
-        initialImageUrl={community.image_url ?? ''}
-        initialFocalX={community.image_focal_x ?? 50}
-        initialFocalY={community.image_focal_y ?? 50}
-        initialZoom={Number(community.image_zoom ?? 1)}
-        initialCustomLinks={initialCustomLinks}
-        currentSlug={community.slug}
-        initialStatus={community.status ?? 'active'}
-        initialOpeningDate={community.opening_date}
-        canChangeOpeningDate={canChangeOpeningDate}
-        hasPreRegistrations={hasPreRegistrations}
-      />
-    </div>
+    <GeneralSettingsForm
+      communitySlug={params.communitySlug}
+      initialName={community.name}
+      initialDescription={community.description ?? ''}
+      initialImageUrl={community.image_url ?? ''}
+      initialFocalX={community.image_focal_x ?? 50}
+      initialFocalY={community.image_focal_y ?? 50}
+      initialZoom={Number(community.image_zoom ?? 1)}
+      initialCustomLinks={initialCustomLinks}
+      currentSlug={community.slug}
+      initialStatus={community.status ?? 'active'}
+      initialOpeningDate={community.opening_date}
+      canChangeOpeningDate={canChangeOpeningDate}
+      hasPreRegistrations={hasPreRegistrations}
+    />
   );
 }

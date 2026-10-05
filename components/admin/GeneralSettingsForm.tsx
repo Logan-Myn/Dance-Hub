@@ -3,17 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
-import { Crop, Loader2, Plus, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Copy, Crop, ImagePlus, Loader2, Plus, X } from "lucide-react";
+import { BTN_GHOST, BTN_SECONDARY } from "@/components/community-feed/feed-header";
+import { Card, Screen, ScreenHead } from "@/components/community-admin/ui";
+import { FIELD_INPUT, FIELD_LABEL } from "@/components/ds/app-dialog";
+import { SaveBar } from "@/components/ds/save-bar";
+import { cn } from "@/lib/utils";
 import { uploadFileToStorage, STORAGE_FOLDERS } from "@/lib/storage-client";
 import { BannerRepositionModal } from "@/components/admin/BannerRepositionModal";
 import { communityPath } from "@/lib/safe-redirect";
@@ -121,7 +116,7 @@ export function GeneralSettingsForm({
     // name moves the community to the site root and makes it unreachable.
     const trimmedName = name.trim();
     if (!trimmedName) {
-      toast.error("Please enter a community name");
+      toast.error("Enter a community name.");
       return;
     }
     // Same slug rule the server applies (letters/digits, not a reserved path).
@@ -166,9 +161,7 @@ export function GeneralSettingsForm({
 
     setIsSaving(true);
 
-    const loadingToast = toast.loading("Saving your changes...", {
-      duration: Infinity,
-    });
+    const loadingToast = toast.loading("Saving…", { duration: Infinity });
 
     try {
       // Regenerate slug from the name, matching the modal behaviour.
@@ -211,10 +204,7 @@ export function GeneralSettingsForm({
       const savedSlug = result.data?.slug || newSlug;
 
       toast.dismiss(loadingToast);
-      toast.success("Your changes have been saved successfully!", {
-        duration: 3000,
-        icon: "✅",
-      });
+      toast.success("Changes saved");
 
       // If the slug has changed, navigate to the new URL — the admin route
       // is nested under /[communitySlug], so we must redirect.
@@ -231,8 +221,8 @@ export function GeneralSettingsForm({
       toast.error(
         error instanceof Error && error.message !== "Failed to update community"
           ? error.message
-          : "Failed to save changes. Please try again.",
-        { duration: 6000, icon: "❌" }
+          : "Couldn't save your changes. Try again.",
+        { duration: 6000 }
       );
     } finally {
       setIsSaving(false);
@@ -244,7 +234,7 @@ export function GeneralSettingsForm({
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image size should be less than 5MB");
+      toast.error("Choose an image under 5 MB.");
       return;
     }
 
@@ -277,290 +267,234 @@ export function GeneralSettingsForm({
       setFocalX(50);
       setFocalY(50);
       setZoom(1);
-      toast.success("Community image updated successfully");
+      toast.success("Cover image updated");
       router.refresh();
     } catch (error) {
       console.error("Error uploading image:", error);
-      toast.error("Failed to upload image");
+      toast.error("Couldn't upload the image. Try again.");
     } finally {
       setIsUploading(false);
     }
   }
 
+  const dirty =
+    name !== initialName ||
+    description !== initialDescription ||
+    JSON.stringify(links) !== JSON.stringify(initialCustomLinks) ||
+    communityStatus !== normalizeStatus(initialStatus) ||
+    (openingDate || "") !== (initialOpeningDate ?? "");
+
+  function discard() {
+    setName(initialName);
+    setDescription(initialDescription);
+    setLinks(initialCustomLinks);
+    setCommunityStatus(normalizeStatus(initialStatus));
+    setOpeningDate(initialOpeningDate ?? "");
+  }
+
+  async function copyAddress() {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${communityPath(currentSlug)}`);
+      toast.success("Address copied");
+    } catch {
+      toast.error("Couldn't copy. Your browser blocked it.");
+    }
+  }
+
+  const localValue = (iso: string) => {
+    const date = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
   return (
-    <div id="settings-general" className="space-y-8">
-      {/* Community Name + Description */}
-      <div className="bg-card rounded-2xl p-6 border border-border/50 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">
-            Community name
-          </label>
-          <Input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="rounded-xl border-border/50 focus:border-primary/50 focus:ring-primary/20 transition-all"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">
-            Description
-          </label>
-          <Textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-            className="rounded-xl border-border/50 focus:border-primary/50 focus:ring-primary/20 transition-all resize-none"
-            placeholder="Tell people what your community is about..."
-          />
-        </div>
-      </div>
-
-      {/* Status & Availability */}
-      <div className="bg-card rounded-2xl p-6 border border-border/50 space-y-4">
-        <h3 className="font-display text-lg font-semibold text-foreground">
-          Status & Availability
-        </h3>
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">
-            Community Status
-          </label>
-          <Select
-            value={communityStatus}
-            onValueChange={(value: CommunityStatus) => setCommunityStatus(value)}
-            disabled={hasPreRegistrations}
-          >
-            <SelectTrigger className="w-full rounded-xl border-border/50">
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl">
-              <SelectItem value="active">
-                Active - Members can join and access content
-              </SelectItem>
-              <SelectItem value="pre_registration">
-                Pre-Registration - Accept pre-registrations only
-              </SelectItem>
-              <SelectItem value="inactive">
-                Inactive - Community is closed
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          {hasPreRegistrations && (
-            <div className="mt-3 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
-              <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                {PRE_REGISTRATIONS_LOCK_MESSAGE}
-              </p>
-            </div>
-          )}
-
-          {communityStatus === "pre_registration" && (
-            <div className="mt-3 p-4 bg-primary/5 border border-primary/20 rounded-xl">
-              <p className="text-sm text-foreground">
-                <strong>Pre-Registration Mode:</strong> Students can save their
-                payment method now and will be automatically charged on the
-                opening date.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Opening Date (conditional on pre-registration status) */}
-        {communityStatus === "pre_registration" && (
+    <Screen>
+      <ScreenHead title="Community details" sub="Your name, description, cover and links. Visitors see them on your About page." />
+      <div id="settings-general" className="flex flex-col gap-5">
+        <Card as="section" aria-labelledby="id-h" className="flex flex-col gap-3.5 p-5">
+          <h2 id="id-h" className="font-display text-[17px] font-semibold text-ink">
+            Name and description
+          </h2>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Opening Date & Time (your local time)
+            <label htmlFor="cd-name" className={FIELD_LABEL}>
+              Community name
             </label>
-            <Input
-              type="datetime-local"
-              value={
-                openingDate
-                  ? (() => {
-                      // Convert UTC to local datetime-local format
-                      const date = new Date(openingDate);
-                      const year = date.getFullYear();
-                      const month = String(date.getMonth() + 1).padStart(2, "0");
-                      const day = String(date.getDate()).padStart(2, "0");
-                      const hours = String(date.getHours()).padStart(2, "0");
-                      const minutes = String(date.getMinutes()).padStart(2, "0");
-                      return `${year}-${month}-${day}T${hours}:${minutes}`;
-                    })()
-                  : ""
-              }
-              onChange={(e) =>
-                setOpeningDate(
-                  e.target.value ? new Date(e.target.value).toISOString() : ""
-                )
-              }
-              min={(() => {
-                // Get current local time for min value
-                const now = new Date();
-                const year = now.getFullYear();
-                const month = String(now.getMonth() + 1).padStart(2, "0");
-                const day = String(now.getDate()).padStart(2, "0");
-                const hours = String(now.getHours()).padStart(2, "0");
-                const minutes = String(now.getMinutes()).padStart(2, "0");
-                return `${year}-${month}-${day}T${hours}:${minutes}`;
-              })()}
-              className="rounded-xl border-border/50"
-              disabled={!canChangeOpeningDate || hasPreRegistrations}
+            <input id="cd-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} className={FIELD_INPUT} />
+          </div>
+          <div>
+            <p className={FIELD_LABEL}>Web address</p>
+            <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-line bg-surface-2 px-3 py-2 text-[14.5px] text-ink-2">
+              <span className="min-w-0 flex-1 truncate">dance-hub.io{communityPath(currentSlug)}</span>
+              <button type="button" onClick={copyAddress} aria-label="Copy address" className="grid h-7 w-7 place-items-center rounded-md text-ink-3 hover:bg-surface hover:text-ink">
+                <Copy className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <p className="mt-1.5 text-[12.5px] text-ink-3">It follows the name. Changing the name changes the address, and old links stop working.</p>
+          </div>
+          <div>
+            <label htmlFor="cd-desc" className={FIELD_LABEL}>
+              Description
+            </label>
+            <textarea
+              id="cd-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder="One or two sentences: what you teach and who it's for."
+              className={cn(FIELD_INPUT, "resize-y")}
             />
-            <p className="text-xs text-muted-foreground mt-1.5">
-              Pre-registered members will be automatically charged on this date.
+            <p className="mt-1.5 text-[12.5px] tabular-nums text-ink-3">
+              Shown under your name on the community and About pages. {description.length} characters.
             </p>
+          </div>
+        </Card>
 
-            {!canChangeOpeningDate && !hasPreRegistrations && (
-              <div className="mt-3 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
-                <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                  {OPENING_DATE_LOCKED_MESSAGE}
-                </p>
-              </div>
+        <Card as="section" aria-labelledby="cov-h" className="flex flex-col gap-3.5 p-5">
+          <div>
+            <h2 id="cov-h" className="font-display text-[17px] font-semibold text-ink">
+              Cover image
+            </h2>
+            <p className="mt-0.5 text-[13.5px] text-ink-2">A wide image works best, 1600 by 400 pixels. Choose what shows with Adjust position.</p>
+          </div>
+          <div className="relative w-full overflow-hidden rounded-2xl bg-surface-3" style={{ aspectRatio: "4 / 1" }}>
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt="Cover preview"
+                className="h-full w-full object-cover"
+                style={{
+                  objectPosition: `${focalX}% ${focalY}%`,
+                  transform: `scale(${zoom})`,
+                  transformOrigin: `${focalX}% ${focalY}%`,
+                }}
+              />
+            ) : (
+              <span className="grid h-full place-items-center text-[14px] text-ink-3">No cover image yet</span>
+            )}
+            {isUploading && (
+              <span className="absolute inset-0 grid place-items-center bg-black/40 text-white">
+                <Loader2 className="h-7 w-7 animate-spin" aria-label="Uploading" />
+              </span>
             )}
           </div>
-        )}
-      </div>
-
-      {/* Cover Image */}
-      <div className="bg-card rounded-2xl p-6 border border-border/50 space-y-4">
-        <div>
-          <h3 className="font-display text-lg font-semibold text-foreground">
-            Cover Image
-          </h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            For a perfect fit, upload a wide image at <strong>1600×400 pixels</strong>{" "}
-            (4:1 ratio). Other shapes work too. Use{" "}
-            <strong>Adjust position</strong> to choose what shows.
-          </p>
-        </div>
-        <div className="w-full max-w-2xl mx-auto space-y-3">
-          {/* Preview the banner at its actual aspect (~4:1) so creators see
-              what the page banner will look like, not a generic 16:9 thumbnail. */}
-          <div className="relative w-full overflow-hidden rounded-2xl group bg-muted" style={{ aspectRatio: "4 / 1" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={imageUrl || "/placeholder.svg"}
-              alt="Community banner preview"
-              className="w-full h-full object-cover"
-              style={{
-                objectPosition: `${focalX}% ${focalY}%`,
-                transform: `scale(${zoom})`,
-                transformOrigin: `${focalX}% ${focalY}%`,
-              }}
-            />
-            <label
-              htmlFor="community-image"
-              className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm text-white opacity-0 group-hover:opacity-100 transition-all duration-300 cursor-pointer rounded-2xl"
-            >
-              {isUploading ? (
-                <Loader2 className="h-8 w-8 animate-spin" />
-              ) : (
-                <span className="px-4 py-2 bg-white/20 rounded-xl backdrop-blur-sm font-medium">
-                  Change Image
-                </span>
-              )}
+          <div className="flex flex-wrap gap-2">
+            <label className={cn(BTN_SECONDARY, "h-9 cursor-pointer")}>
+              <ImagePlus aria-hidden="true" />
+              {imageUrl ? "Replace image" : "Upload an image"}
+              <input type="file" id="community-image" accept="image/*" onChange={handleImageUpload} disabled={isUploading} className="sr-only" />
             </label>
-            <input
-              type="file"
-              id="community-image"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="hidden"
-            />
-          </div>
-          {imageUrl && (
-            <div className="flex justify-center">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsRepositionOpen(true)}
-                className="rounded-xl"
-              >
-                <Crop className="h-4 w-4 mr-2" />
+            {imageUrl && (
+              <button type="button" onClick={() => setIsRepositionOpen(true)} className={cn(BTN_GHOST, "h-9")}>
+                <Crop aria-hidden="true" />
                 Adjust position
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
+              </button>
+            )}
+          </div>
+        </Card>
 
-      {imageUrl && (
-        <BannerRepositionModal
-          isOpen={isRepositionOpen}
-          onClose={() => setIsRepositionOpen(false)}
-          imageUrl={imageUrl}
-          communitySlug={communitySlug}
-          initialFocalX={focalX}
-          initialFocalY={focalY}
-          initialZoom={zoom}
-          onSaved={(fx, fy, z) => {
-            setFocalX(fx);
-            setFocalY(fy);
-            setZoom(z);
-            router.refresh();
-          }}
-        />
-      )}
+        {imageUrl && (
+          <BannerRepositionModal
+            isOpen={isRepositionOpen}
+            onClose={() => setIsRepositionOpen(false)}
+            imageUrl={imageUrl}
+            communitySlug={communitySlug}
+            initialFocalX={focalX}
+            initialFocalY={focalY}
+            initialZoom={zoom}
+            onSaved={(fx, fy, z) => {
+              setFocalX(fx);
+              setFocalY(fy);
+              setZoom(z);
+              router.refresh();
+            }}
+          />
+        )}
 
-      {/* Custom Links */}
-      <div className="bg-card rounded-2xl p-6 border border-border/50 space-y-4">
-        <h3 className="font-display text-lg font-semibold text-foreground">
-          Custom Links
-        </h3>
-        <p className="text-sm text-muted-foreground">
-          Add useful links for your community members (e.g., social media profiles, website)
-        </p>
-        <div className="space-y-3">
+        <Card as="section" aria-labelledby="ln-h" className="flex flex-col gap-3 p-5">
+          <div>
+            <h2 id="ln-h" className="font-display text-[17px] font-semibold text-ink">
+              Links
+            </h2>
+            <p className="mt-0.5 text-[13.5px] text-ink-2">Your website or social profiles. An Instagram link shows on your community and About pages.</p>
+          </div>
           {links.map((link, index) => (
-            <div key={index} className="flex gap-2">
-              <Input
-                placeholder="Link Title (e.g., Instagram)"
+            <div key={index} className="flex flex-wrap gap-2 sm:flex-nowrap">
+              <input
+                placeholder="Title, for example Instagram"
+                aria-label={`Link ${index + 1} title`}
                 value={link.title}
                 onChange={(e) => handleLinkChange(index, "title", e.target.value)}
-                className="flex-1 rounded-xl border-border/50"
+                className={cn(FIELD_INPUT, "sm:max-w-[220px]")}
               />
-              <Input
-                placeholder="URL (e.g., instagram.com/your-profile)"
+              <input
+                placeholder="instagram.com/your-profile"
+                aria-label={`Link ${index + 1} address`}
                 value={link.url}
                 onChange={(e) => handleLinkChange(index, "url", e.target.value)}
-                className="flex-1 rounded-xl border-border/50"
+                className={FIELD_INPUT}
               />
-              <Button
-                variant="outline"
-                size="icon"
+              <button
+                type="button"
                 onClick={() => handleRemoveLink(index)}
-                className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/50 transition-all"
+                aria-label={`Remove ${link.title || "link"}`}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] text-ink-3 hover:bg-live-soft hover:text-live"
               >
-                <X className="h-4 w-4" />
-              </Button>
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
           ))}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleAddLink}
-            className="w-full rounded-xl border-border/50 border-dashed hover:bg-primary/5 hover:border-primary/30 transition-all"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Link
-          </Button>
-        </div>
-      </div>
+          <button type="button" onClick={handleAddLink} className={cn(BTN_GHOST, "h-9 self-start")}>
+            <Plus aria-hidden="true" />
+            Add a link
+          </button>
+        </Card>
 
-      <Button
-        onClick={handleSaveChanges}
-        disabled={isSaving}
-        className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm hover:shadow-md transition-all duration-200"
-      >
-        {isSaving ? (
-          <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Saving...
-          </>
-        ) : (
-          "Save Changes"
-        )}
-      </Button>
-    </div>
+        <Card as="section" aria-labelledby="st-h" className="flex flex-col gap-3.5 p-5">
+          <div>
+            <h2 id="st-h" className="font-display text-[17px] font-semibold text-ink">
+              Who can join
+            </h2>
+            <p className="mt-0.5 text-[13.5px] text-ink-2">Open now, take pre-registrations before you open, or close to new members.</p>
+          </div>
+          <div>
+            <label htmlFor="cd-status" className={FIELD_LABEL}>
+              Status
+            </label>
+            <select
+              id="cd-status"
+              value={communityStatus}
+              onChange={(e) => setCommunityStatus(e.target.value as CommunityStatus)}
+              disabled={hasPreRegistrations}
+              className={cn(FIELD_INPUT, "h-10 py-0")}
+            >
+              <option value="active">Open: members can join</option>
+              <option value="pre_registration">Pre-registration: members sign up now, pay on opening day</option>
+              <option value="inactive">Closed to new members</option>
+            </select>
+            {hasPreRegistrations && <p className="mt-2 rounded-[10px] bg-warn-soft px-3 py-2.5 text-[13.5px] text-warn">{PRE_REGISTRATIONS_LOCK_MESSAGE}</p>}
+          </div>
+          {communityStatus === "pre_registration" && (
+            <div>
+              <label htmlFor="cd-open" className={FIELD_LABEL}>
+                Opening date and time, your local time
+              </label>
+              <input
+                id="cd-open"
+                type="datetime-local"
+                value={openingDate ? localValue(openingDate) : ""}
+                onChange={(e) => setOpeningDate(e.target.value ? new Date(e.target.value).toISOString() : "")}
+                disabled={!canChangeOpeningDate || hasPreRegistrations}
+                className={cn(FIELD_INPUT, "max-w-[280px]")}
+              />
+              <p className="mt-1.5 text-[12.5px] text-ink-3">Members who pre-register are charged on this date.</p>
+              {!canChangeOpeningDate && !hasPreRegistrations && (
+                <p className="mt-2 rounded-[10px] bg-warn-soft px-3 py-2.5 text-[13.5px] text-warn">{OPENING_DATE_LOCKED_MESSAGE}</p>
+              )}
+            </div>
+          )}
+        </Card>
+      </div>
+      <SaveBar show={dirty} saving={isSaving} onSave={handleSaveChanges} onDiscard={discard} />
+    </Screen>
   );
 }

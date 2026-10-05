@@ -21,10 +21,8 @@ async function formProps(status: string, preRegistered: number) {
   mockQueryOne.mockImplementation(async (strings: string[]) =>
     /FROM community_members/.test(strings.join('?')) ? { count: preRegistered } : { ...row, status }
   );
-  const page = (await GeneralSettingsPage({ params: Promise.resolve({ communitySlug: 'salsa' }) })) as ReactElement<{
-    children: ReactElement<Record<string, unknown>>[];
-  }>;
-  return page.props.children[1].props;
+  const page = (await GeneralSettingsPage({ params: Promise.resolve({ communitySlug: 'salsa' }) })) as ReactElement<Record<string, unknown>>;
+  return page.props;
 }
 
 beforeEach(() => mockQueryOne.mockReset());
