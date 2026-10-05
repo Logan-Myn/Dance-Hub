@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Check, Eye, EyeOff, Link2Off, Loader2 } from "lucide-react";
 import { MIN_PASSWORD, friendlyAuthError } from "@/components/auth/AuthModal";
 import { FIELD_INPUT, FIELD_LABEL } from "@/components/ds/app-dialog";
@@ -13,6 +13,10 @@ import { cn } from "@/lib/utils";
 type Step = "form" | "expired" | "done";
 
 function Outcome({ icon, tone, title, children }: { icon: React.ReactNode; tone: "ok" | "warn"; title: string; children: React.ReactNode }) {
+  // The form is replaced by this step, so focus moves to its heading and
+  // screen readers announce it.
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => heading.current?.focus(), []);
   return (
     <div className="flex flex-col items-center gap-3 text-center">
       <span
@@ -21,7 +25,9 @@ function Outcome({ icon, tone, title, children }: { icon: React.ReactNode; tone:
       >
         {icon}
       </span>
-      <h1 className="font-display text-[22px] font-semibold leading-tight text-ink">{title}</h1>
+      <h1 ref={heading} tabIndex={-1} className="font-display text-[22px] font-semibold leading-tight text-ink outline-none">
+        {title}
+      </h1>
       {children}
     </div>
   );

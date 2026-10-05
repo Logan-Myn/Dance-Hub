@@ -26,8 +26,10 @@ export default async function DiscoveryPage() {
       SELECT
         c.id, c.slug, c.name, c.description, c.image_url,
         c.image_focal_x, c.image_focal_y, c.image_zoom, c.status, c.opening_date,
-        (SELECT COUNT(*) FROM community_members m
-          WHERE m.community_id = c.id AND m.role != 'admin' AND m.status = 'active')::int AS members_count,
+        -- Same people as getRosterCount, so the number matches the community page.
+        (SELECT COUNT(*) FROM community_members_with_profiles m
+          WHERE m.community_id = c.id AND m.role != 'admin' AND m.status = 'active'
+            AND (m.subscription_status = 'active' OR m.subscription_status IS NULL))::int AS members_count,
         EXISTS (SELECT 1 FROM community_members m
           WHERE m.community_id = c.id AND m.user_id = ${userId} AND m.status = 'active') AS is_member,
         COALESCE(c.created_by = ${userId}, false) AS is_owner

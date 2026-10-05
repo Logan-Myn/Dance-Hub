@@ -5,8 +5,9 @@ import AuthModal from '@/components/auth/AuthModal';
 import { resetPassword, signIn, signInWithGoogle, signUp } from '@/lib/auth';
 
 const mockPush = jest.fn();
+const mockRefresh = jest.fn();
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush, replace: jest.fn(), back: jest.fn() }),
+  useRouter: () => ({ push: mockPush, replace: jest.fn(), back: jest.fn(), refresh: mockRefresh }),
 }));
 
 jest.mock('@/contexts/AuthContext', () => ({
@@ -49,6 +50,13 @@ describe('AuthModal redirect', () => {
     render(<AuthModal isOpen onClose={jest.fn()} initialTab="signin" redirectUrl="https://evil.example/login" />);
     expect(localStorage.getItem('auth_redirect_url')).toBeNull();
     await signInWithPassword();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('refreshes the current page after a sign-in without a redirect', async () => {
+    render(<AuthModal isOpen onClose={jest.fn()} initialTab="signin" />);
+    await signInWithPassword();
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
     expect(mockPush).not.toHaveBeenCalled();
   });
 

@@ -157,7 +157,9 @@ export default function AuthModal({ isOpen, onClose, initialTab, redirectUrl: re
         await refreshUser();
         toast.success("Signed in");
         handleClose();
+        // Without a redirect, the page re-renders for the signed-in viewer.
         if (redirectUrl) router.push(redirectUrl);
+        else router.refresh();
       }
     } catch (err) {
       console.error("Auth error:", err);

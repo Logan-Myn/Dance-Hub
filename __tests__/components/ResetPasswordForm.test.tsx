@@ -43,7 +43,7 @@ describe('ResetPasswordForm', () => {
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
     render(<ResetPasswordForm token="abc" />);
     await choose('longenough');
-    expect(await screen.findByText('Password changed')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Password changed' })).toHaveFocus();
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ token: 'abc', password: 'longenough' });
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(mockShowAuthModal).toHaveBeenCalledWith('signin', '/dashboard');
