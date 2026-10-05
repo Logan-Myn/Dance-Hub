@@ -1,20 +1,20 @@
 "use client";
 
 import { createContext, useContext, useState, ReactNode } from "react";
-import AuthModal from "@/components/auth/AuthModal";
+import AuthModal, { type AuthModalTab } from "@/components/auth/AuthModal";
 
 interface AuthModalContextType {
-  showAuthModal: (tab: "signin" | "signup", redirectUrl?: string) => void;
+  showAuthModal: (tab: AuthModalTab, redirectUrl?: string) => void;
 }
 
 const AuthModalContext = createContext<AuthModalContextType | undefined>(undefined);
 
 export function AuthModalProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [initialTab, setInitialTab] = useState<"signin" | "signup">("signin");
+  const [initialTab, setInitialTab] = useState<AuthModalTab>("signin");
   const [redirectUrl, setRedirectUrl] = useState<string | undefined>(undefined);
 
-  const showAuthModal = (tab: "signin" | "signup", redirectUrl?: string) => {
+  const showAuthModal = (tab: AuthModalTab, redirectUrl?: string) => {
     setInitialTab(tab);
     setRedirectUrl(redirectUrl);
     setIsOpen(true);

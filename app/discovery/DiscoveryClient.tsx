@@ -1,177 +1,162 @@
 "use client";
 
-import { Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import Link from "next/link";
-import Image from "next/image";
-import { useAuth } from "@/contexts/AuthContext";
+import { useId, useMemo, useState } from "react";
+import { Plus, Search } from "lucide-react";
+import { FIELD_INPUT } from "@/components/ds/app-dialog";
+import { CommunityCover } from "@/components/ds/community-cover";
+import { EmptyState } from "@/components/ds/empty-state";
+import { Pill } from "@/components/ds/pill";
+import { BTN_PRIMARY, BTN_SECONDARY } from "@/components/community-feed/feed-header";
 import { useAuthModal } from "@/contexts/AuthModalContext";
-import useSWR from 'swr';
-import { fetcher, type Community } from '@/lib/fetcher';
-import { useState, useMemo } from 'react';
-import { communityPath } from '@/lib/safe-redirect';
+import { useViewerTimeZone } from "@/hooks/use-viewer-time-zone";
+import { searchCommunities, type DiscoveryCommunity } from "@/lib/discovery";
+import { communityPath } from "@/lib/safe-redirect";
+import { cn } from "@/lib/utils";
 
-export default function DiscoveryClient() {
-  const { user: currentUser } = useAuth();
+interface DiscoveryClientProps {
+  communities: DiscoveryCommunity[];
+  signedIn: boolean;
+  savedTimeZone: string | null;
+}
+
+function CreateCommunityButton({ signedIn, primary, className }: { signedIn: boolean; primary?: boolean; className?: string }) {
   const { showAuthModal } = useAuthModal();
-  const { data: communities, error, isLoading } = useSWR(
-    currentUser ? `communities:${currentUser.id}` : 'communities',
-    fetcher
+  const look = cn(primary ? BTN_PRIMARY : BTN_SECONDARY, className);
+  const content = (
+    <>
+      <Plus aria-hidden="true" />
+      Create a community
+    </>
   );
-  const [searchQuery, setSearchQuery] = useState("");
+  if (signedIn) {
+    return (
+      <Link href="/onboarding" className={look}>
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={() => showAuthModal("signup", "/onboarding")} className={look}>
+      {content}
+    </button>
+  );
+}
 
-  const handleCreateCommunity = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!currentUser) {
-      e.preventDefault();
-      showAuthModal("signup", "/onboarding");
-    }
-  };
-
-  const filteredCommunities = useMemo(() => {
-    if (!communities) return [];
-    
-    let filtered = [...communities];
-
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        community =>
-          community.name.toLowerCase().includes(query) ||
-          (community.description?.toLowerCase() || "").includes(query)
-      );
-    }
-
-    return filtered;
-  }, [communities, searchQuery]);
-
-  const handleCommunityClick = (e: React.MouseEvent<HTMLButtonElement>, community: Community) => {
-    e.preventDefault();
-    
-    if (!currentUser) {
-      showAuthModal("signup", "/onboarding");
-      return;
-    }
-
-    window.location.href = communityPath(community.slug);
-  };
+function CommunityResult({ community, timeZone }: { community: DiscoveryCommunity; timeZone: string }) {
+  const inside = community.isMember || community.isOwner;
+  const opening =
+    community.status === "pre_registration"
+      ? community.opening_date
+        ? `Opens ${new Date(community.opening_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone })}`
+        : "Opening soon"
+      : null;
+  const count = community.members_count;
 
   return (
-    <div className="container mx-auto px-4 py-8">
-        <main>
-          <h2 className="text-4xl font-bold text-center mb-4">
+    <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-card transition-[box-shadow,border-color,transform] hover:-translate-y-px hover:border-line-strong hover:shadow-raised has-[a.card-link:focus-visible]:outline has-[a.card-link:focus-visible]:outline-2 has-[a.card-link:focus-visible]:outline-offset-2 has-[a.card-link:focus-visible]:outline-brand">
+      <CommunityCover community={community} />
+      <div className="flex flex-1 flex-col gap-1.5 p-4">
+        <h2 className="font-display text-[17px] font-semibold leading-snug text-ink [overflow-wrap:anywhere]">
+          {/* Members open the community; everyone else lands on its About page, where joining happens. */}
+          <Link
+            href={communityPath(community.slug, inside ? "" : "/about")}
+            className="card-link outline-none after:absolute after:inset-0 after:content-[''] group-hover:text-brand-ink"
+          >
+            {community.name}
+          </Link>
+        </h2>
+        {community.description && (
+          <p className="line-clamp-2 text-[14px] leading-relaxed text-ink-2 [overflow-wrap:anywhere]">{community.description}</p>
+        )}
+        {(count > 0 || opening || inside) && (
+          <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
+            {count > 0 && (
+              <span className="mr-auto text-[13.5px] text-ink-3">
+                {count} {count === 1 ? "member" : "members"}
+              </span>
+            )}
+            {opening && <Pill variant="warn">{opening}</Pill>}
+            {community.isOwner ? <Pill variant="brand">Owner</Pill> : community.isMember && <Pill variant="ok">Joined</Pill>}
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+export default function DiscoveryClient({ communities, signedIn, savedTimeZone }: DiscoveryClientProps) {
+  const [search, setSearch] = useState("");
+  const timeZone = useViewerTimeZone(savedTimeZone);
+  const searchId = useId();
+  const shown = useMemo(() => searchCommunities(communities, search), [communities, search]);
+  const searching = search.trim().length > 0;
+  const total = communities.length;
+
+  return (
+    <main className="mx-auto flex max-w-[1120px] flex-col gap-6 px-4 pb-16 pt-8 sm:px-6 sm:pt-12">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight text-ink sm:text-[34px]">
             Discover dance communities
-          </h2>
-          <p className="text-center mb-8">
-            or{" "}
-            <Link
-              href="/onboarding"
-              className="text-blue-500 hover:underline"
-              onClick={handleCreateCommunity}
-            >
-              create your own
-            </Link>
+          </h1>
+          <p className="mt-1.5 max-w-[56ch] text-[15.5px] text-ink-2">
+            Learn online with teachers and schools. Open a community to see what&apos;s inside and how to join.
           </p>
-          <div className="relative mb-8">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <Input
-              className="pl-10"
-              placeholder="Search dance styles, teachers, and more"
+        </div>
+        <CreateCommunityButton signedIn={signedIn} className="self-start sm:self-auto" />
+      </header>
+
+      {total > 0 && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-[420px]">
+            <label htmlFor={searchId} className="sr-only">
+              Search communities
+            </label>
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" />
+            <input
+              id={searchId}
               type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, style or teacher"
+              autoComplete="off"
+              className={cn(FIELD_INPUT, "pl-10")}
             />
           </div>
-          <div className="flex space-x-4 mb-8 overflow-x-auto">
-            <Button variant="secondary">All</Button>
-            <Button variant="ghost">Ballet</Button>
-            <Button variant="ghost">Hip Hop</Button>
-            <Button variant="ghost">Contemporary</Button>
-            <Button variant="ghost">Salsa</Button>
-            <Button variant="ghost">Breakdancing</Button>
-          </div>
+          <p aria-live="polite" className="text-[13.5px] text-ink-3">
+            {searching ? `${shown.length} of ${total}` : total} {total === 1 ? "community" : "communities"}
+          </p>
+        </div>
+      )}
 
-          {isLoading ? (
-            <div className="flex justify-center items-center min-h-[200px]">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-            </div>
-          ) : error ? (
-            <div className="text-center text-red-500">
-              Error loading communities. Please try again later.
-            </div>
-          ) : !filteredCommunities.length ? (
-            <div className="text-center text-gray-500">No communities found</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredCommunities.map((community: Community) => (
-                <Link
-                  href={`/${community.slug}`}
-                  key={community.id}
-                  className="block border rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300"
-                >
-                  <div className="relative w-full h-48">
-                    <Image
-                      alt={community.name}
-                      src={community.image_url || "/placeholder.svg"}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      priority={false}
-                    />
-                    {community.status === 'pre_registration' && (
-                      <div className="absolute top-2 right-2 bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-semibold shadow-lg">
-                        Pre-Registration
-                      </div>
-                    )}
-                    {community.status === 'inactive' && (
-                      <div className="absolute top-2 right-2 bg-gray-600 text-white px-3 py-1 rounded-full text-sm font-semibold shadow-lg">
-                        Inactive
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <h3 className="text-xl font-semibold mb-2">
-                      {community.name}
-                    </h3>
-                    <p className="text-gray-600 mb-4">
-                      {community.description || "No description available"}
-                    </p>
-                    {community.status === 'pre_registration' && community.opening_date && (
-                      <p className="text-sm text-blue-600 font-medium mb-2">
-                        Opens: {new Date(community.opening_date).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}
-                      </p>
-                    )}
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-500">
-                        {community.privacy || "Public"} • {community.membersCount}{" "}
-                        Members
-                      </span>
-                      <Button
-                        variant="outline"
-                        onClick={(e) => handleCommunityClick(e, community)}
-                        className="hover:bg-blue-500 hover:text-white"
-                        disabled={community.status === 'inactive'}
-                      >
-                        {community.isMember
-                          ? "Enter"
-                          : community.status === 'pre_registration'
-                            ? "Pre-Register"
-                            : community.status === 'inactive'
-                              ? "Inactive"
-                              : "Join"}
-                      </Button>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-      </main>
-    </div>
+      {total === 0 ? (
+        <EmptyState
+          icon={<Search className="h-7 w-7" />}
+          title="No communities yet"
+          actions={<CreateCommunityButton signedIn={signedIn} primary />}
+        >
+          Be the first: create a community for your classes and invite your students.
+        </EmptyState>
+      ) : shown.length === 0 ? (
+        <EmptyState
+          icon={<Search className="h-7 w-7" />}
+          title={`Nothing matches "${search.trim()}"`}
+          actions={
+            <button type="button" onClick={() => setSearch("")} className={BTN_SECONDARY}>
+              Clear search
+            </button>
+          }
+        >
+          Try another word, like a dance style or a teacher&apos;s name.
+        </EmptyState>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
+          {shown.map((community) => (
+            <CommunityResult key={community.id} community={community} timeZone={timeZone} />
+          ))}
+        </div>
+      )}
+    </main>
   );
 }

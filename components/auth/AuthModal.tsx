@@ -11,16 +11,19 @@ import { resetPassword, signIn, signInWithGoogle, signUp } from "@/lib/auth";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import { cn } from "@/lib/utils";
 
+/** The step the window opens on. "reset" asks for the email to send a new reset link to. */
+export type AuthModalTab = "signin" | "signup" | "reset";
+
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab: "signin" | "signup";
+  initialTab: AuthModalTab;
   redirectUrl?: string;
 }
 
 type View = "signin" | "signup" | "reset" | "check-inbox" | "reset-sent";
 
-const MIN_PASSWORD = 8; // lib/auth-server.ts minPasswordLength
+export const MIN_PASSWORD = 8; // lib/auth-server.ts minPasswordLength
 
 const TITLES: Record<View, { title: string; description: string }> = {
   signin: { title: "Welcome back", description: "Sign in to your Dance-Hub account." },

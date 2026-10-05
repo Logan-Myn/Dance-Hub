@@ -39,7 +39,8 @@ export async function POST(request: Request) {
 
     if (error instanceof Error) {
       // Handle token expired or invalid errors
-      if (error.message.includes("expired") || error.message.includes("invalid")) {
+      // The auth server says "Invalid token" for links that expired or were used.
+      if (/expired|invalid token/i.test(error.message)) {
         return NextResponse.json(
           { error: "Reset link has expired or is invalid. Please request a new one." },
           { status: 400 }
