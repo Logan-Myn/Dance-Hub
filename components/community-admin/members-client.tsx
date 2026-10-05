@@ -37,7 +37,7 @@ export interface AdminMember {
 }
 
 type MemberState = "active" | "canceling" | "failed" | "pre" | "left";
-type Filter = "all" | "paying" | "free" | "canceling" | "failed" | "pre" | "left";
+type Filter = "all" | "paying" | "free" | "canceling" | "failed";
 
 export function memberState(m: Pick<AdminMember, "status" | "subscriptionStatus">): MemberState {
   if (m.status === "inactive") return "left";
@@ -66,8 +66,6 @@ const FILTERS: Array<[Filter, string]> = [
   ["free", "Free"],
   ["canceling", "Canceling"],
   ["failed", "Payment failed"],
-  ["pre", "Pre-registered"],
-  ["left", "Left"],
 ];
 
 function matches(m: AdminMember, f: Filter): boolean {
@@ -209,7 +207,7 @@ export function MembersClient({
       <ScreenHead
         title="Members"
         sub={[
-          `${withAccess} with access`,
+          `${withAccess} ${withAccess === 1 ? "member" : "members"}`,
           counts.canceling ? `${counts.canceling} canceling` : null,
           counts.failed ? `${counts.failed} with a failed payment` : null,
         ]

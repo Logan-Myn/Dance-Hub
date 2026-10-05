@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  *
- * The calendar's week is "Sunday 00:00 to the next Sunday 00:00 in the
+ * The calendar's week is "Monday 00:00 to the next Monday 00:00 in the
  * viewer's timezone", sent to the server as UTC instants. Every test passes
  * explicit instants and an explicit timezone, so the result must not depend
  * on the machine's TZ (try `TZ=Pacific/Kiritimati bun run test -- calendar-week`).
@@ -30,17 +30,22 @@ const SAT_8PM_NY = new Date('2026-10-04T00:00:00Z');
 
 describe('weekStartKey', () => {
   it('uses the calendar date in the viewer timezone, not UTC', () => {
-    // Saturday 21:30 in New York, already Sunday in UTC and in Tallinn.
-    const now = new Date('2026-10-04T01:30:00Z');
-    expect(weekStartKey(dateKeyInTz(now, NY))).toBe('2026-09-27');
-    expect(weekStartKey(dateKeyInTz(now, 'UTC'))).toBe('2026-10-04');
-    expect(weekStartKey(dateKeyInTz(now, TALLINN))).toBe('2026-10-04');
+    // Sunday 21:30 in New York, already Monday in UTC and in Tallinn.
+    const now = new Date('2026-10-05T01:30:00Z');
+    expect(weekStartKey(dateKeyInTz(now, NY))).toBe('2026-09-28');
+    expect(weekStartKey(dateKeyInTz(now, 'UTC'))).toBe('2026-10-05');
+    expect(weekStartKey(dateKeyInTz(now, TALLINN))).toBe('2026-10-05');
+  });
+
+  it('starts weeks on Monday, so Sunday ends the week', () => {
+    expect(weekStartKey('2026-10-05')).toBe('2026-10-05'); // Monday
+    expect(weekStartKey('2026-10-04')).toBe('2026-09-28'); // Sunday
+    expect(weekStartKey('2026-10-10')).toBe('2026-10-05'); // Saturday
   });
 
   it('moves by whole weeks with the offset', () => {
-    expect(weekStartKey('2026-10-01', 1)).toBe('2026-10-04');
-    expect(weekStartKey('2026-10-01', -1)).toBe('2026-09-20');
-    expect(weekStartKey('2026-10-04')).toBe('2026-10-04');
+    expect(weekStartKey('2026-10-01', 1)).toBe('2026-10-05');
+    expect(weekStartKey('2026-10-01', -1)).toBe('2026-09-21');
   });
 });
 
@@ -144,6 +149,8 @@ describe('initialCalendarRange', () => {
     '2026-10-03T09:30:00Z', // Saturday morning UTC
     '2026-10-04T00:30:00Z', // just after Sunday 00:00 UTC
     '2026-10-04T10:30:00Z', // Sunday in Asia, still Saturday in Hawaii
+    '2026-10-05T00:30:00Z', // just after Monday 00:00 UTC, a new week
+    '2026-10-05T10:30:00Z', // Monday in Asia, still Sunday in Hawaii
     '2026-11-01T06:30:00Z', // New York DST change
   ];
 

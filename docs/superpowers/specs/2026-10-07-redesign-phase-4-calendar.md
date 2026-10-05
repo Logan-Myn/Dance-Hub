@@ -26,7 +26,7 @@ Branch: `redesign/phase-4-calendar` (stacked on phase 3)
 
 ## Decisions made while building
 - A saved time zone of `UTC` counts as "not chosen" (it's the column default): viewers fall back to the browser's zone, and the class-time switch only shows when the owner chose a zone.
-- 24-hour times, weeks start on Sunday (as today).
+- 24-hour times. Weeks start on Monday (changed from Sunday after Logan's review, 2026-10-05).
 - Drag to move a class: not in the prototype, not built.
 - Repeat next week copies the class one week later on the same wall clock.
 - The owner's "N reminders set", "N attended", Remind me, Notify me, email toggles and the subscribe feed are not built (reminders and the .ics feed are later projects; attendance isn't recorded).

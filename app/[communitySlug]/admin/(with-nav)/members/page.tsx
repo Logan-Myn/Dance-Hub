@@ -27,9 +27,9 @@ export default async function MembersPage(
   const community = await getCommunityBySlug(params.communitySlug);
   if (!community) return null;
 
-  // Everyone who joined (or is joining through pre-registration), including
-  // members who cancel or left, so the owner can see who needs attention.
-  // Unfinished checkouts (status 'pending') aren't members and stay out.
+  // Members with access: paying, free, canceling (access until the period
+  // ends) and payment failed (still in while the card is retried). People who
+  // left, pre-registrations and unfinished checkouts aren't listed.
   const members = await query<AdminMember>`
     SELECT
       cm.id,
@@ -66,7 +66,7 @@ export default async function MembersPage(
     WHERE cm.community_id = ${community.id}
       AND cm.user_id <> ${community.created_by}
       AND COALESCE(cm.role, 'member') <> 'admin'
-      AND cm.status IN ('active', 'inactive', 'pre_registered', 'pending_pre_registration')
+      AND cm.status = 'active'
     ORDER BY cm.joined_at DESC NULLS LAST
   `;
 

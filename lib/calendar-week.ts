@@ -3,7 +3,7 @@ import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 /**
  * Week maths for the live-class calendar.
  *
- * The calendar shows one week, Sunday 00:00 to the next Sunday 00:00, in the
+ * The calendar shows one week, Monday 00:00 to the next Monday 00:00, in the
  * viewer's timezone. The client turns that week into UTC instants for the API,
  * and buckets classes by their date and hour in the same timezone, so a class
  * is in exactly one week and on one day for every viewer.
@@ -60,12 +60,13 @@ export function formatDayKey(key: string, fmt: string): string {
 }
 
 /**
- * The Sunday that starts the week containing the calendar date `dayKey`,
+ * The Monday that starts the week containing the calendar date `dayKey`,
  * moved by `weekOffset` whole weeks. For "this week" pass today's date in the
  * viewer's timezone: `weekStartKey(dateKeyInTz(now, tz))`.
  */
 export function weekStartKey(dayKey: string, weekOffset = 0): string {
-  return addDaysToKey(dayKey, -weekdayOfKey(dayKey) + weekOffset * 7);
+  const daysSinceMonday = (weekdayOfKey(dayKey) + 6) % 7;
+  return addDaysToKey(dayKey, -daysSinceMonday + weekOffset * 7);
 }
 
 export function weekDayKeys(startKey: string): string[] {
@@ -111,7 +112,7 @@ function startOfDayUtc(dayKey: string, tz: string): Date {
   return new Date(midnight.getTime() + hi * 60_000);
 }
 
-/** The week starting on `startKey` (a Sunday) in `tz`, as UTC instants. */
+/** The week starting on `startKey` (a Monday) in `tz`, as UTC instants. */
 export function weekRangeUtc(startKey: string, tz: string): UtcRange {
   return {
     start: startOfDayUtc(startKey, tz),
