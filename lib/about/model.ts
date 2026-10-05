@@ -23,7 +23,9 @@ const safeUrl = (s: unknown): string => {
     return "";
   }
 };
-const textHtml = (s: unknown) => sanitizeRichText(typeof s === "string" ? s : "");
+// Text pasted from other editors often has a non-breaking space between every
+// word, so the browser can't wrap it and it runs off the page. Normal spaces.
+const textHtml = (s: unknown) => sanitizeRichText(typeof s === "string" ? s : "").replace(/&nbsp;|\u00a0/g, " ");
 const plainToHtml = (s: string) => (s ? `<p>${s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!)}</p>` : "");
 
 interface LegacySection {

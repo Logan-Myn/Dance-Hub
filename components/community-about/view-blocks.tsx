@@ -304,7 +304,7 @@ export function ViewBlock({ block, ctx }: { block: AboutBlock; ctx: AboutCtx }) 
           {c.text && (
             <div
               className={cn(
-                "prose max-w-[65ch] text-[16px] leading-[1.7] text-ink-2",
+                "prose max-w-[65ch] text-[16px] leading-[1.7] text-ink-2 [overflow-wrap:anywhere]",
                 "prose-p:my-2 prose-a:text-brand-ink prose-headings:font-display prose-headings:text-ink prose-strong:text-ink",
                 "prose-li:my-0.5 [&_li>p]:my-0 [&_li>p]:inline prose-blockquote:border-brand-line prose-blockquote:text-ink-2"
               )}

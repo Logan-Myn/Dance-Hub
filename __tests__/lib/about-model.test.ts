@@ -58,4 +58,13 @@ describe("about page model", () => {
     expect(holdsOwnContent({ id: "a", type: "schedule", content: {} })).toBe(false);
     expect(holdsOwnContent({ id: "a", type: "quote", content: { text: "Great teacher" } })).toBe(true);
   });
+
+  it("lets pasted text wrap: non-breaking spaces become normal spaces", () => {
+    const page = normalizeAboutPage({
+      sections: [{ id: "t", type: "text", content: { text: "<p>My&nbsp;teaching&nbsp;approach\u00a0is&nbsp;structured</p>" } }],
+    });
+    const text = page!.sections.find((b) => b.type === "text")!.content.text!;
+    expect(text).toBe("<p>My teaching approach is structured</p>");
+  });
 });
+
