@@ -179,7 +179,6 @@ export default function OnboardingForm() {
         {previewUrl && imageFile ? (
           <div className="flex flex-col gap-2.5">
             <BannerCropper key={previewUrl} imageUrl={previewUrl} onChange={setCrop} />
-            <p className="text-[13px] text-ink-3">Drag and zoom to choose what shows in the banner.</p>
             <div className="flex flex-wrap gap-2">
               <label htmlFor={ids.cover} className={cn(BTN_SECONDARY, "h-9 cursor-pointer")}>
                 <ImagePlus aria-hidden="true" />
