@@ -10,7 +10,7 @@ import { useAuthModal } from "@/contexts/AuthModalContext";
 import { authModalRequestFromSearch } from "@/lib/safe-redirect";
 import { cn } from "@/lib/utils";
 
-const MUX_PRODUCT_TOUR_PLAYBACK_ID = "ez2DwxtXRgWYHWYE2XP00YOqUyybmltscc2pljLw3LX00";
+const MUX_PRODUCT_TOUR_PLAYBACK_ID = "vzZ81ggS02IvBXaQ3W5PRtv6YkApzQOZ6l282102OZJuI";
 
 // Same type scale as the community pages: Outfit for headings, Figtree for text.
 const H1 = "text-balance font-display text-[42px] font-semibold leading-[1.04] tracking-[-0.03em] text-ink sm:text-[60px] lg:text-[74px]";
