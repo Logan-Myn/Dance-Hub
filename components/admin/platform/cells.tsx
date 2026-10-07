@@ -38,7 +38,7 @@ export function NameCell({
 
 /** A person with their avatar. */
 export function PersonCell({ id, name, sub, avatarUrl }: { id: string; name: string; sub?: string; avatarUrl: string | null }) {
-  return <NameCell title={name} sub={sub} picture={<InitialsAvatar id={id} name={name} imageUrl={avatarUrl} size={32} />} width="max-w-[220px]" />;
+  return <NameCell title={name} sub={sub} picture={<InitialsAvatar id={id} name={name} imageUrl={avatarUrl} size={32} />} width="max-w-[180px]" />;
 }
 
 export function NoneCell() {

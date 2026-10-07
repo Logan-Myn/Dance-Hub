@@ -20,7 +20,7 @@ export function ThreadsTable({ threads }: { threads: AdminThreadRow[] }) {
         cell: ({ row }) => {
           const t = row.original;
           return (
-            <div className="min-w-[220px] max-w-[360px]">
+            <div className="min-w-[200px] max-w-[280px]">
               <p className="truncate font-semibold text-ink">{t.title}</p>
               {t.contentPreview && <p className="line-clamp-2 text-[13px] text-ink-3">{t.contentPreview}</p>}
             </div>
@@ -89,7 +89,7 @@ export function ThreadsTable({ threads }: { threads: AdminThreadRow[] }) {
 export function CommunityLink({ community }: { community: { name: string; slug: string } }) {
   if (!community.slug) return <span className="text-ink-3">{community.name}</span>;
   return (
-    <Link href={communityPath(community.slug)} target="_blank" rel="noopener noreferrer" className="inline-block max-w-[180px] truncate align-middle text-ink hover:text-brand-ink hover:underline hover:underline-offset-[3px]">
+    <Link href={communityPath(community.slug)} target="_blank" rel="noopener noreferrer" className="inline-block max-w-[150px] truncate align-middle text-ink hover:text-brand-ink hover:underline hover:underline-offset-[3px]">
       {community.name}
     </Link>
   );
