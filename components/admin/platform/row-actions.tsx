@@ -100,8 +100,8 @@ export function CommunityActions({
         }}
       >
         <p>
-          Every member subscription to <span className="font-semibold text-ink">{community.name}</span> is cancelled,
-          and its members, posts, courses and classes are removed. This can&apos;t be undone.
+          Every member subscription to <span className="font-semibold text-ink">{community.name}</span>{' '}
+          is cancelled, and its members, posts, courses and classes are removed. This can&apos;t be undone.
         </p>
       </ConfirmDialog>
     </>
@@ -165,8 +165,8 @@ export function UserActions({ userId, name }: { userId: string; name: string }) 
         }}
       >
         <p>
-          <span className="font-semibold text-ink">{name}</span> loses their account and everything tied to it. This
-          can&apos;t be undone.
+          <span className="font-semibold text-ink">{name}</span>{' '}
+          loses their account and everything tied to it. This can&apos;t be undone.
         </p>
       </ConfirmDialog>
     </>
@@ -199,8 +199,8 @@ export function ThreadActions({ thread }: { thread: { id: string; title: string;
         }}
       >
         <p>
-          <span className="font-semibold text-ink">{thread.title}</span> and its replies go for good. This can&apos;t be
-          undone.
+          <span className="font-semibold text-ink">{thread.title}</span>{' '}
+          and its replies go for good. This can&apos;t be undone.
         </p>
       </ConfirmDialog>
     </>
@@ -253,8 +253,8 @@ export function CourseActions({
         }}
       >
         <p>
-          <span className="font-semibold text-ink">{course.title}</span>, its chapters, lessons and videos go for good.
-          This can&apos;t be undone.
+          <span className="font-semibold text-ink">{course.title}</span>, its chapters, lessons and videos go for
+          good. This can&apos;t be undone.
         </p>
       </ConfirmDialog>
     </>

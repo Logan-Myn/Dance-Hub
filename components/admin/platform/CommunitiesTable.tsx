@@ -20,14 +20,14 @@ export function CommunitiesTable({ communities }: { communities: AdminCommunityR
         accessorKey: 'name',
         cell: ({ row }) => {
           const c = row.original;
-          return <NameCell title={c.name} sub={c.description || `/${c.slug}`} picture={<Thumb name={c.name} imageUrl={c.imageUrl} />} />;
+          return <NameCell title={c.name} sub={c.description || `/${c.slug}`} picture={<Thumb name={c.name} imageUrl={c.imageUrl} />} width="max-w-[210px]" />;
         },
       },
       {
         id: 'creator',
         header: 'Owner',
         accessorFn: (row) => row.creator.fullName ?? row.creator.email,
-        cell: ({ row }) => <NameCell title={row.original.creator.fullName ?? row.original.creator.email} sub={row.original.creator.fullName ? row.original.creator.email : undefined} width="max-w-[220px]" />,
+        cell: ({ row }) => <NameCell title={row.original.creator.fullName ?? row.original.creator.email} sub={row.original.creator.fullName ? row.original.creator.email : undefined} width="max-w-[190px]" />,
       },
       {
         id: 'members',

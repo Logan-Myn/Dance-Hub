@@ -42,14 +42,14 @@ export function Delta({ growth, className }: { growth: number; className?: strin
   return (
     <span
       className={cn(
-        'mt-1 inline-flex items-center gap-1 text-[13px] font-semibold tabular-nums',
+        'mt-1 inline-flex flex-wrap items-center gap-x-1 text-[13px] font-semibold tabular-nums',
         trend === 'up' ? 'text-ok' : trend === 'down' ? 'text-live' : 'text-ink-3',
         className
       )}
     >
       <Icon className="h-3.5 w-3.5" aria-hidden="true" />
       {percentText(growth)}
-      <span className="font-normal text-ink-3">vs last month</span>
+      <span className="whitespace-nowrap font-normal text-ink-3">vs last month</span>
     </span>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, type ReactNode, useId, useState } from 'react';
+import { Fragment, type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import {
   type ColumnDef,
   type ExpandedState,
@@ -49,6 +49,17 @@ export function AdminDataTable<T>({
   const [globalFilter, setGlobalFilter] = useState('');
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const searchId = useId();
+  // The visible width of the table, so an expanded row's panel stays in view
+  // (pinned to the left) when the table is wider than its card.
+  const scroller = useRef<HTMLDivElement>(null);
+  const [visibleWidth, setVisibleWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entry]) => setVisibleWidth(Math.round(entry.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const usePagination = typeof pageSize === 'number' && pageSize > 0;
   const expandable = Boolean(renderSubComponent);
@@ -95,7 +106,7 @@ export function AdminDataTable<T>({
 
       <Card className="overflow-hidden">
         {/* Wide tables scroll here, inside the card, not the whole page. */}
-        <div className="overflow-x-auto">
+        <div ref={scroller} className="overflow-x-auto">
           <table className="w-full border-collapse text-left">
             <thead>
               {table.getHeaderGroups().map((hg) => (
@@ -181,7 +192,9 @@ export function AdminDataTable<T>({
                       {expandable && isExpanded && (
                         <tr className="border-b border-line bg-surface-2/40 last:border-b-0">
                           <td colSpan={colSpan} className="p-0">
-                            {renderSubComponent!(row.original)}
+                            <div className="sticky left-0" style={visibleWidth ? { width: visibleWidth } : undefined}>
+                              {renderSubComponent!(row.original)}
+                            </div>
                           </td>
                         </tr>
                       )}
