@@ -31,7 +31,7 @@ export function UsersTable({ users }: { users: AdminUserRow[] }) {
         id: 'email',
         header: 'Email',
         accessorKey: 'email',
-        cell: ({ row }) => <span className="text-ink-2">{row.original.email}</span>,
+        cell: ({ row }) => <span className="whitespace-nowrap text-ink-2">{row.original.email}</span>,
       },
       {
         id: 'role',

@@ -19,6 +19,9 @@ import { BTN_SECONDARY } from '@/components/community-feed/feed-header';
 import { Card } from '@/components/community-admin/ui';
 import { cn } from '@/lib/utils';
 
+// The row menu column stays at the right edge when the table scrolls sideways.
+const PINNED = 'sticky right-0 bg-surface shadow-[-10px_0_10px_-10px_rgba(24,16,36,0.18)]';
+
 interface AdminDataTableProps<T> {
   columns: ColumnDef<T, unknown>[];
   data: T[];
@@ -121,7 +124,7 @@ export function AdminDataTable<T>({
                         key={header.id}
                         scope="col"
                         aria-sort={canSort ? (dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none') : undefined}
-                        className="whitespace-nowrap px-4 py-3 text-[13px] font-semibold text-ink-3"
+                        className={cn('whitespace-nowrap px-4 py-3 text-[13px] font-semibold text-ink-3', header.column.id === 'actions' && PINNED)}
                       >
                         {canSort ? (
                           <button
@@ -155,9 +158,9 @@ export function AdminDataTable<T>({
                     <Fragment key={row.id}>
                       <tr
                         className={cn(
-                          'border-b border-line transition-colors last:border-b-0 hover:bg-surface-2/60',
+                          'group border-b border-line transition-colors last:border-b-0 hover:bg-surface-2',
                           expandable && 'cursor-pointer',
-                          isExpanded && 'bg-surface-2/60'
+                          isExpanded && 'bg-surface-2'
                         )}
                         onClick={
                           expandable
@@ -184,7 +187,13 @@ export function AdminDataTable<T>({
                           </td>
                         )}
                         {row.getVisibleCells().map((cell) => (
-                          <td key={cell.id} className="px-4 py-3 align-middle text-[14px] text-ink">
+                          <td
+                            key={cell.id}
+                            className={cn(
+                              'px-4 py-3 align-middle text-[14px] text-ink',
+                              cell.column.id === 'actions' && cn(PINNED, 'transition-colors group-hover:bg-surface-2', isExpanded && 'bg-surface-2')
+                            )}
+                          >
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                           </td>
                         ))}
