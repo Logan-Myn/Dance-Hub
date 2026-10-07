@@ -31,6 +31,7 @@ export function ConfirmDialog({
   confirmLabel,
   typeToConfirm,
   onConfirm,
+  returnFocus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -39,6 +40,7 @@ export function ConfirmDialog({
   confirmLabel: string;
   typeToConfirm?: string;
   onConfirm: () => Promise<void>;
+  returnFocus?: React.RefObject<HTMLElement | null>;
 }) {
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
@@ -76,6 +78,7 @@ export function ConfirmDialog({
       onOpenChange={(o) => !busy && onOpenChange(o)}
       title={title}
       width={460}
+      returnFocus={returnFocus}
       footer={
         <>
           <button type="button" className={BTN_SECONDARY} onClick={() => onOpenChange(false)} disabled={busy}>
@@ -134,6 +137,7 @@ export function EditDialog({
   fields,
   loading,
   onSave,
+  returnFocus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -142,6 +146,7 @@ export function EditDialog({
   /** True while the current values are still loading. */
   loading?: boolean;
   onSave: (values: Record<string, string>) => Promise<void>;
+  returnFocus?: React.RefObject<HTMLElement | null>;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -181,6 +186,7 @@ export function EditDialog({
       onOpenChange={(o) => !busy && onOpenChange(o)}
       title={title}
       width={480}
+      returnFocus={returnFocus}
       footer={
         <>
           <button type="button" className={BTN_SECONDARY} onClick={() => onOpenChange(false)} disabled={busy}>

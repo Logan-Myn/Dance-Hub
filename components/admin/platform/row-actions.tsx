@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { forwardRef, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { ExternalLink, MoreHorizontal, Pencil, Trash2, type LucideIcon } from 'lucide-react';
@@ -21,11 +21,11 @@ type Entry =
   | { kind: 'action'; label: string; icon: LucideIcon; onSelect: () => void; danger?: boolean };
 
 /** The "⋯" menu at the end of a row. Its windows live outside the menu, so closing the menu never closes them. */
-function RowMenu({ label, entries }: { label: string; entries: Entry[] }) {
+const RowMenu = forwardRef<HTMLButtonElement, { label: string; entries: Entry[] }>(function RowMenu({ label, entries }, ref) {
   const firstDanger = entries.findIndex((e) => e.kind === 'action' && e.danger);
   return (
     <DropdownMenu modal={false}>
-      <DropdownMenuTrigger aria-label={label} className={cn(ICON_BTN, 'h-8 w-8')}>
+      <DropdownMenuTrigger ref={ref} aria-label={label} className={cn(ICON_BTN, 'h-8 w-8')}>
         <MoreHorizontal className="h-[18px] w-[18px]" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={6} className={cn(POP, 'w-52')}>
@@ -50,7 +50,7 @@ function RowMenu({ label, entries }: { label: string; entries: Entry[] }) {
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
+});
 
 type Open = 'edit' | 'delete' | null;
 
@@ -60,11 +60,13 @@ export function CommunityActions({
   community: { id: string; name: string; slug: string; description: string | null };
 }) {
   const [open, setOpen] = useState<Open>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const router = useRouter();
   const url = `/api/admin/communities/${community.id}`;
   return (
     <>
       <RowMenu
+        ref={trigger}
         label={`Actions for ${community.name}`}
         entries={[
           { kind: 'link', label: 'Open community', icon: ExternalLink, href: communityPath(community.slug) },
@@ -75,6 +77,7 @@ export function CommunityActions({
       <EditDialog
         open={open === 'edit'}
         onOpenChange={(o) => setOpen(o ? 'edit' : null)}
+        returnFocus={trigger}
         title="Edit community"
         fields={[
           { key: 'name', label: 'Name', value: community.name, required: true },
@@ -90,6 +93,7 @@ export function CommunityActions({
       <ConfirmDialog
         open={open === 'delete'}
         onOpenChange={(o) => setOpen(o ? 'delete' : null)}
+        returnFocus={trigger}
         title="Delete this community?"
         confirmLabel="Delete community"
         typeToConfirm={community.name}
@@ -110,6 +114,7 @@ export function CommunityActions({
 
 export function UserActions({ userId, name }: { userId: string; name: string }) {
   const [open, setOpen] = useState<Open>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const [profile, setProfile] = useState<{ full_name: string; display_name: string; email: string } | null>(null);
   const router = useRouter();
   const url = `/api/admin/users/${userId}`;
@@ -124,13 +129,15 @@ export function UserActions({ userId, name }: { userId: string; name: string }) 
       setProfile({ full_name: p.full_name ?? '', display_name: p.display_name ?? '', email: p.email ?? '' });
     } catch {
       toast.error("Couldn't load this user. Try again.");
-      setOpen(null);
+      // Only close the edit window; another one may be open by now.
+      setOpen((o) => (o === 'edit' ? null : o));
     }
   };
 
   return (
     <>
       <RowMenu
+        ref={trigger}
         label={`Actions for ${name}`}
         entries={[
           { kind: 'action', label: 'Edit user', icon: Pencil, onSelect: startEdit },
@@ -140,6 +147,7 @@ export function UserActions({ userId, name }: { userId: string; name: string }) 
       <EditDialog
         open={open === 'edit'}
         onOpenChange={(o) => setOpen(o ? 'edit' : null)}
+        returnFocus={trigger}
         title="Edit user"
         loading={!profile}
         fields={[
@@ -156,6 +164,7 @@ export function UserActions({ userId, name }: { userId: string; name: string }) 
       <ConfirmDialog
         open={open === 'delete'}
         onOpenChange={(o) => setOpen(o ? 'delete' : null)}
+        returnFocus={trigger}
         title="Delete this user?"
         confirmLabel="Delete user"
         onConfirm={async () => {
@@ -175,10 +184,12 @@ export function UserActions({ userId, name }: { userId: string; name: string }) 
 
 export function ThreadActions({ thread }: { thread: { id: string; title: string; communitySlug: string | null } }) {
   const [open, setOpen] = useState<Open>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const router = useRouter();
   return (
     <>
       <RowMenu
+        ref={trigger}
         label={`Actions for ${thread.title}`}
         entries={[
           ...(thread.communitySlug
@@ -190,6 +201,7 @@ export function ThreadActions({ thread }: { thread: { id: string; title: string;
       <ConfirmDialog
         open={open === 'delete'}
         onOpenChange={(o) => setOpen(o ? 'delete' : null)}
+        returnFocus={trigger}
         title="Delete this post?"
         confirmLabel="Delete post"
         onConfirm={async () => {
@@ -213,11 +225,13 @@ export function CourseActions({
   course: { id: string; title: string; slug: string; description: string | null; communitySlug: string | null };
 }) {
   const [open, setOpen] = useState<Open>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const router = useRouter();
   const url = `/api/admin/courses/${course.id}`;
   return (
     <>
       <RowMenu
+        ref={trigger}
         label={`Actions for ${course.title}`}
         entries={[
           ...(course.communitySlug
@@ -230,6 +244,7 @@ export function CourseActions({
       <EditDialog
         open={open === 'edit'}
         onOpenChange={(o) => setOpen(o ? 'edit' : null)}
+        returnFocus={trigger}
         title="Edit course"
         fields={[
           { key: 'title', label: 'Title', value: course.title, required: true },
@@ -244,6 +259,7 @@ export function CourseActions({
       <ConfirmDialog
         open={open === 'delete'}
         onOpenChange={(o) => setOpen(o ? 'delete' : null)}
+        returnFocus={trigger}
         title="Delete this course?"
         confirmLabel="Delete course"
         onConfirm={async () => {

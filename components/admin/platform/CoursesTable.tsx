@@ -54,7 +54,7 @@ export function CoursesTable({ courses }: { courses: AdminCourseRow[] }) {
       },
       {
         id: 'actions',
-        header: '',
+        header: () => <span className="sr-only">Actions</span>,
         enableSorting: false,
         cell: ({ row }) => {
           const c = row.original;

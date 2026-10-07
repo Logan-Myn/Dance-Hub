@@ -165,6 +165,9 @@ export function AdminDataTable<T>({
                         onClick={
                           expandable
                             ? (e) => {
+                                // Clicks from menus and windows rendered in a portal bubble here
+                                // through React; only clicks inside the row count.
+                                if (!e.currentTarget.contains(e.target as Node)) return;
                                 // Links, buttons and menus inside the row keep their own click.
                                 const target = e.target as HTMLElement;
                                 if (target.closest('a, button, input, [role="menuitem"], [role="dialog"]')) return;
@@ -212,8 +215,10 @@ export function AdminDataTable<T>({
                 })
               ) : (
                 <tr>
-                  <td colSpan={colSpan} className="px-4 py-10 text-center text-[14.5px] text-ink-2">
-                    {globalFilter ? `Nothing matches "${globalFilter}".` : emptyMessage}
+                  <td colSpan={colSpan} className="p-0">
+                    <div className="sticky left-0 px-4 py-10 text-center text-[14.5px] text-ink-2" style={visibleWidth ? { width: visibleWidth } : undefined}>
+                      {globalFilter ? `Nothing matches "${globalFilter}".` : emptyMessage}
+                    </div>
                   </td>
                 </tr>
               )}

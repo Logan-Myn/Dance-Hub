@@ -67,7 +67,7 @@ export function UsersTable({ users }: { users: AdminUserRow[] }) {
       },
       {
         id: 'actions',
-        header: '',
+        header: () => <span className="sr-only">Actions</span>,
         enableSorting: false,
         // The admin user routes and /api/profile take the auth user id, not
         // the profile id (with the profile id, Delete matched nothing).

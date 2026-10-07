@@ -62,7 +62,7 @@ export function ThreadsTable({ threads }: { threads: AdminThreadRow[] }) {
       },
       {
         id: 'actions',
-        header: '',
+        header: () => <span className="sr-only">Actions</span>,
         enableSorting: false,
         cell: ({ row }) => (
           <div className="flex justify-end">

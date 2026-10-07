@@ -16,7 +16,7 @@ export function PlatformDashboardKpis({ stats }: { stats: PlatformStats }) {
   const tiles: Tile[] = [
     { label: 'Users', value: stats.usersTotal.toLocaleString('en-GB'), note: `${stats.newUsersThisMonth} new this month`, growth: stats.newUsersGrowth },
     { label: 'Communities', value: stats.communitiesTotal.toLocaleString('en-GB'), note: `${stats.newCommunitiesThisMonth} new this month`, growth: stats.newCommunitiesGrowth },
-    { label: 'Paid memberships', value: stats.activeSubscriptions.toLocaleString('en-GB'), note: 'Active now', growth: stats.activeSubscriptionsGrowth },
+    { label: 'Active subscriptions', value: stats.activeSubscriptions.toLocaleString('en-GB'), note: 'Memberships and email plans', growth: stats.activeSubscriptionsGrowth },
     { label: 'Community revenue', value: formatEur(stats.communitiesRevenueThisMonth), note: 'This month', growth: stats.communitiesRevenueGrowth },
     { label: 'Dance-Hub fees', value: formatEur(stats.platformRevenueThisMonth), note: 'This month', growth: stats.platformRevenueGrowth },
   ];

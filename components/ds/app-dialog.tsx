@@ -19,6 +19,7 @@ export function AppDialog({
   leading,
   width = 560,
   className,
+  returnFocus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -30,6 +31,8 @@ export function AppDialog({
   leading?: React.ReactNode;
   width?: number;
   className?: string;
+  /** Focused when the window closes, for windows opened without a Dialog trigger (from a menu, say). */
+  returnFocus?: React.RefObject<HTMLElement | null>;
 }) {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -41,6 +44,15 @@ export function AppDialog({
               className
             )}
             style={{ maxWidth: width }}
+            onCloseAutoFocus={
+              returnFocus
+                ? (e) => {
+                    if (!returnFocus.current) return;
+                    e.preventDefault();
+                    returnFocus.current.focus();
+                  }
+                : undefined
+            }
           >
             <div className="flex items-start gap-3 pb-2 pl-[22px] pr-3.5 pt-4">
               {leading && <div className="shrink-0 pt-1">{leading}</div>}

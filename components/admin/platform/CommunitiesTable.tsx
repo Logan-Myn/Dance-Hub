@@ -48,13 +48,13 @@ export function CommunitiesTable({ communities }: { communities: AdminCommunityR
       },
       {
         id: 'revenue',
-        header: 'Revenue',
+        header: 'Lifetime revenue',
         accessorKey: 'totalRevenue',
         cell: ({ row }) => <span className="font-semibold tabular-nums">{formatEur(row.original.totalRevenue)}</span>,
       },
       {
         id: 'platformFees',
-        header: 'Fees',
+        header: 'Lifetime fees',
         accessorKey: 'platformFees',
         cell: ({ row }) => <span className="tabular-nums text-ink-2">{formatEur(row.original.platformFees)}</span>,
       },
@@ -66,7 +66,7 @@ export function CommunitiesTable({ communities }: { communities: AdminCommunityR
       },
       {
         id: 'actions',
-        header: '',
+        header: () => <span className="sr-only">Actions</span>,
         enableSorting: false,
         cell: ({ row }) => (
           <div className="flex justify-end">
