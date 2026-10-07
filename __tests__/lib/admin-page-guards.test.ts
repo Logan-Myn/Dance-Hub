@@ -53,10 +53,17 @@ describe('requirePlatformAdminPage', () => {
     await expect(requirePlatformAdminPage()).rejects.toThrow('REDIRECT /');
   });
 
-  it('lets an admin through (same flag as the admin layout)', async () => {
-    const session = { user: { id: 'a1', isAdmin: true } };
+  it('lets an admin through (same flag as the admin API routes)', async () => {
+    const session = { user: { id: 'a1', isAdmin: false } };
     mockSession.mockResolvedValue(session);
+    mockIsAdmin.mockResolvedValue(true);
     await expect(requirePlatformAdminPage()).resolves.toBe(session);
+    expect(mockIsAdmin).toHaveBeenCalledWith('a1');
+  });
+
+  it('refuses a session flag the admin API routes would not accept', async () => {
+    mockSession.mockResolvedValue({ user: { id: 'a2', isAdmin: true } });
+    await expect(requirePlatformAdminPage()).rejects.toThrow('REDIRECT /');
   });
 });
 

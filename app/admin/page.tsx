@@ -20,6 +20,7 @@ import { PlatformDashboardKpis } from '@/components/admin/platform/PlatformDashb
 import { PlatformDashboardChart } from '@/components/admin/platform/PlatformDashboardChart';
 import { PlatformDashboardActivityFeed } from '@/components/admin/platform/PlatformDashboardActivityFeed';
 import type { PlatformStats } from '@/lib/admin-platform/types';
+import { Screen, ScreenHead } from '@/components/community-admin/ui';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -73,21 +74,11 @@ export default async function AdminDashboard() {
   );
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-1 duration-500 space-y-8">
-      <header>
-        <h1 className="font-display text-4xl sm:text-5xl leading-[1.05] text-foreground">
-          Dashboard
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Platform-wide overview across all communities, users, and revenue.
-        </p>
-      </header>
-
+    <Screen>
+      <ScreenHead title="Dashboard" sub="Everything on Dance-Hub: people, communities and money." />
       <PlatformDashboardKpis stats={stats} />
-
       <PlatformDashboardChart revenue={revenueChart} growth={growthSeries} />
-
       <PlatformDashboardActivityFeed events={events} />
-    </div>
+    </Screen>
   );
 }

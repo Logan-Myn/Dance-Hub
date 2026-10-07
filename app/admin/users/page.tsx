@@ -1,6 +1,7 @@
 import { requirePlatformAdminPage } from '@/lib/community-auth';
 import { getAllAdminUsers } from '@/lib/admin-platform/users';
 import { UsersTable } from '@/components/admin/platform/UsersTable';
+import { Screen, ScreenHead } from '@/components/community-admin/ui';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -10,17 +11,9 @@ export default async function UsersPage() {
   const users = await getAllAdminUsers();
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-1 duration-500 space-y-8">
-      <header>
-        <h1 className="font-display text-4xl sm:text-5xl leading-[1.05] text-foreground">
-          Users
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          {users.length.toLocaleString()} {users.length === 1 ? 'user' : 'users'} on the platform.
-        </p>
-      </header>
-
+    <Screen>
+      <ScreenHead title="Users" sub={`${users.length.toLocaleString('en-GB')} ${users.length === 1 ? 'person has an account' : 'people have an account'} on Dance-Hub.`} />
       <UsersTable users={users} />
-    </div>
+    </Screen>
   );
 }

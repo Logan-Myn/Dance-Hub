@@ -4,9 +4,8 @@ import { UsersTable } from '@/components/admin/platform/UsersTable';
 import type { AdminUserRow } from '@/lib/admin-platform/users';
 
 // Only which id the row actions receive matters here.
-jest.mock('@/components/admin/delete-user-button', () => ({
-  __esModule: true,
-  default: ({ userId }: { userId: string }) => <span data-testid="row-actions">{userId}</span>,
+jest.mock('@/components/admin/platform/row-actions', () => ({
+  UserActions: ({ userId }: { userId: string }) => <span data-testid="row-actions">{userId}</span>,
 }));
 
 const row = (over: Partial<AdminUserRow>): AdminUserRow => ({

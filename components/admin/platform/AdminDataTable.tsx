@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, type ReactNode, useState } from 'react';
+import { Fragment, type ReactNode, useId, useState } from 'react';
 import {
   type ColumnDef,
   type ExpandedState,
@@ -13,33 +13,26 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Search, ChevronDown } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { FIELD_INPUT } from '@/components/ds/app-dialog';
+import { BTN_SECONDARY } from '@/components/community-feed/feed-header';
+import { Card } from '@/components/community-admin/ui';
 import { cn } from '@/lib/utils';
 
 interface AdminDataTableProps<T> {
   columns: ColumnDef<T, unknown>[];
   data: T[];
-  // Placeholder text for the search input. If not provided, search is disabled.
+  /** Placeholder for the search field. Without it there is no search. */
   searchPlaceholder?: string;
-  // Number of rows per page. If 0 or undefined, pagination is disabled
-  // (single page, no controls).
+  /** Rows per page. Without it, every row is on one page. */
   pageSize?: number;
-  // Empty-state message when no rows match the current filter.
+  /** What the rows are, for the count under the table: ["user", "users"]. */
+  noun?: [string, string];
   emptyMessage?: string;
-  // When provided, rows become expandable: clicking a row toggles an inline
-  // panel below it that renders this function's output. Adds a chevron
-  // affordance on the leading cell. Pass undefined to keep rows static.
+  /** Makes rows expandable, showing this under the row. */
   renderSubComponent?: (rowData: T) => ReactNode;
+  /** Names a row for the expand button's label. */
+  rowLabel?: (rowData: T) => string;
 }
 
 export function AdminDataTable<T>({
@@ -47,12 +40,15 @@ export function AdminDataTable<T>({
   data,
   searchPlaceholder,
   pageSize,
-  emptyMessage = 'No results.',
+  noun = ['row', 'rows'],
+  emptyMessage = 'Nothing here yet.',
   renderSubComponent,
+  rowLabel,
 }: AdminDataTableProps<T>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [expanded, setExpanded] = useState<ExpandedState>({});
+  const searchId = useId();
 
   const usePagination = typeof pageSize === 'number' && pageSize > 0;
   const expandable = Boolean(renderSubComponent);
@@ -67,172 +63,160 @@ export function AdminDataTable<T>({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    ...(expandable
-      ? {
-          getExpandedRowModel: getExpandedRowModel(),
-          getRowCanExpand: () => true,
-        }
-      : {}),
+    ...(expandable ? { getExpandedRowModel: getExpandedRowModel(), getRowCanExpand: () => true } : {}),
     ...(usePagination
-      ? {
-          getPaginationRowModel: getPaginationRowModel(),
-          initialState: { pagination: { pageSize } },
-        }
+      ? { getPaginationRowModel: getPaginationRowModel(), initialState: { pagination: { pageSize } } }
       : {}),
   });
 
+  const rows = table.getRowModel().rows;
+  const matching = table.getFilteredRowModel().rows.length;
+  const colSpan = columns.length + (expandable ? 1 : 0);
+
   return (
-    <div className="space-y-4">
-      {searchPlaceholder ? (
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
+    <div className="flex flex-col gap-3">
+      {searchPlaceholder && (
+        <div className="relative w-full sm:max-w-[380px]">
+          <label htmlFor={searchId} className="sr-only">
+            {searchPlaceholder}
+          </label>
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" />
+          <input
+            id={searchId}
+            type="search"
             placeholder={searchPlaceholder}
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            className="pl-9"
+            autoComplete="off"
+            className={cn(FIELD_INPUT, 'pl-10')}
           />
         </div>
-      ) : null}
+      )}
 
-      <div className="bg-card rounded-2xl border border-border/50 overflow-hidden">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id} className="border-border/50 hover:bg-transparent">
-                {expandable ? <TableHead className="w-8" /> : null}
-                {hg.headers.map((header) => {
-                  const canSort = header.column.getCanSort();
-                  const sortState = header.column.getIsSorted();
-                  return (
-                    <TableHead
-                      key={header.id}
-                      className={cn(
-                        'text-xs font-medium uppercase tracking-wider text-muted-foreground',
-                        canSort && 'cursor-pointer select-none hover:text-foreground transition-colors'
-                      )}
-                      onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(header.column.columnDef.header, header.getContext())}
+      <Card className="overflow-hidden">
+        {/* Wide tables scroll here, inside the card, not the whole page. */}
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-left">
+            <thead>
+              {table.getHeaderGroups().map((hg) => (
+                <tr key={hg.id} className="border-b border-line">
+                  {expandable && <th scope="col" className="w-10" aria-label="Details" />}
+                  {hg.headers.map((header) => {
+                    const canSort = header.column.getCanSort();
+                    const dir = header.column.getIsSorted();
+                    const label = header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext());
+                    return (
+                      <th
+                        key={header.id}
+                        scope="col"
+                        aria-sort={canSort ? (dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none') : undefined}
+                        className="whitespace-nowrap px-4 py-3 text-[13px] font-semibold text-ink-3"
+                      >
                         {canSort ? (
-                          sortState === 'asc' ? (
-                            <ArrowUp className="h-3 w-3" />
-                          ) : sortState === 'desc' ? (
-                            <ArrowDown className="h-3 w-3" />
-                          ) : (
-                            <ArrowUpDown className="h-3 w-3 opacity-40" />
-                          )
-                        ) : null}
-                      </div>
-                    </TableHead>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => {
-                const isExpanded = row.getIsExpanded();
-                return (
-                  <Fragment key={row.id}>
-                    <TableRow
-                      className={cn(
-                        'border-border/50 transition-colors',
-                        expandable && 'cursor-pointer hover:bg-muted/40',
-                        !expandable && 'hover:bg-muted/40',
-                        isExpanded && 'bg-muted/30'
-                      )}
-                      onClick={
-                        expandable
-                          ? (e) => {
-                              // Don't toggle when clicking inside an interactive
-                              // element (link, button, dropdown, etc.) inside
-                              // the row.
-                              const target = e.target as HTMLElement;
-                              if (target.closest('a, button, [role="menuitem"], [role="dialog"]')) {
-                                return;
-                              }
-                              row.toggleExpanded();
-                            }
-                          : undefined
-                      }
-                    >
-                      {expandable ? (
-                        <TableCell className="w-8 p-0 pl-3">
-                          <ChevronDown
-                            className={cn(
-                              'h-4 w-4 text-muted-foreground transition-transform',
-                              isExpanded && 'rotate-180'
+                          <button
+                            type="button"
+                            onClick={header.column.getToggleSortingHandler()}
+                            className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:text-ink"
+                          >
+                            {label}
+                            {dir === 'asc' ? (
+                              <ArrowUp className="h-3.5 w-3.5 text-ink-2" aria-hidden="true" />
+                            ) : dir === 'desc' ? (
+                              <ArrowDown className="h-3.5 w-3.5 text-ink-2" aria-hidden="true" />
+                            ) : (
+                              <ArrowUpDown className="h-3.5 w-3.5 opacity-40" aria-hidden="true" />
                             )}
-                          />
-                        </TableCell>
-                      ) : null}
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                    {expandable && isExpanded ? (
-                      <TableRow className="border-border/50 bg-muted/10 hover:bg-muted/10">
-                        <TableCell
-                          colSpan={row.getVisibleCells().length + 1}
-                          className="p-0"
-                        >
-                          {renderSubComponent!(row.original)}
-                        </TableCell>
-                      </TableRow>
-                    ) : null}
-                  </Fragment>
-                );
-              })
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length + (expandable ? 1 : 0)}
-                  className="h-24 text-center text-muted-foreground"
-                >
-                  {emptyMessage}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+                          </button>
+                        ) : (
+                          label
+                        )}
+                      </th>
+                    );
+                  })}
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {rows.length ? (
+                rows.map((row) => {
+                  const isExpanded = row.getIsExpanded();
+                  return (
+                    <Fragment key={row.id}>
+                      <tr
+                        className={cn(
+                          'border-b border-line transition-colors last:border-b-0 hover:bg-surface-2/60',
+                          expandable && 'cursor-pointer',
+                          isExpanded && 'bg-surface-2/60'
+                        )}
+                        onClick={
+                          expandable
+                            ? (e) => {
+                                // Links, buttons and menus inside the row keep their own click.
+                                const target = e.target as HTMLElement;
+                                if (target.closest('a, button, input, [role="menuitem"], [role="dialog"]')) return;
+                                row.toggleExpanded();
+                              }
+                            : undefined
+                        }
+                      >
+                        {expandable && (
+                          <td className="w-10 pl-3">
+                            <button
+                              type="button"
+                              onClick={() => row.toggleExpanded()}
+                              aria-expanded={isExpanded}
+                              aria-label={`${isExpanded ? 'Hide' : 'Show'} details${rowLabel ? ` for ${rowLabel(row.original)}` : ''}`}
+                              className="grid h-7 w-7 place-items-center rounded-md text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
+                            >
+                              <ChevronDown className={cn('h-4 w-4 transition-transform', isExpanded && 'rotate-180')} aria-hidden="true" />
+                            </button>
+                          </td>
+                        )}
+                        {row.getVisibleCells().map((cell) => (
+                          <td key={cell.id} className="px-4 py-3 align-middle text-[14px] text-ink">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        ))}
+                      </tr>
+                      {expandable && isExpanded && (
+                        <tr className="border-b border-line bg-surface-2/40 last:border-b-0">
+                          <td colSpan={colSpan} className="p-0">
+                            {renderSubComponent!(row.original)}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={colSpan} className="px-4 py-10 text-center text-[14.5px] text-ink-2">
+                    {globalFilter ? `Nothing matches "${globalFilter}".` : emptyMessage}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
-      {usePagination && table.getPageCount() > 1 ? (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
+      {usePagination && table.getPageCount() > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-[13.5px] text-ink-3">
           <span>
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-            {' · '}
-            {table.getFilteredRowModel().rows.length} {table.getFilteredRowModel().rows.length === 1 ? 'row' : 'rows'}
+            {matching} {matching === 1 ? noun[0] : noun[1]}, page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
           </span>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              <ChevronLeft className="h-4 w-4" />
+            <button type="button" className={cn(BTN_SECONDARY, 'h-9')} onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+              <ChevronLeft aria-hidden="true" />
               Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
+            </button>
+            <button type="button" className={cn(BTN_SECONDARY, 'h-9')} onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
               Next
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+              <ChevronRight aria-hidden="true" />
+            </button>
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

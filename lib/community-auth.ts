@@ -160,7 +160,9 @@ export async function canViewCommunity(
 export async function requirePlatformAdminPage(): Promise<Session> {
   const session = await getSession();
   if (!session) redirect(loginPath('/admin'));
-  if (!session.user.isAdmin) redirect('/');
+  // Same flag the admin API routes check (requirePlatformAdmin), so a page
+  // never opens for someone whose data requests would be refused.
+  if (!(await getUserIsAdmin(session.user.id))) redirect('/');
   return session;
 }
 

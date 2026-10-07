@@ -1,220 +1,112 @@
 'use client';
 
 import useSWR from 'swr';
-import Link from 'next/link';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-} from 'recharts';
-import {
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  Users,
-  UserPlus,
-  UserMinus,
-  DollarSign,
-  ExternalLink,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ExternalLink } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { BTN_SECONDARY } from '@/components/community-feed/feed-header';
+import { Skeleton } from '@/components/ds/skeleton';
 import { formatEur } from '@/lib/admin-platform/format';
+import { monthLabel, monthLongLabel } from '@/lib/admin-platform/display';
 import type { CommunitySnapshot } from '@/lib/admin-platform/community-snapshot';
+import { communityPath } from '@/lib/safe-redirect';
+import { cn } from '@/lib/utils';
+import { Delta } from './PlatformDashboardKpis';
 
 const fetcher = (url: string) =>
   fetch(url).then(async (res) => {
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.error ?? 'Failed to load community snapshot');
+      throw new Error(body.error ?? "Couldn't load this community's numbers.");
     }
     return res.json();
   });
 
-export function CommunityDetailPanel({
-  communityId,
-  slug,
-}: {
-  communityId: string;
-  slug: string;
-}) {
-  const { data, error, isLoading } = useSWR<CommunitySnapshot>(
-    `/api/admin/communities/${communityId}/snapshot`,
-    fetcher,
-    { revalidateOnFocus: false }
-  );
+const AXIS = { fontSize: 12, fill: 'rgb(var(--ds-ink-3))' };
+
+/** Numbers for one community, shown under its row. */
+export function CommunityDetailPanel({ communityId, slug }: { communityId: string; slug: string }) {
+  const { data, error, isLoading } = useSWR<CommunitySnapshot>(`/api/admin/communities/${communityId}/snapshot`, fetcher, {
+    revalidateOnFocus: false,
+  });
 
   if (isLoading) {
     return (
-      <div className="p-6 text-sm text-muted-foreground">Loading details…</div>
+      <div className="grid grid-cols-2 gap-3 p-5 lg:grid-cols-4" aria-busy="true" aria-label="Loading">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-[92px] rounded-xl" />
+        ))}
+      </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="p-6 text-sm text-destructive">
-        {error instanceof Error ? error.message : 'Failed to load details.'}
-      </div>
+      <p role="alert" className="px-5 py-4 text-[14px] font-medium text-live">
+        {error instanceof Error ? error.message : "Couldn't load this community's numbers."}
+      </p>
     );
   }
 
+  const chart = data.revenueChart6Months.map((p) => ({ ...p, label: monthLabel(p.month), long: monthLongLabel(p.month) }));
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h3 className="font-display text-xl font-semibold">{data.name}</h3>
-          <p className="text-xs text-muted-foreground">/{data.slug}</p>
+    <div className="flex flex-col gap-4 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-display text-[18px] font-semibold text-ink">{data.name}</h3>
+          <p className="text-[13px] text-ink-3">dance-hub.io/{data.slug}</p>
         </div>
-        <Link href={`/${slug}`} target="_blank" rel="noopener noreferrer">
-          <Button variant="outline" size="sm">
-            <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-            Visit community
-          </Button>
-        </Link>
+        <a href={communityPath(slug)} target="_blank" rel="noopener noreferrer" className={cn(BTN_SECONDARY, 'h-9')}>
+          <ExternalLink aria-hidden="true" />
+          Open community
+        </a>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {data.isPaid ? (
-          <KpiTile
-            label="Revenue this month"
-            value={formatEur(data.monthlyRevenue)}
-            growth={data.revenueGrowth}
-            growthSuffix="vs last month"
-            icon={<DollarSign className="h-4 w-4 text-secondary" />}
-            iconBg="bg-secondary/20"
-          />
-        ) : null}
-        <KpiTile
-          label="Active members"
-          value={data.membersTotal.toLocaleString()}
-          icon={<Users className="h-4 w-4 text-primary" />}
-          iconBg="bg-primary/10"
-        />
-        <KpiTile
-          label="New this month"
-          value={data.newMembersThisMonth.toLocaleString()}
-          growth={data.newMembersGrowth}
-          growthSuffix="vs last month"
-          icon={<UserPlus className="h-4 w-4 text-primary" />}
-          iconBg="bg-primary/10"
-        />
-        {data.isPaid ? (
-          <KpiTile
-            label="Cancellations"
-            value={data.cancellationsThisMonth.toLocaleString()}
-            sublineText={`${data.cancellationsLastMonth} last month`}
-            icon={<UserMinus className="h-4 w-4 text-secondary" />}
-            iconBg="bg-secondary/20"
-          />
-        ) : null}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {data.isPaid && (
+          <Mini label="Revenue this month" value={formatEur(data.monthlyRevenue)}>
+            <Delta growth={data.revenueGrowth} />
+          </Mini>
+        )}
+        <Mini label="Members with access" value={data.membersTotal.toLocaleString('en-GB')} />
+        <Mini label="New this month" value={data.newMembersThisMonth.toLocaleString('en-GB')}>
+          <Delta growth={data.newMembersGrowth} />
+        </Mini>
+        {data.isPaid && (
+          <Mini label="Cancelled this month" value={data.cancellationsThisMonth.toLocaleString('en-GB')}>
+            <span className="mt-1 text-[13px] text-ink-3">{data.cancellationsLastMonth} last month</span>
+          </Mini>
+        )}
       </div>
 
-      {data.isPaid ? (
-        <div className="bg-card rounded-xl border border-border/50 p-4">
-          <h4 className="text-sm font-medium mb-3">Revenue (last 6 months)</h4>
+      {data.isPaid && (
+        <div className="rounded-xl border border-line bg-surface px-3 pb-3 pt-4 sm:px-4">
+          <h4 className="px-1 font-display text-[15px] font-semibold text-ink">Revenue, last 6 months</h4>
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart
-              data={data.revenueChart6Months}
-              margin={{ top: 4, right: 4, left: 4, bottom: 4 }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={false}
-                className="stroke-border/40"
-              />
-              <XAxis
-                dataKey="month"
-                tickLine={false}
-                axisLine={false}
-                className="text-xs"
-              />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                className="text-xs"
-                tickFormatter={(v) => `€${Math.round(Number(v))}`}
-              />
+            <BarChart data={chart} margin={{ top: 12, right: 4, left: 0, bottom: 0 }}>
+              <CartesianGrid vertical={false} stroke="rgb(var(--ds-line))" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} tick={AXIS} />
+              <YAxis tickLine={false} axisLine={false} width={48} tick={AXIS} tickFormatter={(v) => `€${Math.round(Number(v))}`} />
               <Tooltip
-                formatter={(value) =>
-                  [`€${Number(value).toFixed(2)}`, 'Revenue'] as [string, string]
-                }
+                cursor={{ fill: 'rgb(var(--ds-surface-2))' }}
+                labelFormatter={(_, payload) => (payload?.[0]?.payload as { long?: string } | undefined)?.long ?? ''}
+                formatter={(v) => [`€${Number(v).toFixed(2)}`, 'Revenue']}
               />
-              <Bar
-                dataKey="revenue"
-                fill="hsl(var(--primary))"
-                radius={[6, 6, 0, 0]}
-              />
+              <Bar dataKey="revenue" radius={[4, 4, 0, 0]} fill="rgb(var(--ds-brand))" maxBarSize={40} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
 
-function KpiTile({
-  label,
-  value,
-  growth,
-  growthSuffix,
-  sublineText,
-  icon,
-  iconBg,
-}: {
-  label: string;
-  value: string;
-  growth?: number;
-  growthSuffix?: string;
-  sublineText?: string;
-  icon: React.ReactNode;
-  iconBg: string;
-}) {
-  const trend: 'up' | 'down' | 'flat' | null =
-    typeof growth === 'number'
-      ? growth > 0
-        ? 'up'
-        : growth < 0
-        ? 'down'
-        : 'flat'
-      : null;
-
+function Mini({ label, value, children }: { label: string; value: string; children?: React.ReactNode }) {
   return (
-    <div className="bg-card rounded-xl border border-border/50 p-3 space-y-1.5">
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-          {label}
-        </span>
-        <div className={`h-7 w-7 rounded-lg ${iconBg} flex items-center justify-center`}>
-          {icon}
-        </div>
-      </div>
-      <p className="font-display text-xl font-bold">{value}</p>
-      {trend ? (
-        <p
-          className={`text-xs font-medium flex items-center gap-1 ${
-            trend === 'up'
-              ? 'text-primary'
-              : trend === 'down'
-              ? 'text-destructive'
-              : 'text-muted-foreground'
-          }`}
-        >
-          {trend === 'up' ? (
-            <TrendingUp className="h-3 w-3" />
-          ) : trend === 'down' ? (
-            <TrendingDown className="h-3 w-3" />
-          ) : (
-            <Minus className="h-3 w-3" />
-          )}
-          {trend === 'up' ? '+' : ''}
-          {growth}% {growthSuffix}
-        </p>
-      ) : sublineText ? (
-        <p className="text-xs text-muted-foreground">{sublineText}</p>
-      ) : null}
+    <div className="flex flex-col gap-0.5 rounded-xl border border-line bg-surface px-4 py-3">
+      <span className="text-[13px] font-medium text-ink-2">{label}</span>
+      <span className="font-display text-[22px] font-semibold tabular-nums text-ink">{value}</span>
+      {children}
     </div>
   );
 }

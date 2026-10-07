@@ -1,123 +1,101 @@
 'use client';
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  Legend,
-} from 'recharts';
-import type {
-  PlatformRevenuePoint,
-  PlatformGrowthPoint,
-} from '@/lib/admin-platform/types';
+import { useState } from 'react';
+import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Card, CardHead } from '@/components/community-admin/ui';
+import { Segmented } from '@/components/ds/segmented';
+import { dayLabel, monthLabel, monthLongLabel } from '@/lib/admin-platform/display';
+import type { PlatformGrowthPoint, PlatformRevenuePoint } from '@/lib/admin-platform/types';
 
-export function PlatformDashboardChart({
-  revenue,
-  growth,
-}: {
-  revenue: PlatformRevenuePoint[];
-  growth: PlatformGrowthPoint[];
-}) {
+const AXIS = { fontSize: 12, fill: 'rgb(var(--ds-ink-3))' };
+const BRAND = 'rgb(var(--ds-brand))';
+const OK = 'rgb(var(--ds-ok))';
+
+type View = 'revenue' | 'growth';
+
+export function PlatformDashboardChart({ revenue, growth }: { revenue: PlatformRevenuePoint[]; growth: PlatformGrowthPoint[] }) {
+  const [view, setView] = useState<View>('revenue');
   const hasRevenue = revenue.some((p) => p.total > 0 || p.platformFees > 0);
   const hasGrowth = growth.some((p) => p.users > 0 || p.communities > 0);
+  const revenueData = revenue.map((p) => ({ ...p, label: monthLabel(p.month), long: monthLongLabel(p.month) }));
+  const growthData = growth.map((p) => ({ ...p, label: dayLabel(p.date) }));
 
   return (
-    <div className="bg-card rounded-2xl border border-border/50 p-6">
-      <Tabs defaultValue="revenue">
-        <TabsList className="mb-4">
-          <TabsTrigger value="revenue">Revenue</TabsTrigger>
-          <TabsTrigger value="growth">Growth</TabsTrigger>
-        </TabsList>
-        <TabsContent value="revenue">
-          {hasRevenue ? <RevenueChart data={revenue} /> : <EmptyState />}
-        </TabsContent>
-        <TabsContent value="growth">
-          {hasGrowth ? <GrowthChart data={growth} /> : <EmptyState />}
-        </TabsContent>
-      </Tabs>
-    </div>
+    <Card as="section" aria-labelledby="platform-chart-h">
+      <CardHead
+        id="platform-chart-h"
+        title={view === 'revenue' ? 'Revenue' : 'Growth'}
+        sub={view === 'revenue' ? 'What members paid communities each month, and the Dance-Hub fee on it' : 'Total users and communities over the last 90 days'}
+        aside={
+          <Segmented
+            label="Chart"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: 'revenue', label: 'Revenue' },
+              { value: 'growth', label: 'Growth' },
+            ]}
+          />
+        }
+      />
+      <div className="px-3 pb-4 pt-3 sm:px-5">
+        {view === 'revenue' ? (
+          hasRevenue ? (
+            <>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={revenueData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke="rgb(var(--ds-line))" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={AXIS} />
+                  <YAxis tickLine={false} axisLine={false} width={52} tick={AXIS} tickFormatter={(v) => `€${Math.round(Number(v))}`} />
+                  <Tooltip
+                    cursor={{ fill: 'rgb(var(--ds-surface-2))' }}
+                    labelFormatter={(_, payload) => (payload?.[0]?.payload as { long?: string } | undefined)?.long ?? ''}
+                    formatter={(v, name) => [`€${Number(v).toFixed(2)}`, name === 'total' ? 'Paid by members' : 'Dance-Hub fees']}
+                  />
+                  <Bar dataKey="total" radius={[4, 4, 0, 0]} fill={BRAND} maxBarSize={40} />
+                  <Bar dataKey="platformFees" radius={[4, 4, 0, 0]} fill={OK} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+              <Legend items={[{ color: BRAND, label: 'Paid by members' }, { color: OK, label: 'Dance-Hub fees' }]} />
+            </>
+          ) : (
+            <Empty>No payments yet. They show up here month by month.</Empty>
+          )
+        ) : hasGrowth ? (
+          <>
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={growthData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid vertical={false} stroke="rgb(var(--ds-line))" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={AXIS} minTickGap={28} />
+                <YAxis tickLine={false} axisLine={false} width={32} allowDecimals={false} tick={AXIS} />
+                <Tooltip formatter={(v, name) => [String(v), name === 'users' ? 'Users' : 'Communities']} />
+                <Line type="monotone" dataKey="users" strokeWidth={2.5} dot={false} stroke={BRAND} />
+                <Line type="monotone" dataKey="communities" strokeWidth={2.5} dot={false} stroke={OK} />
+              </LineChart>
+            </ResponsiveContainer>
+            <Legend items={[{ color: BRAND, label: 'Users' }, { color: OK, label: 'Communities' }]} />
+          </>
+        ) : (
+          <Empty>Not enough history yet.</Empty>
+        )}
+      </div>
+    </Card>
   );
 }
 
-function RevenueChart({ data }: { data: PlatformRevenuePoint[] }) {
+function Legend({ items }: { items: Array<{ color: string; label: string }> }) {
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/40" />
-        <XAxis dataKey="month" tickLine={false} axisLine={false} className="text-xs" />
-        <YAxis
-          tickLine={false}
-          axisLine={false}
-          className="text-xs"
-          tickFormatter={(v) => `€${Math.round(Number(v))}`}
-        />
-        <Tooltip
-          formatter={(value, name) =>
-            [
-              `€${Number(value).toFixed(2)}`,
-              name === 'total' ? 'Communities revenue' : 'Platform fees',
-            ] as [string, string]
-          }
-        />
-        <Legend
-          formatter={(value) =>
-            value === 'total' ? 'Communities revenue' : 'Platform fees'
-          }
-        />
-        <Bar dataKey="total" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-        <Bar dataKey="platformFees" fill="hsl(var(--secondary))" radius={[6, 6, 0, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
+    <ul className="mt-2 flex flex-wrap justify-center gap-x-5 gap-y-1 text-[13px] text-ink-2">
+      {items.map((i) => (
+        <li key={i.label} className="inline-flex items-center gap-1.5">
+          <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: i.color }} />
+          {i.label}
+        </li>
+      ))}
+    </ul>
   );
 }
 
-function GrowthChart({ data }: { data: PlatformGrowthPoint[] }) {
-  return (
-    <ResponsiveContainer width="100%" height={280}>
-      <LineChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/40" />
-        <XAxis
-          dataKey="date"
-          tickLine={false}
-          axisLine={false}
-          className="text-xs"
-          interval={14}
-        />
-        <YAxis tickLine={false} axisLine={false} className="text-xs" allowDecimals={false} />
-        <Tooltip />
-        <Legend />
-        <Line
-          type="monotone"
-          dataKey="users"
-          name="Users"
-          stroke="hsl(var(--primary))"
-          strokeWidth={2}
-          dot={false}
-        />
-        <Line
-          type="monotone"
-          dataKey="communities"
-          name="Communities"
-          stroke="hsl(var(--secondary))"
-          strokeWidth={2}
-          dot={false}
-        />
-      </LineChart>
-    </ResponsiveContainer>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
-      Not enough data yet
-    </div>
-  );
+function Empty({ children }: { children: React.ReactNode }) {
+  return <p className="rounded-xl border border-dashed border-line-strong px-4 py-8 text-center text-[14.5px] text-ink-2">{children}</p>;
 }
