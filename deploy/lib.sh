@@ -6,7 +6,7 @@
 # Every deploy is built in its own release directory, and the live app is
 # only switched to it once the build has succeeded:
 #
-#   $RELEASES_ROOT/<app>/<UTC yyyymmdd-hhmmss>-<short sha>/   a git worktree of one commit
+#   $RELEASES_ROOT/<app>/<UTC yyyymmdd-hhmmss>-<short sha>/   a copy of one commit (git archive)
 #   $RELEASES_ROOT/<app>/current -> <release>                 what pm2 serves
 #
 # A failed build never touches the running release. The last $KEEP_RELEASES
@@ -85,7 +85,8 @@ remove_release() {
     "$RELEASES_DIR"/[0-9]*) ;;
     *) die "Refusing to remove '$dir': not a release of $APP_NAME." ;;
   esac
-  git -C "$MAIN_REPO" worktree remove --force "$dir" 2>/dev/null || rm -rf -- "$dir"
+  rm -rf -- "$dir"
+  # Releases made before they were plain copies were git worktrees; drop their entries.
   git -C "$MAIN_REPO" worktree prune
 }
 
@@ -99,7 +100,14 @@ build_release() {
   mkdir -p "$RELEASES_DIR"
   dir="$RELEASES_DIR/$(date -u +%Y%m%d-%H%M%S)-${sha:0:7}"
   say "Creating release $(basename "$dir") from $ref (${sha:0:7})..."
-  git -C "$MAIN_REPO" worktree add --detach "$dir" "$sha" > /dev/null || return 1
+  # A plain copy of the commit, not a git worktree: nothing in a release uses
+  # git, and worktrees crowd `git worktree list` and the tools that show it.
+  mkdir "$dir" || return 1
+  if ! (set -o pipefail; git -C "$MAIN_REPO" archive --format=tar "$sha" | tar -x -C "$dir") || [[ ! -f "$dir/package.json" ]]; then
+    echo "!! Could not copy ${sha:0:7} into the release." >&2
+    rm -rf -- "$dir"
+    return 1
+  fi
   # Explicit && chain: errexit does not apply inside a function called from `if`.
   if ! (
     cd "$dir" &&

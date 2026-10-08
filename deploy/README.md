@@ -10,7 +10,7 @@ it once the build has succeeded:
 
 ```
 /home/debian/apps/releases/dance-hub/
-  20261002-140512-ab12cd3/     git worktree of one commit, with its own
+  20261002-140512-ab12cd3/     a copy of one commit, with its own
   20261003-091200-ef45ab6/     .env.local, node_modules and .next
   current -> 20261003-091200-ef45ab6
 /home/debian/apps/releases/dance-hub-preprod/   (same layout)
@@ -18,8 +18,9 @@ it once the build has succeeded:
 
 A deploy:
 
-1. adds a detached git worktree of the target commit from the main repo
-   (`/home/debian/apps/dance-hub`) in a new `<UTC timestamp>-<short sha>` directory;
+1. copies the target commit out of the main repo (`/home/debian/apps/dance-hub`)
+   with `git archive` into a new `<UTC timestamp>-<short sha>` directory. It is a
+   plain folder, not a git worktree, so releases don't show in `git worktree list`;
 2. copies the env file in as `.env.local` (prod: the main repo's `.env.local`;
    preprod: the main repo's `.env.preprod`). The source file is never modified;
 3. runs `bun install --frozen-lockfile` and `bun run build` there;
@@ -27,8 +28,7 @@ A deploy:
    runs `pm2 delete` + `pm2 start <current>/node_modules/next/dist/bin/next --cwd <current>`
    (next runs directly under pm2, never via npm/npx), `pm2 save`, and checks
    that pm2's own pid holds the port and serves from the new release;
-5. keeps `current` plus the 2 newest other releases and removes the rest
-   with `git worktree remove`.
+5. keeps `current` plus the 2 newest other releases and removes the rest.
 
 A failed build removes its half-built directory and leaves the running
 release untouched. Only one deploy per app can run at a time.
@@ -124,7 +124,9 @@ readlink -f /proc/$(pm2 pid dance-hub)/cwd    # /home/debian/apps/dance-hub
 That is the code from before the pull. Running `./deploy.sh code` again
 switches back to a release.
 
-Preprod moves the same way on its first `./deploy-preprod.sh restart <branch>`:
+Preprod moves the same way on its first `./deploy-preprod.sh restart <branch>`
+(done: the old worktree was removed on 2026-10-08, after its mode files moved
+into the main repo):
 pm2's `dance-hub-preprod` goes from `/home/debian/apps/dance-hub-preprod` to
 `/home/debian/apps/releases/dance-hub-preprod/current`. The old
 `/home/debian/apps/dance-hub-preprod` worktree is then unused. Move its
@@ -197,8 +199,8 @@ pm2 save
 For preprod, recreate the worktree if you removed it
 (`git worktree add /home/debian/apps/dance-hub-preprod --detach`) and run the
 old `./deploy-preprod.sh restart <branch>`. Remove the release directories
-with `git worktree remove --force <dir>` (not `rm -rf`, which leaves stale
-worktree entries; `git worktree prune` cleans those up).
+with `rm -rf <dir>`, then `git worktree prune` for any made before releases
+became plain copies.
 
 ## Testing the scripts from another worktree
 
