@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/community-auth";
 import { LIVE_SUBSCRIPTION_STATUSES, memberSubscriptionStatus } from "@/lib/membership-ended";
 import { isMissingStripeResource } from "@/lib/subscription-cancel";
 import { membershipFeePercentage } from "@/lib/platform-fees";
+import { trackServer } from "@/lib/analytics-server";
 
 interface Community {
   id: string;
@@ -150,13 +151,31 @@ export async function POST(request: Request, props: { params: Promise<{ communit
       }
 
       if (oldSubscription && LIVE_SUBSCRIPTION_STATUSES.includes(oldSubscription.status)) {
-        await sql`
-          UPDATE community_members
+        // The CTE reads the status before the update (and locks the row), so
+        // this and the webhook's activation can't both count the join.
+        const [activated] = await sql<{ previous_status: string }[]>`
+          WITH prev AS (
+            SELECT id, status
+            FROM community_members
+            WHERE id = ${existingMember.id}
+              AND stripe_subscription_id = ${oldSubscription.id}
+            FOR UPDATE
+          )
+          UPDATE community_members cm
           SET status = 'active',
               subscription_status = ${memberSubscriptionStatus(oldSubscription)}
-          WHERE id = ${existingMember.id}
-            AND stripe_subscription_id = ${oldSubscription.id}
+          FROM prev
+          WHERE cm.id = prev.id
+          RETURNING prev.status AS previous_status
         `;
+        if (activated && activated.previous_status !== 'active') {
+          trackServer(userId, "member_joined", {
+            community: params.communitySlug,
+            paid: true,
+            plan: oldSubscription.items.data[0]?.price?.recurring?.interval === 'year' ? 'yearly' : 'monthly',
+            pre_registration: false,
+          });
+        }
         return NextResponse.json(
           { error: "You're already a member of this community.", alreadyMember: true },
           { status: 409 }

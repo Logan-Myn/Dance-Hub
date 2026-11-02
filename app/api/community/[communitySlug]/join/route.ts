@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { queryOne, sql } from "@/lib/db";
 import { requireSession } from "@/lib/community-auth";
+import { trackServer } from "@/lib/analytics-server";
 
 interface Community {
   id: string;
@@ -101,6 +102,8 @@ export async function POST(_request: Request, props: { params: Promise<{ communi
         { status: 500 }
       );
     }
+
+    trackServer(userId, "member_joined", { community: params.communitySlug, paid: false });
 
     // members_count is kept by a trigger on community_members.
     return NextResponse.json({ success: true });

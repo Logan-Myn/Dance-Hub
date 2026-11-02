@@ -8,6 +8,7 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 // - Mux player: HLS from *.mux.com, Mux Data on *.litix.io, Chromecast sender on www.gstatic.com
 // - LiveKit signalling: live.nexio.ee (Stream-Hub's PUBLIC_LIVEKIT_URL)
 // - Uploaded files: our B2 bucket
+// - Product analytics: PostHog's EU ingestion (lib/analytics.ts); its library is bundled
 // 'unsafe-inline' stays for scripts until we move to a nonce-based CSP.
 // 'unsafe-eval' is only for the dev server (React's dev tooling uses eval).
 function contentSecurityPolicy() {
@@ -24,7 +25,7 @@ function contentSecurityPolicy() {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
-    "connect-src 'self' https://api.stripe.com https://*.mux.com https://*.litix.io https://s3.eu-central-003.backblazeb2.com https://live.nexio.ee wss://live.nexio.ee https://cloudflareinsights.com",
+    "connect-src 'self' https://api.stripe.com https://*.mux.com https://*.litix.io https://s3.eu-central-003.backblazeb2.com https://live.nexio.ee wss://live.nexio.ee https://cloudflareinsights.com https://eu.i.posthog.com",
     "frame-src 'self' https://js.stripe.com https://*.stripe.com",
     "media-src 'self' blob: https://*.mux.com https://live.nexio.ee",
     "worker-src 'self' blob:",

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPolicyPage() {
   return (
-    <LegalPageLayout title="Privacy Policy" icon={Shield} lastUpdated="January 25, 2025">
+    <LegalPageLayout title="Privacy Policy" icon={Shield} lastUpdated="November 2, 2026">
       <p className="lead text-lg text-neutral-700 dark:text-neutral-300">
         At DanceHub, we take your privacy seriously. This Privacy Policy explains how we collect,
         use, disclose, and safeguard your information when you use our platform.
@@ -93,8 +93,14 @@ export default function PrivacyPolicyPage() {
 
       <h2>7. Cookies and Tracking</h2>
       <p>
-        We use cookies and similar technologies to maintain your session, remember your preferences,
-        and analyze how our services are used. You can control cookie settings through your browser.
+        We use cookies to keep you signed in and remember your preferences. You can control cookie
+        settings through your browser.
+      </p>
+      <p>
+        To understand how the platform is used, we measure page visits and key actions, such as
+        creating a community or joining one. This measurement sets no cookies and stores nothing on
+        your device. When you are signed in, it is linked to your account ID, never to your name or
+        email address.
       </p>
 
       <h2>8. Third-Party Services</h2>
@@ -102,6 +108,7 @@ export default function PrivacyPolicyPage() {
       <ul>
         <li><strong>Stripe:</strong> For payment processing</li>
         <li><strong>Google:</strong> For authentication (optional)</li>
+        <li><strong>PostHog:</strong> For product analytics, hosted in the EU</li>
       </ul>
 
       <h2>9. Changes to This Policy</h2>

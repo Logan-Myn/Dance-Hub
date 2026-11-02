@@ -3,6 +3,7 @@ import { stripe, mapStripeRequirement, isStripeAccountFullyVerified } from '@/li
 import { queryOne } from '@/lib/db';
 import { requireStripeAccountManager } from '@/lib/community-auth';
 import { isConnectedAccountGone } from '@/lib/stripe-connect-errors';
+import { recordPaymentsVerified } from '@/lib/payments-verified';
 
 interface OnboardingProgress {
   current_step: number;
@@ -47,6 +48,12 @@ export async function GET(request: Request, props: { params: Promise<{ accountId
     };
 
     const isFullyVerified = isStripeAccountFullyVerified(account);
+    if (isFullyVerified) {
+      // Bookkeeping only: the status read never fails over it.
+      await recordPaymentsVerified(guard.community, accountId, guard.session.user.id).catch((error) =>
+        console.error('Failed to record verified payments account:', error)
+      );
+    }
     const needsAttention = requirements.currentlyDue.length > 0 || requirements.pastDue.length > 0;
 
     // Calculate completion percentage based on steps completed

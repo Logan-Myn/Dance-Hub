@@ -22,6 +22,7 @@ import {
   slotStartsAt,
 } from '@/lib/private-lesson-booking';
 import { isInLaunchPromo, membershipFeePercentage } from '@/lib/platform-fees';
+import { trackServer } from '@/lib/analytics-server';
 import React from 'react';
 import Stripe from 'stripe';
 
@@ -245,6 +246,13 @@ async function applyPaidMembership(
   // (row insert/delete), so there is nothing to count here.
   const becameMember = row.previous_status !== 'active' && row.status === 'active';
   if (!becameMember) return 'applied';
+
+  trackServer(user_id, 'member_joined', {
+    community: community.slug,
+    paid: true,
+    plan: subscription.items.data[0]?.price?.recurring?.interval === 'year' ? 'yearly' : 'monthly',
+    pre_registration: isPreRegistration,
+  });
 
   // Get user profile for email
   const userProfile = await queryOne<UserProfile>`

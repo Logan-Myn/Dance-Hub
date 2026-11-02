@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { stripe, mapStripeRequirement, isStripeAccountFullyVerified } from '@/lib/stripe';
 import { requireStripeAccountManager } from '@/lib/community-auth';
+import { recordPaymentsVerified } from '@/lib/payments-verified';
 
 export async function GET(request: Request, props: { params: Promise<{ accountId: string }> }) {
   const { accountId } = await props.params;
@@ -20,6 +21,12 @@ export async function GET(request: Request, props: { params: Promise<{ accountId
 
     const isEnabled = isStripeAccountFullyVerified(account);
     const needsSetup = !isEnabled;
+    if (isEnabled) {
+      // Bookkeeping only: the status read never fails over it.
+      await recordPaymentsVerified(guard.community, accountId, guard.session.user.id).catch((error) =>
+        console.error('Failed to record verified payments account:', error)
+      );
+    }
 
     return NextResponse.json({
       chargesEnabled: account.charges_enabled,

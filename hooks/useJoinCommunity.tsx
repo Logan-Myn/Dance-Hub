@@ -16,6 +16,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useAuthModal } from '@/contexts/AuthModalContext';
 import { communityPath } from '@/lib/safe-redirect';
+import { track } from '@/lib/analytics';
 
 export interface JoinCommunityData {
   id: string;
@@ -132,6 +133,18 @@ export function useJoinCommunity(
   };
 
   const join = async (opts?: { plan?: 'monthly' | 'yearly' }) => {
+    // Counted before the sign-in check (a visitor sent to sign up still
+    // clicked), but not again while a join is already underway.
+    if (!joinInFlight.current) {
+      const paid = !!community?.membershipEnabled && Number(community.membershipPrice ?? 0) > 0;
+      track('join_clicked', {
+        community: community?.slug,
+        signed_in: !!user,
+        paid,
+        pre_registration: community?.status === 'pre_registration',
+        plan: paid ? opts?.plan : undefined,
+      });
+    }
     if (!user) {
       showAuthModal('signup');
       return;

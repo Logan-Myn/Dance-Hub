@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { stripe, STRIPE_REQUIREMENT_MESSAGES, isStripeAccountFullyVerified } from '@/lib/stripe';
-import { sql } from '@/lib/db';
 import { requireStripeAccountManager } from '@/lib/community-auth';
+import { recordPaymentsVerified } from '@/lib/payments-verified';
 
 export async function POST(request: Request, props: { params: Promise<{ accountId: string }> }) {
   const { accountId } = await props.params;
@@ -28,16 +28,7 @@ export async function POST(request: Request, props: { params: Promise<{ accountI
     }
 
     if (isStripeAccountFullyVerified(account)) {
-      // Update onboarding progress to completed
-      await sql`
-        UPDATE stripe_onboarding_progress
-        SET
-          current_step = 5,
-          completed_steps = ARRAY[1, 2, 3, 4, 5],
-          verification_completed_at = NOW(),
-          updated_at = NOW()
-        WHERE stripe_account_id = ${accountId}
-      `;
+      await recordPaymentsVerified(guard.community, accountId, guard.session.user.id);
 
       return NextResponse.json({
         success: true,

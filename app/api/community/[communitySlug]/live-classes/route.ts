@@ -5,6 +5,7 @@ import { createRoom } from "@/lib/stream-hub";
 import { isValidTimeZone, weeklyStarts } from "@/lib/calendar/series";
 import { requireCommunityViewer } from "@/lib/community-auth";
 import { parseRangeParams } from "@/lib/calendar-week";
+import { trackServer } from "@/lib/analytics-server";
 
 interface Community {
   id: string;
@@ -183,6 +184,7 @@ export async function POST(
           }
           return rows;
         });
+        trackServer(user.id, "live_class_scheduled", { community: params.communitySlug, weekly: true, classes: created.length });
         // Video rooms are created when someone joins (the video-token route).
         return NextResponse.json({ classes: created }, { status: 201 });
       } catch (error) {
@@ -268,6 +270,8 @@ export async function POST(
       console.error("Warning: Failed to create video room for live class:", error);
       // Don't fail the entire request - the room can be created later on join
     }
+
+    trackServer(user.id, "live_class_scheduled", { community: params.communitySlug, weekly: false, classes: 1 });
 
     return NextResponse.json(liveClass, { status: 201 });
   } catch (error) {

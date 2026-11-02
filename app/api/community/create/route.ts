@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { sql, query, queryOne } from '@/lib/db';
 import { getSession } from '@/lib/auth-session';
 import { checkCommunitySlug } from '@/lib/community-slug';
+import { trackServer } from '@/lib/analytics-server';
 
 interface ExistingCommunity {
   name: string;
@@ -143,6 +144,8 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    trackServer(createdBy, 'community_created', { community: community.slug });
 
     return NextResponse.json({
       message: 'Community created successfully',

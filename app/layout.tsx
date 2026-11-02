@@ -5,8 +5,8 @@ import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AuthModalProvider } from "@/contexts/AuthModalContext";
 import { TimezoneSync } from "@/components/TimezoneSync";
+import { AnalyticsIdentify } from "@/components/AnalyticsIdentify";
 import { Toaster } from "react-hot-toast";
-import { Analytics } from "@vercel/analytics/next";
 import { NextStepProvider } from "nextstepjs";
 import NextStepWrapper from "@/components/NextStepWrapper";
 
@@ -65,6 +65,7 @@ export default function RootLayout({
           <NextStepWrapper>
             <AuthProvider>
               <TimezoneSync />
+              <AnalyticsIdentify />
               <AuthModalProvider>
                 {children}
               </AuthModalProvider>
@@ -80,7 +81,6 @@ export default function RootLayout({
             </AuthProvider>
           </NextStepWrapper>
         </NextStepProvider>
-        <Analytics />
       </body>
     </html>
   );

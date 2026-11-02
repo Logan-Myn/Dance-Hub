@@ -3,6 +3,7 @@ import { queryOne } from "@/lib/db";
 import { uniqueCourseSlug, isUniqueViolation } from "@/lib/course-slug";
 import { uploadFile, generateFileKey, deleteFile } from "@/lib/storage";
 import { requireCommunityManager } from "@/lib/community-auth";
+import { trackServer } from "@/lib/analytics-server";
 
 interface Course {
   id: string;
@@ -110,6 +111,13 @@ export async function POST(request: Request, props: { params: Promise<{ communit
         { status: 500 }
       );
     }
+
+    // The teacher's funnel step, even when a platform admin did it for them.
+    trackServer(community.created_by, "course_created", {
+      community: community.slug,
+      is_public: isPublic,
+      by_admin: guard.session.user.id !== community.created_by,
+    });
 
     return NextResponse.json(newCourse);
   } catch (error) {

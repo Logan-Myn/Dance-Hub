@@ -29,6 +29,7 @@ import {
   type TemplateKey,
 } from "@/lib/about/blocks";
 import type { AboutData } from "@/lib/about/data";
+import { track } from "@/lib/analytics";
 import { euro } from "@/lib/private-lessons/policy";
 import { communityPath } from "@/lib/safe-redirect";
 import { relativeDayWord } from "@/lib/time/format";
@@ -126,6 +127,14 @@ export default function AboutClient({
     isMember: joinState.isMember,
     status: joinState.status,
   });
+
+  // The first step of the join funnel. The owner looking at their own page
+  // isn't a prospective member.
+  useEffect(() => {
+    if (!isOwner) track("about_page_viewed", { community: community.slug, member: joinState.isMember });
+    // Once per page, not again when membership changes after a join.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [community.slug, isOwner]);
 
   // ---- Autosave: every change is saved shortly after the owner stops typing.
   const latest = useRef({ blocks: initialBlocks, finalCta: initialFinalCta });
