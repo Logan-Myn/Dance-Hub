@@ -63,7 +63,8 @@ export const getClassroomOverview = cache(async (
     FROM courses
     WHERE community_id = ${communityId}
       AND (${canManage} OR is_public = true)
-    ORDER BY created_at DESC
+    -- The teacher's order (Classroom "Earlier" / "Later"); unordered courses first, newest first.
+    ORDER BY position ASC NULLS FIRST, created_at DESC
   `;
   if (courseRows.length === 0) return { courses: [], replays: null, lessons: [] };
   const courseIds = courseRows.map((c) => c.id);

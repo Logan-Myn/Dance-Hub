@@ -15,7 +15,6 @@ export interface AboutCourse {
   lessonCount: number;
   chapters: Array<{ title: string; lessons: number }>;
   previewLessonId: string | null;
-  replayCount: number;
 }
 
 export interface AboutLesson {
@@ -32,8 +31,10 @@ export interface AboutLesson {
 export interface AboutData {
   memberCount: number;
   upcoming: UpcomingClass[];
-  course: AboutCourse | null;
-  courseCount: number;
+  /** Published courses with lessons, in the teacher's Classroom order. */
+  courses: AboutCourse[];
+  /** Lessons in the live class replays course, which isn't listed with the courses. */
+  replayCount: number;
   lessons: AboutLesson[];
   activity: { posts30: number; replies30: number; topics: Array<{ name: string; color: string; count: number }> };
 }
@@ -57,7 +58,7 @@ export const getAboutData = cache(async (
           LEFT JOIN lessons l ON l.chapter_id = ch.id
           WHERE co.community_id = ${community.id} AND co.is_public = true
           GROUP BY co.id, ch.id
-          ORDER BY co.created_at DESC, ch.chapter_position
+          ORDER BY co.position ASC NULLS FIRST, co.created_at DESC, ch.chapter_position
         `
       : Promise.resolve([]),
     offered.privateLessons ? getActivePrivateLessons(community.id) : Promise.resolve([]),
@@ -69,11 +70,11 @@ export const getAboutData = cache(async (
     `,
   ]);
 
-  // Courses: the newest published one with lessons is the preview; replays count separately.
+  // Courses: every published one with lessons, in the order the query gives
+  // (a Map keeps insertion order); replays count separately.
   const byCourse = new Map<string, typeof courseRows>();
   for (const r of courseRows) byCourse.set(r.id, [...(byCourse.get(r.id) ?? []), r]);
-  let course: AboutCourse | null = null;
-  let courseCount = 0;
+  const courses: AboutCourse[] = [];
   let replayCount = 0;
   for (const rows of byCourse.values()) {
     const total = rows.reduce((n, r) => n + r.lessons, 0);
@@ -82,21 +83,16 @@ export const getAboutData = cache(async (
       continue;
     }
     if (total === 0) continue;
-    courseCount += 1;
-    if (!course) {
-      course = {
-        slug: rows[0].slug,
-        title: rows[0].title,
-        description: rows[0].description ?? "",
-        coverUrl: realCoverUrl(rows[0].image_url),
-        lessonCount: total,
-        chapters: rows.filter((r) => r.chapter_title).map((r) => ({ title: r.chapter_title!, lessons: r.lessons })),
-        previewLessonId: rows.map((r) => r.preview_id).find(Boolean) ?? null,
-        replayCount: 0,
-      };
-    }
+    courses.push({
+      slug: rows[0].slug,
+      title: rows[0].title,
+      description: rows[0].description ?? "",
+      coverUrl: realCoverUrl(rows[0].image_url),
+      lessonCount: total,
+      chapters: rows.filter((r) => r.chapter_title && r.lessons > 0).map((r) => ({ title: r.chapter_title!, lessons: r.lessons })),
+      previewLessonId: rows.map((r) => r.preview_id).find(Boolean) ?? null,
+    });
   }
-  if (course) course.replayCount = replayCount;
 
   const teacherIds = Array.from(new Set(lessonRows.map((l) => l.teacher_id || community.created_by)));
   const slots = offered.privateLessons ? await getOpenSlots(community.id, teacherIds, now) : [];
@@ -129,8 +125,8 @@ export const getAboutData = cache(async (
   return {
     memberCount,
     upcoming,
-    course,
-    courseCount,
+    courses,
+    replayCount,
     lessons,
     activity: { posts30: activity?.posts30 ?? 0, replies30: activity?.replies30 ?? 0, topics },
   };

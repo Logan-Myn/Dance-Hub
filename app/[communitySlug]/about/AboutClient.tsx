@@ -357,7 +357,7 @@ export default function AboutClient({
       }
     : offered.liveClasses && data.upcoming.length
       ? { title: "Dance with us at the next live class", text: pricing.paid ? `${euro(pricing.monthly)} a month${pricing.yearly ? ` or ${euro(pricing.yearly)} a year` : ""}. Cancel anytime.` : "Joining is free." }
-      : offered.courses && data.course
+      : offered.courses && data.courses.length
         ? { title: "Start lesson 1 today", text: pricing.paid ? `${euro(pricing.monthly)} a month${pricing.yearly ? ` or ${euro(pricing.yearly)} a year` : ""}. Cancel anytime.` : "Joining is free." }
         : { title: `Join ${community.name}`, text: pricing.paid ? `${euro(pricing.monthly)} a month. Cancel anytime.` : "Joining is free." };
 
@@ -366,8 +366,8 @@ export default function AboutClient({
   const fact =
     offered.liveClasses && next
       ? { icon: CalendarDays, text: `Next live class ${inSentence(relativeDayWord(next.startsAt, now, timeZone, "en-GB"))} at ${clock(next.startsAt, timeZone)}` }
-      : offered.courses && data.courseCount
-        ? { icon: BookOpen, text: `${data.courseCount} ${data.courseCount === 1 ? "course" : "courses"}` }
+      : offered.courses && data.courses.length
+        ? { icon: BookOpen, text: `${data.courses.length} ${data.courses.length === 1 ? "course" : "courses"}` }
         : offered.privateLessons && data.lessons.length
           ? { icon: GraduationCap, text: `Private lessons from ${euro(Math.min(...data.lessons.map((l) => l.memberPrice ?? l.regularPrice)))}` }
           : null;
@@ -382,7 +382,7 @@ export default function AboutClient({
       ? { label: "Monthly and yearly prices", done: pricing.yearly != null, href: admin("/subscriptions") }
       : { label: "Free membership", done: true },
     ...(offered.liveClasses ? [{ label: "A live class on the schedule", done: data.upcoming.length > 0, href: communityPath(community.slug, "/calendar") }] : []),
-    ...(offered.courses ? [{ label: "A published course", done: !!data.course, href: communityPath(community.slug, "/classroom") }] : []),
+    ...(offered.courses ? [{ label: "A published course", done: data.courses.length > 0, href: communityPath(community.slug, "/classroom") }] : []),
     ...(offered.privateLessons ? [{ label: "Lesson types with open times", done: data.lessons.some((l) => l.nextFree), href: communityPath(community.slug, "/private-lessons") }] : []),
     { label: "A welcome video", done: !!video?.content.videoId, onFix: () => startEditingAt("video") },
     { label: "Teacher bio", done: !!teacherBlock?.content.bio, onFix: () => startEditingAt("teacher") },

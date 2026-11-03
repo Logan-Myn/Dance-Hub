@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TextAlign from "@tiptap/extension-text-align";
@@ -79,12 +80,45 @@ function ToolbarButton({
   tooltip: string;
   children: React.ReactNode;
 }) {
+  // Phones have no hover, so a tap also shows the button's name for a moment.
+  // While it shows, the tooltip ignores its own close requests: the command
+  // moves focus into the editor a frame later, and that blur would close it.
+  const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const touched = useRef(false);
+  const pinned = useRef(false);
+  const hide = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const unpin = () => {
+    pinned.current = false;
+    clearTimeout(hide.current);
+    setOpen(false);
+  };
+  useEffect(() => () => clearTimeout(hide.current), []);
+
   return (
-    <Tooltip>
+    <Tooltip open={open} onOpenChange={(next) => (next || !pinned.current) && setOpen(next)}>
       <TooltipTrigger asChild>
         <button
+          ref={button}
           type="button"
-          onClick={onClick}
+          aria-label={tooltip}
+          aria-pressed={isActive}
+          onPointerDown={(e) => {
+            touched.current = e.pointerType !== "mouse";
+          }}
+          onClick={(e) => {
+            onClick();
+            // A later Enter or Space on this button is not a tap.
+            const tap = touched.current;
+            touched.current = false;
+            if (!tap) return;
+            // Stops the tooltip's own click handler from closing it again.
+            e.preventDefault();
+            pinned.current = true;
+            setOpen(true);
+            clearTimeout(hide.current);
+            hide.current = setTimeout(unpin, 1500);
+          }}
           className={cn(
             "h-8 w-8 flex items-center justify-center rounded-lg",
             "transition-all duration-200 ease-out",
@@ -98,7 +132,20 @@ function ToolbarButton({
           {children}
         </button>
       </TooltipTrigger>
-      <TooltipContent side="bottom" className="text-xs">
+      {/* A tap elsewhere, such as on the next button, still closes it; a tap
+          on this button again keeps it. Taps go through it to the text. */}
+      <TooltipContent
+        side="bottom"
+        className="pointer-events-none text-xs"
+        onEscapeKeyDown={unpin}
+        onPointerDownOutside={(e) => {
+          if (button.current?.contains(e.target as Node)) {
+            e.preventDefault();
+            return;
+          }
+          unpin();
+        }}
+      >
         {tooltip}
       </TooltipContent>
     </Tooltip>

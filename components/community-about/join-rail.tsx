@@ -27,8 +27,8 @@ const CARD = "flex flex-col gap-4 rounded-[20px] border border-line bg-surface p
 function perks(ctx: AboutCtx): string[] {
   return [
     ctx.offered.liveClasses ? "Live classes, and the calendar of what's next" : null,
-    ctx.offered.courses && ctx.data.course ? "Every course in the Classroom" : null,
-    ctx.offered.courses && (ctx.data.course?.replayCount ?? 0) > 0 ? "Replays of past live classes" : null,
+    ctx.offered.courses && ctx.data.courses.length > 0 ? "Every course in the Classroom" : null,
+    ctx.offered.courses && ctx.data.replayCount > 0 ? "Replays of past live classes" : null,
     ctx.offered.privateLessons && ctx.data.lessons.some((l) => l.memberPrice != null) ? "Member prices on private lessons" : null,
     "The community feed: questions, feedback, progress",
   ].filter(Boolean) as string[];

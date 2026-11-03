@@ -486,14 +486,14 @@ export const getCoursesForCommunity = cache(async (
         SELECT *
         FROM courses
         WHERE community_id = ${communityId}
-        ORDER BY created_at DESC
+        ORDER BY position ASC NULLS FIRST, created_at DESC
       `
     : await query<CourseRow>`
         SELECT *
         FROM courses
         WHERE community_id = ${communityId}
           AND is_public = true
-        ORDER BY created_at DESC
+        ORDER BY position ASC NULLS FIRST, created_at DESC
       `;
   const toIsoStr = (v: Date | string): string =>
     v instanceof Date ? v.toISOString() : v;

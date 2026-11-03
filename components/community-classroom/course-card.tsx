@@ -1,10 +1,31 @@
 import Link from "next/link";
-import { CheckCircle2, Layers, Lock, Users, Video } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Layers, Lock, Users, Video } from "lucide-react";
 import type { ClassroomCourse } from "@/lib/classroom/data";
 import { communityPath } from "@/lib/safe-redirect";
 import { CourseCover, ProgressBar } from "./course-cover";
 
-export function CourseCard({ slug, course, canManage, memberCount }: { slug: string; course: ClassroomCourse; canManage: boolean; memberCount: number }) {
+const MOVE_BTN =
+  "inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface px-2.5 text-[13px] font-semibold text-ink-2 transition-colors hover:border-line-strong hover:text-ink disabled:pointer-events-none disabled:opacity-40";
+
+/** Moves the course one place in the teacher's order; null at either end. */
+export interface CourseMove {
+  earlier: (() => void) | null;
+  later: (() => void) | null;
+}
+
+export function CourseCard({
+  slug,
+  course,
+  canManage,
+  memberCount,
+  move,
+}: {
+  slug: string;
+  course: ClassroomCourse;
+  canManage: boolean;
+  memberCount: number;
+  move?: CourseMove;
+}) {
   const href = communityPath(slug, `/classroom/${encodeURIComponent(course.slug)}`);
   const pct = course.lessonCount ? (course.completedCount / course.lessonCount) * 100 : 0;
   return (
@@ -82,6 +103,19 @@ export function CourseCard({ slug, course, canManage, memberCount }: { slug: str
             <div className="flex items-center justify-between gap-2 text-[13px] text-ink-2">
               <span>Not started</span>
               <span className="font-semibold text-brand-ink">Start course</span>
+            </div>
+          )}
+          {canManage && move && (
+            // Above the card's stretched link, so the buttons take the tap.
+            <div className="relative z-[2] flex gap-1.5">
+              <button type="button" className={MOVE_BTN} disabled={!move.earlier} onClick={move.earlier ?? undefined} aria-label={`Move ${course.title} earlier`}>
+                <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                Earlier
+              </button>
+              <button type="button" className={MOVE_BTN} disabled={!move.later} onClick={move.later ?? undefined} aria-label={`Move ${course.title} later`}>
+                Later
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
             </div>
           )}
         </div>

@@ -8,7 +8,7 @@ import toast from "react-hot-toast";
 import { BTN_PRIMARY, BTN_SECONDARY } from "@/components/community-feed/feed-header";
 import { FeedEmpty } from "@/components/community-feed/feed-states";
 import { ContinueCard } from "@/components/community-classroom/continue-card";
-import { CourseCard } from "@/components/community-classroom/course-card";
+import { CourseCard, type CourseMove } from "@/components/community-classroom/course-card";
 import { CreateCourseDialog } from "@/components/community-classroom/create-course-dialog";
 import { ReplaysRow } from "@/components/community-classroom/replays-row";
 import { SearchPalette, type PaletteItem } from "@/components/ds/search-palette";
@@ -47,7 +47,14 @@ export default function ClassroomPageClient({
   const [filter, setFilter] = useState<Filter>("all");
   const [creating, setCreating] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const { courses, replays, lessons } = overview;
+  const { replays, lessons } = overview;
+  // A move shows at once. It applies to the data it was made on: the refresh
+  // after saving brings new data, already in the saved order.
+  const [moved, setMoved] = useState<{ on: ClassroomOverview; ids: string[] } | null>(null);
+  const order = moved?.on === overview ? moved.ids : null;
+  const courses = order
+    ? order.map((id) => overview.courses.find((c) => c.id === id)).filter((c): c is (typeof overview.courses)[number] => c !== undefined)
+    : overview.courses;
 
   useEffect(() => registerPageSearch(() => setSearchOpen(true), "Search lessons"), []);
   useEffect(() => {
@@ -81,6 +88,35 @@ export default function ClassroomPageClient({
   const list =
     filter === "all" ? courses : filter === "draft" ? courses.filter((c) => !c.isPublic) : courses.filter((c) => c.status === filter);
 
+  const moveCourse = async (id: string, by: -1 | 1) => {
+    const ids = courses.map((c) => c.id);
+    const from = ids.indexOf(id);
+    const to = from + by;
+    if (from < 0 || to < 0 || to >= ids.length) return;
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    setMoved({ on: overview, ids });
+    const response = await fetch(`/api/community/${encodeURIComponent(slug)}/course-order`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ courseIds: ids }),
+    });
+    if (!response.ok) {
+      setMoved(null);
+      const data = await response.json().catch(() => null);
+      toast.error(data?.error || "Couldn't save the new order. Try again.");
+      return;
+    }
+    router.refresh();
+  };
+  // Only on the full list: moving within a filtered one would skip hidden courses.
+  const moveFor = (index: number): CourseMove | undefined =>
+    canManage && filter === "all" && courses.length > 1
+      ? {
+          earlier: index > 0 ? () => void moveCourse(courses[index].id, -1) : null,
+          later: index < courses.length - 1 ? () => void moveCourse(courses[index].id, 1) : null,
+        }
+      : undefined;
+
   const createCourse = async ({ title, description, image }: { title: string; description: string; image: File | null }) => {
     const form = new FormData();
     form.append("title", title);
@@ -112,12 +148,12 @@ export default function ClassroomPageClient({
   });
   const upNext = useMemo(
     () =>
-      courses
+      overview.courses
         .filter((c) => c.next && c.status !== "done")
         .slice(0, 4)
         .map((c) => lessons.find((l) => l.id === c.next!.id))
         .filter((l): l is LessonSearchItem => !!l),
-    [courses, lessons]
+    [overview.courses, lessons]
   );
   const search = useCallback(
     (q: string) => (q.trim() ? searchLessons(lessons, q, 8) : upNext).map(toItem),
@@ -184,9 +220,14 @@ export default function ClassroomPageClient({
 
           {(courses.length > 0 || canManage) && (
             <section aria-labelledby="courses-title" className="mt-8 flex flex-col gap-3.5">
-              <h2 id="courses-title" className="font-display text-[19px] font-semibold text-ink">
-                Courses
-              </h2>
+              <div>
+                <h2 id="courses-title" className="font-display text-[19px] font-semibold text-ink">
+                  Courses
+                </h2>
+                {canManage && courses.length > 1 && (
+                  <p className="mt-0.5 text-[14px] text-ink-2">Visitors see your courses in this order, here and on your About page.</p>
+                )}
+              </div>
               {courses.length > 0 && (
                 <div role="group" aria-label="Filter courses" className="scrollbar-hide flex min-w-0 gap-1.5 overflow-x-auto">
                   {filters.map(([id, label]) => (
@@ -210,8 +251,8 @@ export default function ClassroomPageClient({
               )}
               {list.length > 0 || (canManage && filter === "all") ? (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-5">
-                  {list.map((c) => (
-                    <CourseCard key={c.id} slug={slug} course={c} canManage={canManage} memberCount={memberCount} />
+                  {list.map((c, i) => (
+                    <CourseCard key={c.id} slug={slug} course={c} canManage={canManage} memberCount={memberCount} move={moveFor(i)} />
                   ))}
                   {isCreator && filter === "all" && (
                     <button

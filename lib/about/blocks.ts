@@ -70,7 +70,7 @@ export const isWritten = (t: string): t is WrittenType => (WRITTEN_TYPES as read
 export const AUTO_INFO: Record<AutoType, { name: string; hint: string; needs?: keyof Offered; missing?: string }> = {
   included: { name: "What you get", hint: "Built from what you offer" },
   schedule: { name: "Upcoming live classes", hint: "Next dates, in each visitor's time zone", needs: "liveClasses", missing: "Turn on live classes and schedule one first" },
-  course: { name: "Course preview", hint: "Chapters and a free preview lesson", needs: "courses", missing: "Turn on courses and publish one first" },
+  course: { name: "Courses", hint: "Your published courses, in your Classroom order", needs: "courses", missing: "Turn on courses and publish one first" },
   lessons: { name: "Private lessons", hint: "Lesson types, prices and the next free time", needs: "privateLessons", missing: "Turn on private lessons and add a lesson type first" },
   activity: { name: "Community activity", hint: "Posts, replies and topics" },
   faq: { name: "Questions", hint: "Answers about joining, plus your own" },

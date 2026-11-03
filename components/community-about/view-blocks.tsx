@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import type { ReactNode } from "react";
 import { BookOpen, CalendarDays, ChevronDown, GraduationCap, MessageCircle, Play, Quote, Users, Video } from "lucide-react";
 import { BTN_SECONDARY } from "@/components/community-feed/feed-header";
 import { DateTile } from "@/components/ds/date-tile";
 import { InitialsAvatar } from "@/components/ds/initials-avatar";
 import { CourseCover } from "@/components/community-classroom/course-cover";
 import { clock } from "@/components/community-calendar/format";
-import type { AboutData } from "@/lib/about/data";
+import type { AboutCourse, AboutData } from "@/lib/about/data";
 import { AUTO_INFO, WRITTEN_INFO, isAuto, type AboutBlock, type FaqItem, type Offered } from "@/lib/about/blocks";
 import { describeCancellationPolicy, euro } from "@/lib/private-lessons/policy";
 import { communityPath } from "@/lib/safe-redirect";
@@ -62,7 +63,7 @@ export function faqItems(ctx: AboutCtx, own: FaqItem[]): FaqItem[] {
   } else {
     out.push({ q: "How much does it cost?", a: "Joining is free. You only pay for private lessons, if you book one." });
   }
-  if (offered.liveClasses && offered.courses && (data.course?.replayCount ?? 0) > 0) {
+  if (offered.liveClasses && offered.courses && data.replayCount > 0) {
     out.push({ q: "Can I watch a class later?", a: "Yes. Live classes are recorded, and the replays land in the Classroom." });
   }
   if (offered.privateLessons && data.lessons.length) {
@@ -83,7 +84,7 @@ export function autoHasData(b: AboutBlock, ctx: AboutCtx): boolean {
     case "schedule":
       return ctx.offered.liveClasses && ctx.data.upcoming.length > 0;
     case "course":
-      return ctx.offered.courses && !!ctx.data.course;
+      return ctx.offered.courses && ctx.data.courses.length > 0;
     case "lessons":
       return ctx.offered.privateLessons && ctx.data.lessons.length > 0;
     case "activity":
@@ -91,6 +92,40 @@ export function autoHasData(b: AboutBlock, ctx: AboutCtx): boolean {
     default:
       return true;
   }
+}
+
+/** A course's cover, title and size, with room for an action under the size. */
+function CourseSummary({ course, action, className }: { course: AboutCourse; action?: ReactNode; className?: string }) {
+  return (
+    <div className={cn("grid grid-cols-[96px_minmax(0,1fr)] items-center gap-4 p-3.5 sm:grid-cols-[120px_minmax(0,1fr)]", className)}>
+      <div className="aspect-[3/2] overflow-hidden rounded-[10px]">
+        <CourseCover id={course.slug} title={course.title} coverUrl={course.coverUrl} />
+      </div>
+      <div className="min-w-0">
+        <h3 className="font-display text-[17px] font-semibold text-ink">{course.title}</h3>
+        <p className="mt-0.5 text-[13.5px] text-ink-2">
+          {course.lessonCount} {course.lessonCount === 1 ? "lesson" : "lessons"} in {course.chapters.length}{" "}
+          {course.chapters.length === 1 ? "chapter" : "chapters"}
+        </p>
+        {action && <div className="mt-2">{action}</div>}
+      </div>
+    </div>
+  );
+}
+
+/** The course's free preview lesson, when the teacher made one free. */
+function WatchFree({ course, slug }: { course: AboutCourse; slug: string }) {
+  if (!course.previewLessonId) return null;
+  return (
+    <Link
+      href={`${communityPath(slug, `/classroom/${encodeURIComponent(course.slug)}`)}?lesson=${course.previewLessonId}`}
+      aria-label={`Watch a free lesson from ${course.title}`}
+      className="inline-flex h-[30px] items-center gap-1.5 rounded-lg bg-brand-soft px-2.5 text-[13px] font-bold text-brand-ink hover:bg-brand/15"
+    >
+      <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+      Watch free
+    </Link>
+  );
 }
 
 export function ViewBlock({ block, ctx }: { block: AboutBlock; ctx: AboutCtx }) {
@@ -105,11 +140,11 @@ export function ViewBlock({ block, ctx }: { block: AboutBlock; ctx: AboutCtx }) 
           text: ctx.data.upcoming.length ? `Join from home, with ${ctx.teacher.name}.` : "Scheduled in the calendar.",
           fact: ctx.data.upcoming.length ? `Next: ${inSentence(relativeDayWord(ctx.data.upcoming[0].startsAt, ctx.now, ctx.timeZone, "en-GB"))} at ${clock(ctx.data.upcoming[0].startsAt, ctx.timeZone)}` : null,
         },
-        ctx.offered.courses && ctx.data.course && {
+        ctx.offered.courses && ctx.data.courses.length > 0 && {
           icon: BookOpen,
           title: "Courses",
           text: "Learn step by step, at your own pace.",
-          fact: `${ctx.data.courseCount} ${ctx.data.courseCount === 1 ? "course" : "courses"}${ctx.data.course.replayCount ? ` and ${ctx.data.course.replayCount} class replays` : ""}`,
+          fact: `${ctx.data.courses.length} ${ctx.data.courses.length === 1 ? "course" : "courses"}${ctx.data.replayCount ? ` and ${ctx.data.replayCount} class ${ctx.data.replayCount === 1 ? "replay" : "replays"}` : ""}`,
         },
         ctx.offered.privateLessons && ctx.data.lessons.length > 0 && {
           icon: GraduationCap,
@@ -167,47 +202,42 @@ export function ViewBlock({ block, ctx }: { block: AboutBlock; ctx: AboutCtx }) 
         </>
       );
     case "course": {
-      const course = ctx.data.course!;
+      const { courses } = ctx.data;
+      const only = courses.length === 1 ? courses[0] : null;
       return (
         <>
           <Heading text={heading} />
           <div className={cn(CARD, "overflow-hidden")}>
-            <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-4 border-b border-line p-3.5 sm:grid-cols-[120px_minmax(0,1fr)]">
-              <div className="aspect-[3/2] overflow-hidden rounded-[10px]">
-                <CourseCover id={course.slug} title={course.title} coverUrl={course.coverUrl} />
-              </div>
-              <div className="min-w-0">
-                <h3 className="font-display text-[17px] font-semibold text-ink">{course.title}</h3>
-                <p className="mt-0.5 text-[13.5px] text-ink-2">
-                  {course.lessonCount} {course.lessonCount === 1 ? "lesson" : "lessons"} in {course.chapters.length}{" "}
-                  {course.chapters.length === 1 ? "chapter" : "chapters"}
-                </p>
-              </div>
-            </div>
-            <ol>
-              {course.chapters.map((ch, i) => (
-                <li key={`${ch.title}-${i}`} className="flex items-center gap-3 border-t border-line px-4 py-[11px] text-[14.5px] first:border-t-0">
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-2 text-[12px] font-bold tabular-nums text-ink-2">{i + 1}</span>
-                  <strong className="min-w-0 flex-1 truncate font-semibold text-ink">{ch.title}</strong>
-                  <span className="whitespace-nowrap text-[13px] text-ink-3">
-                    {ch.lessons} {ch.lessons === 1 ? "lesson" : "lessons"}
-                  </span>
-                  {i === 0 && course.previewLessonId && (
-                    <Link
-                      href={`${communityPath(ctx.slug, `/classroom/${encodeURIComponent(course.slug)}`)}?lesson=${course.previewLessonId}`}
-                      className="inline-flex h-[30px] items-center gap-1.5 rounded-lg bg-brand-soft px-2.5 text-[13px] font-bold text-brand-ink hover:bg-brand/15"
-                    >
-                      <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                      Watch free
-                    </Link>
-                  )}
-                </li>
-              ))}
-            </ol>
-            {course.replayCount > 0 && (
+            {only ? (
+              <>
+                <CourseSummary course={only} className="border-b border-line" />
+                <ol>
+                  {only.chapters.map((ch, i) => (
+                    <li key={`${ch.title}-${i}`} className="flex items-center gap-3 border-t border-line px-4 py-[11px] text-[14.5px] first:border-t-0">
+                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-2 text-[12px] font-bold tabular-nums text-ink-2">{i + 1}</span>
+                      <strong className="min-w-0 flex-1 truncate font-semibold text-ink">{ch.title}</strong>
+                      <span className="whitespace-nowrap text-[13px] text-ink-3">
+                        {ch.lessons} {ch.lessons === 1 ? "lesson" : "lessons"}
+                      </span>
+                      {i === 0 && <WatchFree course={only} slug={ctx.slug} />}
+                    </li>
+                  ))}
+                </ol>
+              </>
+            ) : (
+              // Several courses: one row each, so a visitor sees the whole path.
+              <ol className="divide-y divide-line">
+                {courses.map((course) => (
+                  <li key={course.slug}>
+                    <CourseSummary course={course} action={course.previewLessonId ? <WatchFree course={course} slug={ctx.slug} /> : undefined} />
+                  </li>
+                ))}
+              </ol>
+            )}
+            {ctx.data.replayCount > 0 && (
               <p className="flex items-center gap-3 border-t border-line bg-surface-2 px-4 py-3 text-[14px] text-ink-2">
                 <Video className="h-4 w-4 text-ink-3" aria-hidden="true" />
-                Plus replays of {course.replayCount} live {course.replayCount === 1 ? "class" : "classes"}.
+                Plus replays of {ctx.data.replayCount} live {ctx.data.replayCount === 1 ? "class" : "classes"}.
               </p>
             )}
           </div>

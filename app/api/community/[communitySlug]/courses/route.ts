@@ -77,7 +77,8 @@ export async function POST(request: Request, props: { params: Promise<{ communit
             community_id,
             created_at,
             updated_at,
-            is_public
+            is_public,
+            position
           ) VALUES (
             ${title},
             ${description},
@@ -86,7 +87,9 @@ export async function POST(request: Request, props: { params: Promise<{ communit
             ${community.id},
             NOW(),
             NOW(),
-            ${isPublic}
+            ${isPublic},
+            -- Last, once the teacher has ordered the courses; NULL (newest first) until then.
+            (SELECT MAX(position) + 1 FROM courses WHERE community_id = ${community.id})
           )
           RETURNING *
         `;
