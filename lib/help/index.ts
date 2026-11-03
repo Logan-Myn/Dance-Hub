@@ -25,6 +25,26 @@ export function helpSections(): Array<(typeof HELP_CATEGORIES)[number] & { artic
   );
 }
 
+/**
+ * The guides as the sidebar lists them. A category gets a heading only when it
+ * holds two guides or more: a heading over a single guide reads like an empty
+ * chapter. Single guides next to each other share one list.
+ */
+export function helpNavGroups(): Array<{ category: (typeof HELP_CATEGORIES)[number] | null; articles: HelpArticle[] }> {
+  const groups: ReturnType<typeof helpNavGroups> = [];
+  for (const section of helpSections()) {
+    const { articles, ...category } = section;
+    if (articles.length > 1) {
+      groups.push({ category, articles });
+      continue;
+    }
+    const last = groups[groups.length - 1];
+    if (last && !last.category) last.articles.push(...articles);
+    else groups.push({ category: null, articles: [...articles] });
+  }
+  return groups;
+}
+
 export function helpCategory(id: HelpCategoryId) {
   return HELP_CATEGORIES.find((c) => c.id === id)!;
 }

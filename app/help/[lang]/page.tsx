@@ -50,7 +50,21 @@ export default async function HelpIndex(props: { params: Promise<{ lang: string 
 
         <HelpSearch lang={lang} entries={entries}>
           <div className="mt-10 grid gap-5 md:grid-cols-2">
-            {helpSections().map((c) => (
+            {helpSections().map((c) =>
+              // A category card only around two guides or more; a single guide is its own card.
+              c.articles.length === 1 ? (
+                <Link
+                  key={c.id}
+                  href={helpPath(lang, c.articles[0].slug)}
+                  className="group flex items-start gap-3 rounded-2xl border border-line bg-surface p-5 transition-colors hover:border-line-strong"
+                >
+                  <span className="min-w-0 flex-1">
+                    <strong className="block font-display text-[19px] font-semibold text-ink group-hover:text-brand-ink">{c.articles[0].title[lang]}</strong>
+                    <span className="mt-1 block text-[14.5px] text-ink-2">{c.articles[0].summary[lang]}</span>
+                  </span>
+                  <ArrowRight className="mt-1.5 h-4 w-4 shrink-0 text-ink-3 group-hover:text-brand-ink" aria-hidden="true" />
+                </Link>
+              ) : (
               <section key={c.id} aria-labelledby={`cat-${c.id}`} className="rounded-2xl border border-line bg-surface p-5">
                 <h2 id={`cat-${c.id}`} className="font-display text-[19px] font-semibold text-ink">
                   {c.title[lang]}
@@ -70,7 +84,8 @@ export default async function HelpIndex(props: { params: Promise<{ lang: string 
                   ))}
                 </ul>
               </section>
-            ))}
+              )
+            )}
           </div>
         </HelpSearch>
 

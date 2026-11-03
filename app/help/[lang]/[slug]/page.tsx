@@ -6,7 +6,7 @@ import { ArrowRight, ChevronRight, Info } from "lucide-react";
 import { HelpDeviceProvider, HelpDeviceToggle, HelpShot } from "@/components/help/help-device";
 import { HelpContact, HelpShell } from "@/components/help/help-shell";
 import { HelpText } from "@/components/help/help-text";
-import { HELP_LANGS, getHelpArticle, helpCategory, helpPath, helpSections, isHelpLang } from "@/lib/help";
+import { HELP_LANGS, getHelpArticle, helpCategory, helpNavGroups, helpPath, isHelpLang } from "@/lib/help";
 import { HELP_DEVICE_COOKIE, initialHelpDevice } from "@/lib/help/shots";
 import { HELP_UI } from "@/lib/help/ui";
 import { cn } from "@/lib/utils";
@@ -41,11 +41,11 @@ export default async function HelpArticlePage(props: { params: Promise<{ lang: s
       <div className="mx-auto grid max-w-[1160px] gap-10 px-4 pb-14 pt-6 sm:px-6 sm:pt-8 lg:grid-cols-[240px_minmax(0,1fr)]">
         <nav aria-label={t.allArticles} className="hidden lg:block">
           <div className="sticky top-24 flex flex-col gap-5">
-            {helpSections().map((c) => (
-              <div key={c.id}>
-                <p className="px-2.5 text-[12.5px] font-semibold text-ink-3">{c.title[lang]}</p>
-                <ul className="mt-1 flex flex-col">
-                  {c.articles.map((a) => (
+            {helpNavGroups().map((group) => (
+              <div key={group.category?.id ?? group.articles[0].slug}>
+                {group.category && <p className="mb-1 px-2.5 text-[12.5px] font-semibold text-ink-3">{group.category.title[lang]}</p>}
+                <ul className="flex flex-col">
+                  {group.articles.map((a) => (
                     <li key={a.slug}>
                       <Link
                         href={helpPath(lang, a.slug)}

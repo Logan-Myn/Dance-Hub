@@ -1,5 +1,5 @@
 import { existsSync } from "fs";
-import { HELP_ARTICLES, HELP_LANGS, getHelpArticle, preferredHelpLang, type Localized } from "@/lib/help";
+import { HELP_ARTICLES, HELP_LANGS, getHelpArticle, helpNavGroups, helpSections, preferredHelpLang, type Localized } from "@/lib/help";
 import { HELP_SHOT_ALT, helpShot } from "@/lib/help/shots";
 import { HELP_CATEGORIES, HELP_UI } from "@/lib/help/ui";
 
@@ -72,6 +72,15 @@ describe("help center content", () => {
         expect({ where, lang, text: value[lang] }).not.toEqual({ where, lang, text: expect.stringMatching(/—|\bStripe\b|\bMux\b|\bLiveKit\b/i) });
       }
     }
+  });
+
+  it("heads only categories of two guides or more in the sidebar, listing every guide once", () => {
+    const groups = helpNavGroups();
+    for (const g of groups) if (g.category) expect(g.articles.length).toBeGreaterThan(1);
+    groups.forEach((g, i) => {
+      if (i > 0) expect(!g.category && !groups[i - 1].category).toBe(false);
+    });
+    expect(groups.flatMap((g) => g.articles.map((a) => a.slug))).toEqual(helpSections().flatMap((c) => c.articles.map((a) => a.slug)));
   });
 
   it("opens in Spanish for visitors who prefer it", () => {
