@@ -1,6 +1,13 @@
 import { aboutPage } from "./articles/about-page";
+import { communityFeed } from "./articles/community-feed";
 import { courses } from "./articles/courses";
 import { gettingPaid } from "./articles/getting-paid";
+import { gettingStarted } from "./articles/getting-started";
+import { liveClasses } from "./articles/live-classes";
+import { membersEmails } from "./articles/members-emails";
+import { phone } from "./articles/phone";
+import { privateLessons } from "./articles/private-lessons";
+import { promoCodes } from "./articles/promo-codes";
 import { whoCanJoin } from "./articles/who-can-join";
 import { HELP_CATEGORIES } from "./ui";
 import type { HelpArticle, HelpCategoryId, HelpLang } from "./types";
@@ -8,7 +15,19 @@ import type { HelpArticle, HelpCategoryId, HelpLang } from "./types";
 export * from "./types";
 
 /** Every article, in the order the index lists them within a category. */
-export const HELP_ARTICLES: HelpArticle[] = [whoCanJoin, aboutPage, courses, gettingPaid];
+export const HELP_ARTICLES: HelpArticle[] = [
+  gettingStarted,
+  whoCanJoin,
+  phone,
+  aboutPage,
+  courses,
+  liveClasses,
+  privateLessons,
+  communityFeed,
+  membersEmails,
+  gettingPaid,
+  promoCodes,
+];
 
 export function getHelpArticle(slug: string): HelpArticle | undefined {
   return HELP_ARTICLES.find((a) => a.slug === slug);

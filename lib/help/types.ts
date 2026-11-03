@@ -10,7 +10,7 @@ export type HelpLang = (typeof HELP_LANGS)[number];
 
 export type Localized = Record<HelpLang, string>;
 
-export type HelpCategoryId = "setup" | "page" | "teaching" | "money";
+export type HelpCategoryId = "setup" | "page" | "teaching" | "community" | "money";
 
 export interface HelpStep {
   text: Localized;

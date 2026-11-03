@@ -167,6 +167,126 @@ const SHOTS = {
       return page.locator("article").filter({ hasText: "Turns and Partnerwork" });
     },
   },
+  onboarding: {
+    async take(page) {
+      await open(page, `${BASE}/onboarding`);
+      return null;
+    },
+  },
+  offerings: {
+    async take(page) {
+      await open(page, `${COMMUNITY}/admin/offerings`);
+      return null;
+    },
+  },
+  "admin-overview": {
+    async take(page) {
+      await open(page, `${COMMUNITY}/admin`);
+      return null;
+    },
+  },
+  "calendar-owner": {
+    async take(page) {
+      await open(page, `${COMMUNITY}/calendar`);
+      return null;
+    },
+  },
+  "schedule-class": {
+    async take(page, device) {
+      await open(page, `${COMMUNITY}/calendar`);
+      await tap(page, device, page.getByRole("button", { name: "Schedule class" }).first());
+      return device === "phone" ? null : page.getByRole("dialog");
+    },
+  },
+  "class-details": {
+    async take(page, device) {
+      await open(page, `${COMMUNITY}/calendar`);
+      await tap(page, device, page.getByRole("button", { name: /^(Details for Salsa Basics|Salsa Basics: live practice,)/ }).first());
+      return device === "phone" ? null : page.getByRole("dialog");
+    },
+  },
+  "lessons-owner": {
+    async take(page) {
+      await open(page, `${COMMUNITY}/private-lessons`);
+      return null;
+    },
+  },
+  "lesson-type": {
+    async take(page, device) {
+      await open(page, `${COMMUNITY}/private-lessons`);
+      await tap(page, device, page.getByRole("button", { name: "Add lesson type" }).first());
+      return device === "phone" ? null : page.getByRole("dialog");
+    },
+  },
+  "open-times": {
+    async take(page, device) {
+      await open(page, `${COMMUNITY}/private-lessons`);
+      await tap(page, device, page.getByRole("button", { name: "Open times" }).first());
+      return device === "phone" ? null : page.getByRole("dialog");
+    },
+  },
+  "feed-composer": {
+    async take(page, device) {
+      await open(page, COMMUNITY);
+      await tap(page, device, page.getByText("Share a question or a win…").first());
+      const post = page.getByRole("button", { name: "Post", exact: true });
+      await post.scrollIntoViewIfNeeded();
+      return device === "phone" ? null : page.locator("form").filter({ has: post }).first();
+    },
+  },
+  "post-topics": {
+    async take(page, device) {
+      await open(page, `${COMMUNITY}/admin/thread-categories`);
+      await tap(page, device, page.getByRole("button", { name: "Add topic" }).first());
+      // A named topic reads better than an empty row; it's never saved.
+      await page.getByPlaceholder("Topic name").last().fill("Technique");
+      return null;
+    },
+  },
+  members: {
+    async take(page) {
+      await open(page, `${COMMUNITY}/admin/members`);
+      return null;
+    },
+  },
+  "new-email": {
+    async take(page) {
+      await open(page, `${COMMUNITY}/admin/emails/new`);
+      return null;
+    },
+  },
+  "promo-codes": {
+    // The form needs a paid membership; the demo gets a pretend one for the
+    // shot (no codes exist, so nothing asks the payment provider about them).
+    async before() {
+      this.saved = sql(
+        "SELECT json_build_object('enabled', membership_enabled, 'price', membership_price, 'account', stripe_account_id, 'priceId', stripe_price_id) FROM communities WHERE slug = 'salsa-with-ana'"
+      );
+      sql("UPDATE communities SET membership_enabled = true, membership_price = 25, stripe_account_id = 'acct_help_demo', stripe_price_id = 'price_help_demo' WHERE slug = 'salsa-with-ana'");
+    },
+    async after() {
+      if (!this.saved) return;
+      const v = JSON.parse(this.saved);
+      const lit = (x) => (x === null ? "NULL" : `'${String(x).replace(/'/g, "''")}'`);
+      sql(`UPDATE communities SET membership_enabled = ${v.enabled === null ? "NULL" : v.enabled}, membership_price = ${v.price === null ? "NULL" : Number(v.price)}, stripe_account_id = ${lit(v.account)}, stripe_price_id = ${lit(v.priceId)} WHERE slug = 'salsa-with-ana'`);
+    },
+    async take(page) {
+      await open(page, `${COMMUNITY}/admin/promo-codes`);
+      return null;
+    },
+  },
+  "toolbar-names": {
+    async take(page, device) {
+      await open(page, COMMUNITY);
+      await tap(page, device, page.getByText("Share a question or a win…").first());
+      const bold = page.locator('button[aria-label="Bold"]:visible').first();
+      await bold.scrollIntoViewIfNeeded();
+      if (device === "phone") await bold.tap();
+      else await bold.hover();
+      await page.waitForTimeout(device === "phone" ? 250 : 900);
+      return { band: bold, above: 140, below: 160 };
+    },
+  },
   payouts: {
     async take(page) {
       await open(page, `${COMMUNITY}/admin/subscriptions`);

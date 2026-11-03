@@ -77,6 +77,11 @@ export const HELP_CATEGORIES: Array<{ id: HelpCategoryId; title: Localized; text
     text: { en: "Courses, lessons and what members learn.", es: "Cursos, lecciones y lo que aprenden tus miembros." },
   },
   {
+    id: "community",
+    title: { en: "Members and posts", es: "Miembros y publicaciones" },
+    text: { en: "Your community feed, your members and emails to them.", es: "El muro de tu comunidad, tus miembros y los correos que les envías." },
+  },
+  {
     id: "money",
     title: { en: "Pricing and payouts", es: "Precios y cobros" },
     text: { en: "What members pay, and how you get paid.", es: "Lo que pagan tus miembros y cómo cobras." },

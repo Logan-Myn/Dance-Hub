@@ -153,6 +153,156 @@
         624,
         606
       ]
+    },
+    "onboarding": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1920,
+        1230
+      ]
+    },
+    "offerings": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1920,
+        1230
+      ]
+    },
+    "admin-overview": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1920,
+        1230
+      ]
+    },
+    "calendar-owner": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1920,
+        1230
+      ]
+    },
+    "schedule-class": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        840,
+        870
+      ]
+    },
+    "class-details": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        840,
+        597
+      ]
+    },
+    "lessons-owner": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1920,
+        1230
+      ]
+    },
+    "lesson-type": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1008,
+        1418
+      ]
+    },
+    "open-times": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1080,
+        1182
+      ]
+    },
+    "feed-composer": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1137,
+        489
+      ]
+    },
+    "post-topics": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1920,
+        1230
+      ]
+    },
+    "members": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1920,
+        1230
+      ]
+    },
+    "new-email": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1920,
+        1230
+      ]
+    },
+    "promo-codes": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1920,
+        1230
+      ]
+    },
+    "toolbar-names": {
+      "phone": [
+        780,
+        590
+      ],
+      "desktop": [
+        1920,
+        498
+      ]
     }
   }
 }

@@ -32,6 +32,21 @@ export const HELP_SHOT_ALT: Record<string, Localized> = {
   "course-order": { en: "The Earlier and Later buttons on a course", es: "Los botones Earlier y Later de un curso" },
   "payouts": { en: "The Payouts section with Set up payouts", es: "La sección Payouts con Set up payouts" },
   "pricing": { en: "The Membership price section", es: "La sección Membership price" },
+  "onboarding": { en: "The Create your community form", es: "El formulario Create your community" },
+  "offerings": { en: "The Offerings page with its switches", es: "La página Offerings con sus interruptores" },
+  "admin-overview": { en: "The Admin overview with Community setup", es: "El resumen de Admin con Community setup" },
+  "calendar-owner": { en: "The Calendar with the Schedule class button", es: "El Calendar con el botón Schedule class" },
+  "schedule-class": { en: "The Schedule a class window", es: "La ventana Schedule a class" },
+  "class-details": { en: "A class's details, with Edit and Cancel class", es: "Los detalles de una clase, con Edit y Cancel class" },
+  "lessons-owner": { en: "The private lessons page with Add lesson type", es: "La página de clases particulares con Add lesson type" },
+  "lesson-type": { en: "The Add a lesson type window", es: "La ventana Add a lesson type" },
+  "open-times": { en: "The Open times calendar", es: "El calendario Open times" },
+  "feed-composer": { en: "Writing a post in the community", es: "Escribiendo una publicación en la comunidad" },
+  "post-topics": { en: "The Post topics page", es: "La página Post topics" },
+  "members": { en: "The list of members", es: "La lista de miembros" },
+  "new-email": { en: "Writing an email to members", es: "Escribiendo un correo a los miembros" },
+  "promo-codes": { en: "The Create a code form", es: "El formulario Create a code" },
+  "toolbar-names": { en: "A toolbar button showing its name", es: "Un botón de la barra que muestra su nombre" },
 };
 
 type Size = [number, number];
