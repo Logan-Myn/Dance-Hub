@@ -1,0 +1,158 @@
+{
+  "scale": {
+    "phone": 2,
+    "desktop": 1.5
+  },
+  "shots": {
+    "open-admin": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1920,
+        477
+      ]
+    },
+    "who-can-join": {
+      "phone": [
+        716,
+        382
+      ],
+      "desktop": [
+        1278,
+        255
+      ]
+    },
+    "about-closed": {
+      "phone": [
+        716,
+        262
+      ],
+      "desktop": [
+        510,
+        197
+      ]
+    },
+    "about-owner": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1920,
+        1230
+      ]
+    },
+    "about-edit": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1920,
+        1230
+      ]
+    },
+    "add-block": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        900,
+        999
+      ]
+    },
+    "about-visitor": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1920,
+        1230
+      ]
+    },
+    "classroom-owner": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1920,
+        1230
+      ]
+    },
+    "create-course": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        840,
+        747
+      ]
+    },
+    "lessons-edit": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        480,
+        1094
+      ]
+    },
+    "lesson-edit": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        1146,
+        963
+      ]
+    },
+    "course-settings": {
+      "phone": [
+        780,
+        1688
+      ],
+      "desktop": [
+        840,
+        987
+      ]
+    },
+    "course-order": {
+      "phone": [
+        716,
+        906
+      ],
+      "desktop": [
+        537,
+        680
+      ]
+    },
+    "payouts": {
+      "phone": [
+        716,
+        624
+      ],
+      "desktop": [
+        624,
+        468
+      ]
+    },
+    "pricing": {
+      "phone": [
+        716,
+        966
+      ],
+      "desktop": [
+        624,
+        606
+      ]
+    }
+  }
+}

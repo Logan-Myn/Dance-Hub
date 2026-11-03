@@ -11,6 +11,7 @@ import {
   Hash,
   Layers,
   LayoutGrid,
+  LifeBuoy,
   Mail,
   Settings,
   Tag,
@@ -74,6 +75,7 @@ export function AdminNav({
       items: [
         { href: admin("/general"), label: "Community details", icon: Settings },
         { href: admin("/thread-categories"), label: "Post topics", icon: Hash },
+        { href: "/help", label: "Help center", icon: LifeBuoy, out: true },
       ],
     },
   ];

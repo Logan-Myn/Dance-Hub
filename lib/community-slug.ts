@@ -14,6 +14,7 @@ export const RESERVED_COMMUNITY_SLUGS: ReadonlySet<string> = new Set([
   'dashboard',
   'discovery',
   'fonts',
+  'help',
   'images',
   'landing-alt',
   'live-class',

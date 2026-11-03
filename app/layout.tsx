@@ -34,6 +34,8 @@ const figtree = Figtree({
 });
 
 export const metadata: Metadata = {
+  // Turns relative canonical, hreflang and image URLs into full ones (search engines need them).
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://dance-hub.io"),
   title: "DanceHub - Dance Community Platform",
   description: "Join dance communities, learn from teachers, and connect with other dancers.",
   icons: {

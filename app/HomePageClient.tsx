@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef } from "react";
 import MuxPlayer from "@mux/mux-player-react/lazy";
 import { ArrowRight, CalendarClock, ChevronDown, GraduationCap, MessagesSquare, Radio, Wallet } from "lucide-react";
@@ -9,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAuthModal } from "@/contexts/AuthModalContext";
 import { authModalRequestFromSearch } from "@/lib/safe-redirect";
 import { cn } from "@/lib/utils";
+import { SiteFooter } from "@/components/landing/site-footer";
 
 const MUX_PRODUCT_TOUR_PLAYBACK_ID = "vzZ81ggS02IvBXaQ3W5PRtv6YkApzQOZ6l282102OZJuI";
 
@@ -341,24 +341,6 @@ function FinalCTA({ onCtaSignup }: { onCtaSignup: () => void }) {
   );
 }
 
-function FooterBlock() {
-  return (
-    <footer className="bg-ink px-4 py-7 text-[13px] text-white/70 sm:px-8">
-      <div className="mx-auto flex max-w-[1240px] flex-wrap items-center justify-between gap-3">
-        <div>© {new Date().getFullYear()} Dance-Hub. Built in Estonia 🇪🇪</div>
-        <div className="flex gap-5">
-          <Link href="/privacy" className="hover:text-white">
-            Privacy policy
-          </Link>
-          <Link href="/terms" className="hover:text-white">
-            Terms of service
-          </Link>
-        </div>
-      </div>
-    </footer>
-  );
-}
-
 // ── Page ──
 export default function HomePageClient() {
   const { user } = useAuth();
@@ -407,7 +389,7 @@ export default function HomePageClient() {
       <FAQ />
       <FounderLetter />
       <FinalCTA onCtaSignup={onCtaSignup} />
-      <FooterBlock />
+      <SiteFooter />
     </div>
   );
 }
